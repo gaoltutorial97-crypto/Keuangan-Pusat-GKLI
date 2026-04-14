@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@layer base {
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    .print-section {
+      display: block !important;
+      width: 100%;
+      background: white;
+    }
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: white;
+    }
+    table {
+      page-break-inside: auto;
+    }
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+    thead {
+      display: table-header-group;
+    }
+    tfoot {
+      display: table-footer-group;
+    }
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 10px;
+}
