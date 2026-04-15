@@ -36,4 +36,4 @@ export interface AppSettings {
   menuDownloadMenu: string;
 }
 
-export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'download' | 'akun';
+export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat';

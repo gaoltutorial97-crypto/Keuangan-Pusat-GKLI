@@ -17,12 +17,13 @@ import {
   X,
   CheckCircle2,
   AlertTriangle,
+  Award,
   ChevronRight,
   UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Church, Payment, User, AppSettings, TabType } from './types';
-import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS } from './constants';
+import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
 
 export default function App() {
   // STATE NAVIGASI
@@ -30,16 +31,33 @@ export default function App() {
   
   // STATE USER & LOGIN
   const [users, setUsers] = useState<User[]>(() => {
+    const defaultUsers: User[] = [
+      { username: 'kpt_gkli@yahoo.com', password: '@Reformasi1517', role: 'superadmin' },
+      { username: 'GKLI180565', password: 'GEREJAKU', role: 'staff' }
+    ];
     try {
       const saved = localStorage.getItem('gkli_users');
-      return saved ? JSON.parse(saved) : [{ username: 'kpt_gkli@yahoo.com', password: '@Reformasi1517', role: 'superadmin' }];
-    } catch { return [{ username: 'kpt_gkli@yahoo.com', password: '@Reformasi1517', role: 'superadmin' }]; }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure the requested admin exists
+        const hasAdmin = parsed.find((u: User) => u.username === 'kpt_gkli@yahoo.com');
+        if (!hasAdmin) {
+          return [...defaultUsers, ...parsed.filter((u: User) => u.username !== 'GKLI180565')];
+        }
+        return parsed;
+      }
+      return defaultUsers;
+    } catch { return defaultUsers; }
   });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isGatePassed, setIsGatePassed] = useState(() => {
+    return sessionStorage.getItem('gkli_gate_passed') === 'true';
+  });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [gateForm, setGateForm] = useState({ username: '', password: '' });
   const [showUserModal, setShowUserModal] = useState(false);
-  const [formUser, setFormUser] = useState({ username: '', password: '' });
+  const [formUser, setFormUser] = useState<User>({ username: '', password: '', role: 'staff' });
 
   // STATE PENGATURAN TAMPILAN
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
@@ -86,6 +104,40 @@ export default function App() {
   const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wa: '' });
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
+  const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
+
+  // STATE TEMPLATES
+  const [templates, setTemplates] = useState(() => {
+    const defaultTemplates = {
+      kopSurat: '', // Base64 image
+      stempelTerimaKasih: '', // Base64 image
+      stempelTunggakan: '', // Base64 image
+      suratTerimaKasih: `Terpujilah Allah Tuhan kita di dalam nama Yesus Kristus, sebagai kepala gereja, yang senantiasa menolong dan memberkati gereja-Nya.
+
+Melalui surat ini kami mengucapkan terima kasih atas persembahan ke Kantor Pusat. Telah kami terima persembahan sebesar Rp [JUMLAH] dengan rincian sebagai berikut:
+- Pembayaran [KATEGORI] - [PERIODE]
+
+Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`,
+      suratTunggakan: `Salam sejahtera dalam Nama Tuhan Yesus Kristus, Tuhan kita!
+
+Berdasarkan catatan kas kami hingga tanggal [TANGGAL], kami mendapati bahwa kewajiban administrasi untuk [KATEGORI] pada periode [PERIODE] dari Jemaat [NAMA_JEMAAT] masih belum kami terima (menunggak).
+
+Kami memohon kesediaan bapak/ibu Majelis Jemaat untuk dapat segera menyelesaikan kewajiban administrasi tersebut.
+
+Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
+    };
+    try {
+      const saved = localStorage.getItem('gkli_templates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaultTemplates, ...parsed };
+      }
+      return defaultTemplates;
+    } catch { return defaultTemplates; }
+  });
+
+  useEffect(() => { localStorage.setItem('gkli_templates', JSON.stringify(templates)); }, [templates]);
 
   // ==========================================
   // FUNGSI PERHITUNGAN LAPORAN
@@ -116,31 +168,66 @@ export default function App() {
   const dataPelean = useMemo(() => getLaporanData('pelean'), [churches, payments, periodeAktif]);
   const dataLaporanKeuangan = useMemo(() => getLaporanData('laporan'), [churches, payments, periodeAktif]);
 
+  const lunasChurches = useMemo(() => {
+    return churches.filter(church => {
+      const isLaporanLunas = dataLaporanKeuangan.find(d => d.id === church.id)?.status === 'Lunas';
+      const isPeleanLunas = dataPelean.find(d => d.id === church.id)?.status === 'Lunas';
+      const isAlamanLunas = dataAlaman.find(d => d.id === church.id)?.status === 'Lunas';
+      return isLaporanLunas && isPeleanLunas && isAlamanLunas;
+    });
+  }, [churches, dataLaporanKeuangan, dataPelean, dataAlaman]);
+
   const totalPemasukan = useMemo(() => payments
     .filter(p => p.periode === periodeAktif && p.jumlah > 0)
     .reduce((sum, item) => sum + item.jumlah, 0), [payments, periodeAktif]);
   
   const stats = useMemo(() => {
-    let totalEstimasiTunggakan = 0;
     let totalMenunggak = 0;
     let totalLunas = 0;
 
-    [dataAlaman, dataPelean, dataLaporanKeuangan].forEach((dataset, index) => {
+    [dataAlaman, dataPelean, dataLaporanKeuangan].forEach((dataset) => {
       dataset.forEach(item => {
         if (item.status === 'Menunggak') {
           totalMenunggak++;
-          totalEstimasiTunggakan += index === 0 ? 500000 : index === 1 ? 1000000 : 2000000;
         } else {
           totalLunas++;
         }
       });
     });
-    return { totalEstimasiTunggakan, totalMenunggak, totalLunas };
+    return { totalMenunggak, totalLunas };
   }, [dataAlaman, dataPelean, dataLaporanKeuangan]);
+
+  const churchesWithArrears = useMemo(() => {
+    return churches.map(church => {
+      const arrears: Record<string, string[]> = {};
+      let hasArrears = false;
+
+      Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
+        const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
+        const unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+        if (unpaid.length > 0) {
+          arrears[cat] = unpaid;
+          hasArrears = true;
+        }
+      });
+
+      return hasArrears ? { ...church, arrears } : null;
+    }).filter((c): c is (Church & { arrears: Record<string, string[]> }) => c !== null);
+  }, [churches, payments, periodeAktif]);
 
   // ==========================================
   // FUNGSI AKSI & TOMBOL
   // ==========================================
+  const handleGateLogin = () => {
+    const foundUser = users.find(u => u.username === gateForm.username && u.password === gateForm.password);
+    if (foundUser) {
+      setIsGatePassed(true);
+      sessionStorage.setItem('gkli_gate_passed', 'true');
+    } else {
+      alert('Akses Ditolak: Username atau Password salah!');
+    }
+  };
+
   const handleLogin = () => {
     const foundUser = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
     if (foundUser) {
@@ -155,9 +242,9 @@ export default function App() {
   const handleSaveUser = () => {
     if (!formUser.username || !formUser.password) return alert('Email dan Password wajib diisi!');
     if (users.find(u => u.username === formUser.username)) return alert('Email/Username sudah terdaftar!');
-    setUsers([...users, { username: formUser.username, password: formUser.password, role: 'staff' }]);
+    setUsers([...users, { ...formUser }]);
     setShowUserModal(false);
-    setFormUser({ username: '', password: '' });
+    setFormUser({ username: '', password: '', role: 'staff' });
   };
 
   const handleDeleteUser = (username: string) => {
@@ -182,6 +269,22 @@ export default function App() {
     setPayments(prev => {
       const existingIdx = prev.findIndex(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
       
+      // Track session updates
+      setSessionUpdatedCells(sess => {
+        const churchSess = sess[gerejaId] || {};
+        const catSess = churchSess[kategori] || [];
+        if (!catSess.includes(field)) {
+          return {
+            ...sess,
+            [gerejaId]: {
+              ...churchSess,
+              [kategori]: [...catSess, field]
+            }
+          };
+        }
+        return sess;
+      });
+
       if (existingIdx >= 0) {
         const updated = [...prev];
         const payment = { ...updated[existingIdx] };
@@ -213,6 +316,66 @@ export default function App() {
     }
     setShowChurchModal(false);
     setFormChurch({ id: '', nama: '', resort: '', wa: '' });
+  };
+
+  const handleKirimWASpesifik = (item: any, colName: string) => {
+    const val = item.details[colName] || 0;
+    const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
+    let text = "";
+    if (val > 0) {
+      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan *${colName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} sebesar *Rp ${formatRupiah(val)}*. Tuhan memberkati.`;
+    } else {
+      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, dari Kantor Pusat GKLI ingin mengingatkan bahwa catatan kas kami untuk item *${colName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} masih kosong (menunggak). Mohon agar dapat segera diselesaikan. Terima kasih, Tuhan memberkati.`;
+    }
+    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleKirimWABatch = (item: any) => {
+    const selected = selectedCells[item.id] || [];
+    if (selected.length === 0) return;
+
+    const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
+    const details = selected.map(col => `- *${col.toUpperCase()}*: Rp ${formatRupiah(item.details[col])}`).join('\n');
+    const total = selected.reduce((sum, col) => sum + (item.details[col] || 0), 0);
+    
+    const text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan (${catLabel.toUpperCase()}) periode ${item.periode} untuk item berikut:\n${details}\n\n*Total: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
+    
+    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const toggleCellSelection = (gerejaId: string, colName: string) => {
+    setSelectedCells(prev => {
+      const current = prev[gerejaId] || [];
+      if (current.includes(colName)) {
+        return { ...prev, [gerejaId]: current.filter(c => c !== colName) };
+      } else {
+        return { ...prev, [gerejaId]: [...current, colName] };
+      }
+    });
+  };
+
+  const handlePrintBukti = (item: any, type: 'penerimaan' | 'tunggakan') => {
+    const selected = selectedCells[item.id] || [];
+    const columns = SPREADSHEET_COLUMNS[item.kategori as keyof typeof SPREADSHEET_COLUMNS];
+    
+    const dataToPrint = {
+      ...item,
+      printType: type,
+      items: type === 'penerimaan' 
+        ? (selected.length > 0 ? selected : columns.filter(c => (item.details[c] || 0) > 0))
+        : columns.filter(c => !(item.details[c] || 0))
+    };
+    
+    setPrintData(dataToPrint);
+    setPrintType(type);
+  };
+
+  const handleKirimWA = (item: any, type: 'tagihan' | 'terimakasih') => {
+    const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
+    const text = type === 'tagihan' 
+      ? `Syalom Jemaat ${item.nama}, mohon kesediaannya untuk menyelesaikan administrasi ${catLabel.toUpperCase()} periode ${item.periode}.`
+      : `Syalom Jemaat ${item.nama}, terima kasih atas persembahan ${catLabel.toUpperCase()} sebesar Rp ${formatRupiah(item.jumlah)}.`;
+    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleBulkImport = () => {
@@ -250,12 +413,85 @@ export default function App() {
     return new Intl.NumberFormat('id-ID').format(angka);
   };
 
+  const formatInput = (angka: number) => {
+    if (!angka || angka === 0) return '';
+    return new Intl.NumberFormat('id-ID').format(angka);
+  };
+
   const today = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
 
   // ==========================================
   // RENDER COMPONENTS
   // ==========================================
   
+  if (!isGatePassed) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+        >
+          <div className="bg-blue-600 p-8 text-center text-white">
+            <div className="bg-white/20 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md overflow-hidden">
+              {appSettings.logoUrl ? (
+                <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+              ) : (
+                <LayoutDashboard size={40} />
+              )}
+            </div>
+            <h1 className="text-2xl font-bold">{appSettings.title}</h1>
+            <p className="text-blue-100 mt-2">Akses Terbatas: Silakan Masuk</p>
+          </div>
+          <div className="p-8 space-y-6">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest">Username</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <Users size={18} />
+                  </span>
+                  <input 
+                    type="text" 
+                    value={gateForm.username} 
+                    onChange={e => setGateForm({...gateForm, username: e.target.value})} 
+                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder="Username Akses"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest">Password</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <LogIn size={18} />
+                  </span>
+                  <input 
+                    type="password" 
+                    value={gateForm.password} 
+                    onChange={e => setGateForm({...gateForm, password: e.target.value})} 
+                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder="Password Akses"
+                    onKeyDown={e => e.key === 'Enter' && handleGateLogin()}
+                  />
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={handleGateLogin} 
+              className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Buka Dashboard
+            </button>
+            <p className="text-center text-xs text-slate-400">
+              Masukkan kredensial untuk melihat konten website
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   if (printType && printData) {
     // Print View Implementation (Simplified for brevity, but maintaining the core logic)
     return (
@@ -269,15 +505,34 @@ export default function App() {
         </div>
         <div className="print-section mt-16">
            {/* Header */}
-           <div className="text-center border-b-2 border-black pb-4 mb-6">
-              <h1 className="text-2xl font-bold">KANTOR PUSAT</h1>
-              <h2 className="text-3xl font-bold text-blue-800">GEREJA KRISTEN LUTHER INDONESIA</h2>
-              <p className="text-sm">Sihabonghabong, Kec. Parlilitan, Kab. Humbang Hasundutan, Prov. Sumatera Utara</p>
+           <div className="text-center border-b-4 border-double border-black pb-4 mb-6">
+              {templates.kopSurat ? (
+                <img src={templates.kopSurat} alt="Kop Surat" className="w-full mx-auto" />
+              ) : (
+                <div className="flex items-center justify-center space-x-6">
+                  <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-[10px] italic overflow-hidden">
+                    {appSettings.logoUrl ? (
+                      <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      "Logo GKLI"
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <h1 className="text-xl font-bold">KANTOR PUSAT</h1>
+                    <h2 className="text-3xl font-bold text-blue-800">GEREJA KRISTEN LUTHER INDONESIA</h2>
+                    <p className="text-red-600 font-bold italic">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</p>
+                    <p className="text-[10px] font-bold mt-1">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
+                    <p className="text-[10px] font-bold">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
+                    <p className="text-[10px] mt-1">Sihabonghabong, Kec. Parlilitan, Kab. Humbang Hasundutan, Prov. Sumatera Utara, 22456</p>
+                    <p className="text-[10px] font-bold text-red-600 mt-1 uppercase tracking-widest">Anggota Persekutuan Gereja-Gereja di Indonesia (PGI)</p>
+                  </div>
+                </div>
+              )}
            </div>
            
            {printType === 'rekap' ? (
              <div>
-               <h3 className="text-center text-xl font-bold underline mb-4">REKAPITULASI {printData.kategori.toUpperCase()}</h3>
+               <h3 className="text-center text-xl font-bold underline mb-4">REKAPITULASI {(CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
                <p className="text-center mb-6">PERIODE: {periodeAktif}</p>
                <table className="w-full border-collapse border border-black text-sm">
                  <thead>
@@ -302,6 +557,117 @@ export default function App() {
                  </tbody>
                </table>
              </div>
+            ) : printType === 'penerimaan' || printType === 'tunggakan' || printType === 'global-receipt' || printType === 'global-arrears' ? (
+             <div className="space-y-6">
+                <div className="flex justify-between">
+                  <div>
+                    <p>Nomor: {printType === 'tunggakan' || printType === 'global-arrears' ? '1.953/P.10' : '1.952/E.12'}/IV/2026</p>
+                    <p>Hal: <b>{printType === 'tunggakan' || printType === 'global-arrears' ? 'Bukti Tunggakan Administrasi' : printType === 'global-receipt' ? 'Bukti Penerimaan Gabungan' : 'Bukti Penerimaan Setoran'}</b></p>
+                  </div>
+                  <div className="text-right">
+                    <p>Sihabonghabong, {today}</p>
+                    <p className="mt-4">Kepada Yth,</p>
+                    <p className="font-bold">{printData.nama}</p>
+                    <p>Resort {printData.resort}</p>
+                  </div>
+                </div>
+                <div className="text-justify leading-relaxed">
+                  <p>Salam sejahtera dalam Nama Tuhan Yesus Kristus!</p>
+                  <p className="mt-4">
+                    {printType === 'tunggakan' || printType === 'global-arrears'
+                      ? `Berdasarkan catatan kas kami hingga tanggal ${today}, berikut adalah rincian tunggakan administrasi periode ${printData.periode} yang belum kami terima:`
+                      : `Kami mengucapkan terima kasih atas persembahan periode ${printData.periode} yang telah kami terima dengan rincian sebagai berikut:`
+                    }
+                  </p>
+                  <div className="pl-8 my-4">
+                    {printType === 'global-receipt' ? (
+                      <div className="space-y-4">
+                        {Object.entries(printData.updates).map(([cat, fields]: [any, any]) => (
+                          <div key={cat} className="border border-black p-4 rounded">
+                            <h4 className="font-bold border-b border-black mb-2 uppercase">{CATEGORY_LABELS[cat] || cat}</h4>
+                            <table className="w-full">
+                              <tbody>
+                                {fields.map((f: string) => (
+                                  <tr key={f}>
+                                    <td>{f}</td>
+                                    <td className="text-right">{formatRupiah(printData.allDetails[cat]?.[f] || 0)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))}
+                      </div>
+                    ) : printType === 'global-arrears' ? (
+                      <div className="space-y-4">
+                        {Object.entries(printData.details).map(([cat, fields]: [any, any]) => (
+                          <div key={cat} className="border border-black p-4 rounded">
+                            <h4 className="font-bold border-b border-black mb-2 uppercase">{CATEGORY_LABELS[cat] || cat}</h4>
+                            <div className="grid grid-cols-2 gap-2">
+                              {fields.map((f: string) => (
+                                <div key={f} className="flex items-center space-x-2">
+                                  <div className="w-2 h-2 bg-black rounded-full"></div>
+                                  <span>{f}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <table className="w-full border-collapse border border-black">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="border border-black p-2 text-left">Item Persembahan</th>
+                            <th className="border border-black p-2 text-right">Jumlah (Rp)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {printData.items.map((col: string) => (
+                            <tr key={col}>
+                              <td className="border border-black p-2">{col}</td>
+                              <td className="border border-black p-2 text-right">{formatRupiah(printData.details[col] || 0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  {printType !== 'global-arrears' && (
+                    <div className="flex justify-between font-bold text-lg border-t-2 border-black pt-2">
+                      <span>TOTAL KESELURUHAN</span>
+                      <span>Rp {formatRupiah(printData.total)}</span>
+                    </div>
+                  )}
+                  <p className="mt-6">
+                    {printType === 'tunggakan' || printType === 'global-arrears'
+                      ? "Kami memohon kesediaan bapak/ibu Majelis Jemaat untuk dapat segera menyelesaikan kewajiban administrasi tersebut. Tuhan memberkati."
+                      : "Kiranya Tuhan Yesus senantiasa memberkati pelayanan kita."
+                    }
+                  </p>
+                </div>
+                <div className="flex justify-end mt-20">
+                  <div className="text-center">
+                    {((printType === 'peringatan' || printType === 'tunggakan' || printType === 'global-arrears') && templates.stempelTunggakan) || 
+                     ((printType === 'terimakasih' || printType === 'penerimaan' || printType === 'global-receipt') && templates.stempelTerimaKasih) ? (
+                      <img 
+                        src={(printType === 'peringatan' || printType === 'tunggakan' || printType === 'global-arrears') ? templates.stempelTunggakan : templates.stempelTerimaKasih} 
+                        alt="Stempel & Tanda Tangan" 
+                        className="max-h-64 mx-auto"
+                      />
+                    ) : (
+                      <>
+                        <p>Teriring Salam dan Doa</p>
+                        <p>Pucuk Pimpinan GKLI</p>
+                        <p className="mb-4">A.n. Bishop</p>
+                        <div className="h-24"></div>
+                        <p className="font-bold underline">Pdt. Lamris Malau, M.Th.</p>
+                        <p>Sekretaris Jenderal</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+             </div>
            ) : (
              <div className="space-y-6">
                 <div className="flex justify-between">
@@ -316,20 +682,38 @@ export default function App() {
                     <p>Resort {printData.resort}</p>
                   </div>
                 </div>
-                <div className="text-justify leading-relaxed">
+                <div className="text-justify leading-relaxed whitespace-pre-wrap">
                   <p>Salam sejahtera dalam Nama Tuhan Yesus Kristus!</p>
-                  {printType === 'peringatan' ? (
-                    <p className="mt-4">Berdasarkan catatan kas kami, kewajiban administrasi untuk <b>{printData.kategori.toUpperCase()}</b> periode <b>{printData.periode}</b> dari Jemaat {printData.nama} masih tercatat belum diselesaikan. Mohon kesediaannya untuk segera dikoordinasikan.</p>
-                  ) : (
-                    <p className="mt-4">Kami mengucapkan terima kasih atas persembahan sebesar <b>Rp {formatRupiah(printData.jumlah)}</b> untuk kategori <b>{printData.kategori.toUpperCase()}</b> periode <b>{printData.periode}</b>. Tuhan memberkati pelayanan kita.</p>
-                  )}
-                  <p className="mt-4">Demikian kami sampaikan, atas perhatiannya kami ucapkan terima kasih.</p>
+                  <div className="mt-4">
+                    {(printType === 'peringatan' ? templates.suratTunggakan : templates.suratTerimaKasih)
+                      .replace('[NAMA_JEMAAT]', printData.nama)
+                      .replace('[RESORT]', printData.resort)
+                      .replace('[JUMLAH]', formatRupiah(printData.jumlah))
+                      .replace('[KATEGORI]', (CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase())
+                      .replace('[PERIODE]', printData.periode)
+                      .replace('[TANGGAL]', today)
+                    }
+                  </div>
                 </div>
                 <div className="flex justify-end mt-20">
                   <div className="text-center">
-                    <p>Pucuk Pimpinan GKLI</p>
-                    <p className="mb-20">Sekretaris Jenderal</p>
-                    <p className="font-bold underline">Pdt. Tamris Malau, M.Th.</p>
+                    {((printType === 'peringatan' || printType === 'tunggakan' || printType === 'global-arrears') && templates.stempelTunggakan) || 
+                     ((printType === 'terimakasih' || printType === 'penerimaan' || printType === 'global-receipt') && templates.stempelTerimaKasih) ? (
+                      <img 
+                        src={(printType === 'peringatan' || printType === 'tunggakan' || printType === 'global-arrears') ? templates.stempelTunggakan : templates.stempelTerimaKasih} 
+                        alt="Stempel & Tanda Tangan" 
+                        className="max-h-64 mx-auto"
+                      />
+                    ) : (
+                      <>
+                        <p>Teriring Salam dan Doa</p>
+                        <p>Pucuk Pimpinan GKLI</p>
+                        <p className="mb-4">A.n. Bishop</p>
+                        <div className="h-24"></div>
+                        <p className="font-bold underline">Pdt. Lamris Malau, M.Th.</p>
+                        <p>Sekretaris Jenderal</p>
+                      </>
+                    )}
                   </div>
                 </div>
              </div>
@@ -344,19 +728,26 @@ export default function App() {
       {/* SIDEBAR */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-xl no-print">
         <div className="p-6 flex items-center space-x-3 border-b border-slate-800">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <LayoutDashboard size={24} />
+          <div className="bg-blue-600 p-2 rounded-lg overflow-hidden flex items-center justify-center w-10 h-10">
+            {appSettings.logoUrl ? (
+              <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+            ) : (
+              <LayoutDashboard size={24} />
+            )}
           </div>
           <div>
             <h1 className="text-lg font-bold leading-tight">{appSettings.title}</h1>
             <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-              {currentUser?.role === 'superadmin' ? 'Admin Utama' : currentUser ? 'Staf Pengisi' : 'Tamu'}
+              {currentUser?.role === 'superadmin' ? 'Admin Utama' : 'Staf Pengisi'}
             </p>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
           <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={20} />} label="Dashboard" />
+          <NavItem active={activeTab === 'pengiriman'} onClick={() => setActiveTab('pengiriman')} icon={<MessageCircle size={20} className="text-green-500" />} label="Pusat Pengiriman" className="text-green-500 font-bold" />
+          <NavItem active={activeTab === 'penagihan'} onClick={() => setActiveTab('penagihan')} icon={<AlertTriangle size={20} className="text-red-500" />} label="Pusat Penagihan" className="text-red-500 font-bold" />
+          <NavItem active={activeTab === 'sertifikat'} onClick={() => setActiveTab('sertifikat')} icon={<Award size={20} className="text-yellow-500" />} label="Sertifikat Penghargaan" className="text-yellow-500 font-bold" />
           
           <NavHeader label={appSettings.menuMasterData} />
           <NavItem active={activeTab === 'gereja'} onClick={() => setActiveTab('gereja')} icon={<Users size={20} />} label={appSettings.menuGereja} />
@@ -373,6 +764,7 @@ export default function App() {
           {currentUser?.role === 'superadmin' && (
             <>
               <NavHeader label="Pengaturan Sistem" />
+              <NavItem active={activeTab === 'templates'} onClick={() => setActiveTab('templates')} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
               <NavItem active={false} onClick={() => { setFormSettings(appSettings); setShowSettingsModal(true); }} icon={<Settings size={20} className="text-yellow-500" />} label="Edit Tampilan" className="text-yellow-500" />
               <NavItem active={activeTab === 'akun'} onClick={() => setActiveTab('akun')} icon={<UserPlus size={20} className="text-yellow-500" />} label="Manajemen Akun" className="text-yellow-500" />
             </>
@@ -388,7 +780,7 @@ export default function App() {
           ) : (
             <button onClick={() => setShowLoginModal(true)} className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-green-400 hover:bg-slate-800 transition-colors bg-slate-800/50">
               <LogIn size={20} />
-              <span className="text-sm font-semibold">Masuk (Login)</span>
+              <span className="text-sm font-semibold">Login Admin</span>
             </button>
           )}
         </div>
@@ -421,11 +813,206 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
+              {activeTab === 'penagihan' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="font-bold text-lg">Pusat Penagihan Tunggakan</h3>
+                        <p className="text-sm text-slate-500">Daftar jemaat yang memiliki tunggakan (belum lunas) pada periode {periodeAktif}.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                      {churchesWithArrears.map(church => {
+                        const summaryLines: string[] = [];
+                        Object.entries(church.arrears).forEach(([cat, fields]) => {
+                          const f = fields as string[];
+                          summaryLines.push(`*${(CATEGORY_LABELS[cat] || cat).toUpperCase()}*:`);
+                          summaryLines.push(`  - ${f.join(', ')}`);
+                        });
+
+                        return (
+                          <div key={church.id} className="border border-red-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-red-50/10">
+                            <div className="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
+                              <div>
+                                <h4 className="font-bold text-slate-800">{church.nama}</h4>
+                                <p className="text-xs text-slate-500">Resort {church.resort}</p>
+                              </div>
+                              <div className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                                Ada Tunggakan
+                              </div>
+                            </div>
+                            <div className="p-4 flex flex-col md:flex-row gap-4">
+                              <div className="flex-1 bg-white p-3 rounded-lg border border-red-50">
+                                <p className="text-[10px] font-bold text-red-400 uppercase mb-2">Daftar Item Belum Terbayar:</p>
+                                <div className="text-xs text-slate-600 space-y-2">
+                                  {Object.entries(church.arrears).map(([cat, fields]) => (
+                                    <div key={cat}>
+                                      <span className="font-bold text-slate-800">{(CATEGORY_LABELS[cat] || cat).toUpperCase()}:</span>
+                                      <p className="pl-2 text-red-600">{(fields as string[]).join(', ')}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex flex-col justify-center space-y-2 min-w-[150px]">
+                                <button 
+                                  onClick={() => {
+                                    const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan periode ${periodeAktif} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.`;
+                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+                                >
+                                  <MessageCircle size={16} /> <span>Tagih via WA</span>
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setPrintData({
+                                      nama: church.nama,
+                                      resort: church.resort,
+                                      periode: periodeAktif,
+                                      kategori: 'Gabungan',
+                                      details: church.arrears,
+                                      total: 0
+                                    });
+                                    setPrintType('global-arrears');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"
+                                >
+                                  <Printer size={16} /> <span>Cetak Surat</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'pengiriman' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="font-bold text-lg">Pusat Pengiriman Terima Kasih</h3>
+                        <p className="text-sm text-slate-500">Daftar jemaat yang baru saja melakukan pembayaran di sesi ini.</p>
+                      </div>
+                      <button 
+                        onClick={() => setSessionUpdatedCells({})}
+                        className="text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg border border-red-100 transition-colors"
+                      >
+                        Bersihkan Daftar Baru
+                      </button>
+                    </div>
+
+                    {Object.keys(sessionUpdatedCells).length === 0 ? (
+                      <div className="text-center py-20 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                        <MessageCircle size={48} className="mx-auto text-slate-300 mb-4" />
+                        <p className="text-slate-500 font-medium">Belum ada data pembayaran baru yang diisi di sesi ini.</p>
+                        <p className="text-xs text-slate-400 mt-2">Silakan isi angka pada menu Laporan, Pelean, atau Almanak terlebih dahulu.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-6">
+                        {Object.entries(sessionUpdatedCells).map(([gerejaId, updates]) => {
+                          const church = churches.find(c => c.id === gerejaId);
+                          if (!church) return null;
+
+                          let totalGabungan = 0;
+                          const summaryLines: string[] = [];
+
+                          Object.entries(updates).forEach(([cat, fields]) => {
+                            const payment = payments.find(p => p.gerejaId === gerejaId && p.kategori === cat && p.periode === periodeAktif);
+                            if (payment) {
+                              summaryLines.push(`*${(CATEGORY_LABELS[cat] || cat).toUpperCase()}*:`);
+                              fields.forEach(f => {
+                                const val = payment.details[f] || 0;
+                                totalGabungan += val;
+                                summaryLines.push(`- ${f}: Rp ${formatRupiah(val)}`);
+                              });
+                            }
+                          });
+
+                          return (
+                            <div key={gerejaId} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+                              <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                                <div>
+                                  <h4 className="font-bold text-slate-800">{church.nama}</h4>
+                                  <p className="text-xs text-slate-500">Resort {church.resort}</p>
+                                </div>
+                                <div className="text-right flex flex-col items-end">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Total Baru</p>
+                                  <p className="font-bold text-blue-600">Rp {formatRupiah(totalGabungan)}</p>
+                                  <button 
+                                    onClick={() => {
+                                      const newSess = { ...sessionUpdatedCells };
+                                      delete newSess[gerejaId];
+                                      setSessionUpdatedCells(newSess);
+                                    }}
+                                    className="text-[10px] text-red-500 hover:underline mt-1"
+                                  >
+                                    Hapus dari Daftar
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="p-4 flex flex-col md:flex-row gap-4">
+                                  <div className="flex-1 bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Rincian Pembayaran Baru:</p>
+                                    <div className="text-xs text-slate-600 space-y-1">
+                                      {Object.entries(updates).map(([cat, fields]) => (
+                                        <div key={cat} className="mb-2">
+                                          <p className="font-bold text-slate-800">{(CATEGORY_LABELS[cat] || cat).toUpperCase()}</p>
+                                          <p className="pl-2">{(fields as string[]).join(', ')}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                <div className="flex flex-col justify-center space-y-2 min-w-[150px]">
+                                  <button 
+                                    onClick={() => {
+                                      const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan periode ${periodeAktif} yang baru saja kami terima:\n\n${summaryLines.join('\n')}\n\n*Total Keseluruhan: Rp ${formatRupiah(totalGabungan)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
+                                      window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                    }}
+                                    className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+                                  >
+                                    <MessageCircle size={16} /> <span>Kirim WA</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      const allDetails: any = {};
+                                      payments.filter(p => p.gerejaId === gerejaId && p.periode === periodeAktif).forEach(p => {
+                                        allDetails[p.kategori] = p.details;
+                                      });
+                                      setPrintData({
+                                        nama: church.nama,
+                                        resort: church.resort,
+                                        periode: periodeAktif,
+                                        updates,
+                                        allDetails,
+                                        total: totalGabungan
+                                      });
+                                      setPrintType('global-receipt');
+                                    }}
+                                    className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
+                                  >
+                                    <Printer size={16} /> <span>Cetak Bukti</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'dashboard' && (
                 <div className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <StatCard title={`Total Pemasukan (${periodeAktif})`} value={`Rp ${formatRupiah(totalPemasukan)}`} icon={<Save className="text-green-600" />} color="green" />
-                    <StatCard title={`Estimasi Tunggakan (${periodeAktif})`} value={`Rp ${formatRupiah(stats.totalEstimasiTunggakan)}`} icon={<AlertTriangle className="text-red-600" />} color="red" />
                     <StatCard title="Status Laporan" value={`${stats.totalLunas} Lunas / ${stats.totalMenunggak} Nunggak`} icon={<CheckCircle2 className="text-blue-600" />} color="blue" />
                   </div>
                   
@@ -442,6 +1029,63 @@ export default function App() {
                           ? `Anda masuk sebagai ${currentUser.role === 'superadmin' ? 'Administrator Utama' : 'Staf Pengisi Data'}. Anda dapat mengelola data keuangan dan jemaat.`
                           : "Silakan login untuk mendapatkan akses penuh dalam mengelola data keuangan dan administrasi GKLI."}
                       </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'sertifikat' && (
+                <div className="space-y-6">
+                  <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-8 rounded-2xl text-white shadow-lg">
+                    <div className="flex items-center space-x-4 mb-4">
+                      <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+                        <Award size={32} />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold">Apresiasi Prestasi Penyetoran</h2>
+                        <p className="text-yellow-100">Daftar jemaat yang telah menyelesaikan seluruh kewajiban administrasi periode {periodeAktif}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100">
+                      <h3 className="font-bold text-lg">Jemaat Berprestasi (Lunas Seluruhnya)</h3>
+                    </div>
+                    <div className="p-6">
+                      {lunasChurches.length === 0 ? (
+                        <div className="text-center py-12">
+                          <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Award size={32} className="text-slate-300" />
+                          </div>
+                          <p className="text-slate-500">Belum ada jemaat yang lunas seluruhnya untuk periode ini.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {lunasChurches.map(church => (
+                            <div key={church.id} className="border border-slate-200 rounded-xl p-5 hover:border-yellow-400 hover:shadow-md transition-all group">
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="bg-yellow-50 p-2 rounded-lg text-yellow-600">
+                                  <Award size={24} />
+                                </div>
+                                <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">Lunas 100%</span>
+                              </div>
+                              <h4 className="font-bold text-slate-800 mb-1">{church.nama}</h4>
+                              <p className="text-xs text-slate-500 mb-4">Resort {church.resort}</p>
+                              <button 
+                                onClick={() => {
+                                  setPrintData({ ...church, periode: periodeAktif });
+                                  setPrintType('sertifikat');
+                                }}
+                                className="w-full flex items-center justify-center space-x-2 bg-slate-900 text-white py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors"
+                              >
+                                <Printer size={16} />
+                                <span>Cetak Sertifikat</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -469,7 +1113,7 @@ export default function App() {
                           <th className="px-6 py-4">No</th>
                           <th className="px-6 py-4">Nama Jemaat</th>
                           <th className="px-6 py-4">Resort</th>
-                          <th className="px-6 py-4">WhatsApp</th>
+                          {currentUser?.role === 'superadmin' && <th className="px-6 py-4">WhatsApp</th>}
                           {currentUser && <th className="px-6 py-4 text-center">Aksi</th>}
                         </tr>
                       </thead>
@@ -479,7 +1123,7 @@ export default function App() {
                             <td className="px-6 py-4 text-slate-500 font-medium">{church.id}</td>
                             <td className="px-6 py-4 font-bold text-slate-800">{church.nama}</td>
                             <td className="px-6 py-4 text-slate-600">{church.resort}</td>
-                            <td className="px-6 py-4 text-slate-600">{church.wa || '-'}</td>
+                            {currentUser?.role === 'superadmin' && <td className="px-6 py-4 text-slate-600">{church.wa || '-'}</td>}
                             {currentUser && (
                               <td className="px-6 py-4 text-center">
                                 <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50">
@@ -564,37 +1208,93 @@ export default function App() {
                                 {item.status.toUpperCase()}
                               </span>
                             </td>
-                            {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => (
-                              <td key={col} className="p-0 border-r border-slate-100">
-                                <input 
-                                  type="text" 
-                                  value={item.details[col] || ''}
-                                  onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
-                                  disabled={!currentUser}
-                                  className={`w-full h-full p-3 text-right outline-none focus:bg-blue-50 transition-colors ${!item.details[col] ? 'bg-red-50/30' : 'bg-transparent'}`}
-                                  placeholder="-"
-                                />
-                              </td>
-                            ))}
+                            {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => {
+                              const val = item.details[col] || 0;
+                              const isSelected = (selectedCells[item.id] || []).includes(col);
+                              return (
+                                <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px]">
+                                  <div className="flex items-center h-full px-2">
+                                    {val > 0 && (
+                                      <div className="mr-1">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={isSelected}
+                                          onChange={() => toggleCellSelection(item.id, col)}
+                                          className="w-3 h-3 cursor-pointer"
+                                          title="Pilih untuk pesan gabungan"
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="flex-1 relative flex items-center">
+                                      {currentUser ? (
+                                        <input 
+                                          type="text" 
+                                          value={formatInput(val)}
+                                          onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
+                                          className={`w-full py-3 text-right outline-none bg-transparent font-medium ${!val ? 'text-red-400' : 'text-slate-700'}`}
+                                          placeholder="0"
+                                        />
+                                      ) : (
+                                        <div className={`w-full py-3 text-right font-medium ${!val ? 'text-red-300' : 'text-slate-700'}`}>
+                                          {val || '-'}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Tombol WA Khusus */}
+                                      <button 
+                                        onClick={() => handleKirimWASpesifik(item, col)}
+                                        className="ml-2 p-1 rounded-full text-slate-300 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                        title={val > 0 ? "Kirim WA Terima Kasih" : "Kirim WA Tagihan"}
+                                      >
+                                        <MessageCircle size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              );
+                            })}
                             <td className="px-4 py-3 text-right font-bold text-blue-900 bg-blue-50/30">{formatRupiah(item.jumlah)}</td>
                             <td className="px-4 py-3 text-center">
-                              <div className="flex justify-center space-x-2">
+                              <div className="flex flex-col items-center space-y-1">
+                                <div className="flex justify-center space-x-1">
+                                  <button 
+                                    onClick={() => handleKirimWA(item, item.status === 'Menunggak' ? 'tagihan' : 'terimakasih')}
+                                    className="text-green-600 hover:bg-green-50 p-1 rounded-lg"
+                                    title="WA Cepat"
+                                  >
+                                    <MessageCircle size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => { setPrintData(item); setPrintType(item.status === 'Menunggak' ? 'peringatan' : 'terimakasih'); }}
+                                    className="text-slate-600 hover:bg-slate-100 p-1 rounded-lg"
+                                    title="Cetak Surat"
+                                  >
+                                    <Printer size={14} />
+                                  </button>
+                                </div>
+                                {(selectedCells[item.id] || []).length > 0 && (
+                                  <div className="flex space-x-1">
+                                    <button 
+                                      onClick={() => handleKirimWABatch(item)}
+                                      className="bg-green-600 text-white p-1 rounded text-[9px] font-bold"
+                                      title="Kirim WA Gabungan"
+                                    >
+                                      WA Gabung
+                                    </button>
+                                    <button 
+                                      onClick={() => handlePrintBukti(item, 'penerimaan')}
+                                      className="bg-blue-600 text-white p-1 rounded text-[9px] font-bold"
+                                      title="Cetak Bukti Penerimaan"
+                                    >
+                                      Bukti
+                                    </button>
+                                  </div>
+                                )}
                                 <button 
-                                  onClick={() => {
-                                    const text = item.status === 'Menunggak' 
-                                      ? `Syalom Jemaat ${item.nama}, mohon kesediaannya untuk menyelesaikan administrasi ${activeTab.toUpperCase()} periode ${periodeAktif}.`
-                                      : `Syalom Jemaat ${item.nama}, terima kasih atas persembahan ${activeTab.toUpperCase()} sebesar Rp ${formatRupiah(item.jumlah)}.`;
-                                    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
-                                  }}
-                                  className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg"
+                                  onClick={() => handlePrintBukti(item, 'tunggakan')}
+                                  className="text-[9px] text-red-600 font-bold hover:underline"
                                 >
-                                  <MessageCircle size={16} />
-                                </button>
-                                <button 
-                                  onClick={() => { setPrintData(item); setPrintType(item.status === 'Menunggak' ? 'peringatan' : 'terimakasih'); }}
-                                  className="text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg"
-                                >
-                                  <Printer size={16} />
+                                  Bukti Tunggakan
                                 </button>
                               </div>
                             </td>
@@ -683,16 +1383,148 @@ export default function App() {
                   </table>
                 </div>
               )}
+
+              {activeTab === 'templates' && currentUser?.role === 'superadmin' && (
+                <div className="space-y-8">
+                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-lg mb-6">Manajemen Template Surat</h3>
+                    
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Upload Kop Surat (Gambar)</label>
+                        <div className="flex items-center space-x-4">
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setTemplates({ ...templates, kopSurat: reader.result as string });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          />
+                          {templates.kopSurat && (
+                            <button onClick={() => setTemplates({ ...templates, kopSurat: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus Kop</button>
+                          )}
+                        </div>
+                        {templates.kopSurat && (
+                          <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-slate-50">
+                            <p className="text-[10px] text-slate-400 mb-1">Pratinjau Kop:</p>
+                            <img src={templates.kopSurat} alt="Kop Surat" className="max-h-20" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">Format Resmi (Stempel/TTD) Terima Kasih</label>
+                          <div className="flex items-center space-x-4">
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setTemplates({ ...templates, stempelTerimaKasih: reader.result as string });
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                            />
+                            {templates.stempelTerimaKasih && (
+                              <button onClick={() => setTemplates({ ...templates, stempelTerimaKasih: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus</button>
+                            )}
+                          </div>
+                          {templates.stempelTerimaKasih && (
+                            <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-slate-50">
+                              <img src={templates.stempelTerimaKasih} alt="Stempel Terima Kasih" className="max-h-20" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">Format Resmi (Stempel/TTD) Tunggakan</label>
+                          <div className="flex items-center space-x-4">
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setTemplates({ ...templates, stempelTunggakan: reader.result as string });
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                            />
+                            {templates.stempelTunggakan && (
+                              <button onClick={() => setTemplates({ ...templates, stempelTunggakan: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus</button>
+                            )}
+                          </div>
+                          {templates.stempelTunggakan && (
+                            <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-slate-50">
+                              <img src={templates.stempelTunggakan} alt="Stempel Tunggakan" className="max-h-20" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-bold text-slate-700">Template Surat Terima Kasih</label>
+                          <textarea 
+                            value={templates.suratTerimaKasih}
+                            onChange={(e) => setTemplates({ ...templates, suratTerimaKasih: e.target.value })}
+                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-serif"
+                          ></textarea>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-sm font-bold text-slate-700">Template Surat Tunggakan</label>
+                          <textarea 
+                            value={templates.suratTunggakan}
+                            onChange={(e) => setTemplates({ ...templates, suratTunggakan: e.target.value })}
+                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-serif"
+                          ></textarea>
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <h4 className="font-bold text-blue-800 text-xs mb-2 uppercase">Daftar Placeholder (Kode Otomatis)</h4>
+                        <p className="text-[11px] text-blue-700 leading-relaxed">
+                          Gunakan kode di bawah ini dalam teks surat agar sistem mengisi data secara otomatis:
+                          <br /><b>[NAMA_JEMAAT]</b> : Nama gereja
+                          <br /><b>[RESORT]</b> : Nama resort
+                          <br /><b>[JUMLAH]</b> : Total uang yang disetor
+                          <br /><b>[KATEGORI]</b> : Jenis setoran (Laporan/Pelean/Alaman)
+                          <br /><b>[PERIODE]</b> : Tahun/Bulan setoran
+                          <br /><b>[TANGGAL]</b> : Tanggal hari ini
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
 
       {/* MODALS */}
-      <Modal show={showLoginModal} onClose={() => setShowLoginModal(false)} title="Login Sistem">
+      <Modal show={showLoginModal} onClose={() => setShowLoginModal(false)} title="Login Admin / Staf">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username Admin</label>
             <input 
               type="text" 
               value={loginForm.username} 
@@ -701,7 +1533,7 @@ export default function App() {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password Admin</label>
             <input 
               type="password" 
               value={loginForm.password} 
@@ -711,7 +1543,7 @@ export default function App() {
             />
           </div>
           <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">
-            Masuk Sekarang
+            Masuk Sebagai Admin
           </button>
         </div>
       </Modal>
@@ -738,19 +1570,68 @@ export default function App() {
         </div>
       </Modal>
 
-      <Modal show={showUserModal} onClose={() => setShowUserModal(false)} title="Tambah Akun Staf">
+      <Modal show={showUserModal} onClose={() => setShowUserModal(false)} title="Tambah Akun Baru">
         <div className="space-y-4">
-          <input type="text" value={formUser.username} onChange={e => setFormUser({...formUser, username: e.target.value})} className="w-full border p-3 rounded-lg" placeholder="Username" />
-          <input type="text" value={formUser.password} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border p-3 rounded-lg" placeholder="Password" />
-          <button onClick={handleSaveUser} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Buat Akun</button>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
+            <input type="text" value={formUser.username} onChange={e => setFormUser({...formUser, username: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Username" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+            <input type="text" value={formUser.password} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pilih Peran (Role)</label>
+            <select 
+              value={formUser.role} 
+              onChange={e => setFormUser({...formUser, role: e.target.value as 'superadmin' | 'staff'})}
+              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="staff">Staff (Hanya Akses Dashboard)</option>
+              <option value="superadmin">Admin (Akses Kelola & Edit Data)</option>
+            </select>
+            <p className="text-[10px] text-slate-400 mt-1">
+              * Staff digunakan untuk login perlindungan pertama (pengunjung).
+              <br />* Admin digunakan untuk membantu mengelola dan mengedit data.
+            </p>
+          </div>
+          <button onClick={handleSaveUser} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">Buat Akun Sekarang</button>
         </div>
       </Modal>
 
       <Modal show={showSettingsModal} onClose={() => setShowSettingsModal(false)} title="Pengaturan Tampilan" size="max-w-2xl">
         <div className="space-y-6 max-h-[70vh] overflow-y-auto p-1 custom-scrollbar">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <label className="block text-sm font-bold text-slate-700 mb-2">Ganti Logo Aplikasi</label>
+            <div className="flex items-center space-x-4">
+              <input 
+                type="file" 
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setFormSettings({ ...formSettings, logoUrl: reader.result as string });
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              {formSettings.logoUrl && (
+                <button onClick={() => setFormSettings({ ...formSettings, logoUrl: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus Logo</button>
+              )}
+            </div>
+            {formSettings.logoUrl && (
+              <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-white w-20 h-20 flex items-center justify-center overflow-hidden">
+                <img src={formSettings.logoUrl} alt="Pratinjau Logo" className="max-w-full max-h-full object-contain" />
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <SettingInput label="Judul Aplikasi" value={formSettings.title} onChange={v => setFormSettings({...formSettings, title: v})} />
-            <SettingInput label="URL Logo" value={formSettings.logoUrl} onChange={v => setFormSettings({...formSettings, logoUrl: v})} />
             <SettingInput label="Menu Master Data" value={formSettings.menuMasterData} onChange={v => setFormSettings({...formSettings, menuMasterData: v})} />
             <SettingInput label="Menu Jemaat" value={formSettings.menuGereja} onChange={v => setFormSettings({...formSettings, menuGereja: v})} />
             <SettingInput label="Menu Periode" value={formSettings.menuPeriode} onChange={v => setFormSettings({...formSettings, menuPeriode: v})} />

@@ -6,6 +6,12 @@ export const SPREADSHEET_COLUMNS = {
   alaman: ['Almanak', 'Kalender', 'Evang. Edisi 1', 'Evang. Edisi 2', 'Evang. Edisi 3', 'Buku SKM', 'Buku Ende']
 };
 
+export const CATEGORY_LABELS: Record<string, string> = {
+  laporan: 'Persembahan II',
+  pelean: 'Persembahan Khusus (Namarboho)',
+  alaman: 'Literatur'
+};
+
 export const DEFAULT_SETTINGS: AppSettings = {
   title: 'Keuangan GKLI',
   logoUrl: '',
@@ -13,9 +19,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   menuGereja: 'Data Gereja (Anggota)',
   menuPeriode: 'Periode Tahunan',
   menuPembayaran: 'Pembayaran & Tagihan',
-  menuLaporan: 'Laporan Keuangan',
-  menuPelean: 'Pelean Namarboho',
-  menuAlaman: 'Pembayaran Alaman',
+  menuLaporan: 'Persembahan II',
+  menuPelean: 'Persembahan Khusus (Namarboho)',
+  menuAlaman: 'Literatur',
   menuRekapJudul: 'Laporan & Rekap',
   menuRekapMenu: 'Cetak Rekapitulasi',
   menuDownloadMenu: 'Download Excel/Word/PDF'
