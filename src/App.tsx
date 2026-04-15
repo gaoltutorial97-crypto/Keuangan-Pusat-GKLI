@@ -33,7 +33,7 @@ export default function App() {
   const [users, setUsers] = useState<User[]>(() => {
     const defaultUsers: User[] = [
       { username: 'kpt_gkli@yahoo.com', password: '@Reformasi1517', role: 'superadmin' },
-      { username: 'GKLI180565', password: 'GEREJAKU', role: 'staff' }
+      { username: 'GKLI180565', password: 'LUTHERAN', role: 'staff' }
     ];
     try {
       const saved = localStorage.getItem('gkli_users');
@@ -219,8 +219,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   // FUNGSI AKSI & TOMBOL
   // ==========================================
   const handleGateLogin = () => {
-    const foundUser = users.find(u => u.username === gateForm.username && u.password === gateForm.password);
-    if (foundUser) {
+    if (gateForm.username === 'GKLI180565' && gateForm.password === 'LUTHERAN') {
       setIsGatePassed(true);
       sessionStorage.setItem('gkli_gate_passed', 'true');
     } else {
