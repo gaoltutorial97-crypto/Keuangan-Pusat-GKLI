@@ -458,7 +458,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         tanggal: new Date().toISOString().split('T')[0]
       });
     } else {
-      await addDoc(collection(db, 'payments'), {
+      // Deterministic ID to prevent race conditions during fast typing
+      const stableId = `${gerejaId}_${kategori}_${periodeAktif.replace(/\s+/g, '_')}`;
+      await setDoc(doc(db, 'payments', stableId), {
         gerejaId, 
         kategori, 
         periode: periodeAktif,
@@ -483,7 +485,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         tanggal: new Date().toISOString().split('T')[0]
       });
     } else {
-      await addDoc(collection(db, 'distributions'), {
+      // Deterministic ID to prevent race conditions
+      const stableId = `${gerejaId}_dist_${periodeAktif.replace(/\s+/g, '_')}`;
+      await setDoc(doc(db, 'distributions', stableId), {
         gerejaId, 
         periode: periodeAktif,
         details: { [field]: numValue },
@@ -1798,7 +1802,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     {currentUserProfile ? (
                                       <input 
                                         type="number" 
-                                        value={val === 0 ? '' : val}
+                                        value={val || ''}
                                         onChange={(e) => handleDistributionChange(item.id, col, e.target.value)}
                                         className={`w-full py-3 px-2 text-center outline-none bg-transparent font-mono font-bold ${!val ? 'text-slate-300' : 'text-gold-700'}`}
                                         placeholder="0"
@@ -1893,7 +1897,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       {currentUserProfile ? (
                                         <input 
                                           type="text" 
-                                          value={formatInput(val)}
+                                          value={val === 0 ? '' : formatInput(val)}
                                           onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
                                           className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? 'text-red-400 font-medium' : 'text-slate-700 font-bold'}`}
                                           placeholder="0"
