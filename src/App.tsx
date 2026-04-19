@@ -1544,14 +1544,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       <p>2. Klik <b>Extensions &gt; Apps Script</b>.</p>
                       <p>3. Hapus semua kode yang ada dan paste kode di bawah ini:</p>
                       <pre className="bg-slate-800 p-4 rounded text-xs overflow-x-auto text-green-400">
-{`function doPost(e) {
+{`function doGet() {
+  return ContentService.createTextOutput("✅ API Keuangan GKLI Aktif!")
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+function doPost(e) {
   try {
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("FullBackup") || ss.insertSheet("FullBackup");
     
-    // Header otomatis jika sheet baru
     if (sheet.getLastRow() === 0) {
       sheet.appendRow(["Tanggal", "Aksi", "Data"]);
     }
