@@ -15,6 +15,7 @@ import {
   Printer, 
   Save, 
   X,
+  Database,
   CheckCircle2,
   AlertTriangle,
   Award,
@@ -31,23 +32,20 @@ export default function App() {
   
   // STATE USER & LOGIN
   const [users, setUsers] = useState<User[]>(() => {
-    const defaultUsers: User[] = [
+    const mandatoryUsers: User[] = [
       { username: 'kpt_gkli@yahoo.com', password: '@Reformasi1517', role: 'superadmin' },
       { username: 'GKLI180565', password: 'LUTHERAN', role: 'staff' }
     ];
     try {
       const saved = localStorage.getItem('gkli_users');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        // Ensure the requested admin exists
-        const hasAdmin = parsed.find((u: User) => u.username === 'kpt_gkli@yahoo.com');
-        if (!hasAdmin) {
-          return [...defaultUsers, ...parsed.filter((u: User) => u.username !== 'GKLI180565')];
-        }
-        return parsed;
+        const parsed = JSON.parse(saved) as User[];
+        // Filter out mandatory users from saved list to avoid duplicates, then combine
+        const filteredParsed = parsed.filter(u => !mandatoryUsers.some(m => m.username === u.username));
+        return [...mandatoryUsers, ...filteredParsed];
       }
-      return defaultUsers;
-    } catch { return defaultUsers; }
+      return mandatoryUsers;
+    } catch { return mandatoryUsers; }
   });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isGatePassed, setIsGatePassed] = useState(() => {
@@ -239,11 +237,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   };
 
   const handleSaveUser = () => {
-    if (!formUser.username || !formUser.password) return alert('Email dan Password wajib diisi!');
-    if (users.find(u => u.username === formUser.username)) return alert('Email/Username sudah terdaftar!');
-    setUsers([...users, { ...formUser }]);
+    if (!formUser.username || !formUser.password) return alert('Username dan Password wajib diisi!');
+    
+    setUsers(prev => {
+      const exists = prev.findIndex(u => u.username === formUser.username);
+      if (exists !== -1) {
+        const updated = [...prev];
+        updated[exists] = { ...formUser };
+        return updated;
+      }
+      return [...prev, { ...formUser }];
+    });
+    
     setShowUserModal(false);
     setFormUser({ username: '', password: '', role: 'staff' });
+    alert('Akun berhasil disimpan!');
   };
 
   const handleDeleteUser = (username: string) => {
@@ -397,6 +405,185 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     setChurches(newChurches);
     setShowBulkModal(false);
     setBulkText('');
+  };
+
+  const syncToGoogleSheets = async () => {
+    if (!appSettings.googleSheetUrl) {
+      alert("Silakan atur URL Google Apps Script di Pengaturan terlebih dahulu.");
+      return;
+    }
+    
+    const confirmSync = window.confirm("Apakah Anda ingin mencadangkan seluruh data ke Google Sheet?");
+    if (!confirmSync) return;
+
+    try {
+      // We use a simple structure for Google Apps Script to consume
+      const data = {
+        action: 'syncData',
+        payload: {
+          churches,
+          payments,
+          users: users.map(u => ({ username: u.username, role: u.role })), // Don't send passwords to Sheet for security? 
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      const response = await fetch(appSettings.googleSheetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+        mode: 'no-cors' // Common for Apps Script
+      });
+
+      alert("Data berhasil dikirim ke antrean Google Sheet. Silakan periksa Spreadsheet Anda.");
+    } catch (error) {
+      console.error(error);
+      alert("Gagal menghubungi Google Sheet. Pastikan URL benar dan Apps Script sudah dideploy.");
+    }
+  };
+
+  const handleDownloadCurrentMenu = (format: 'excel' | 'word' | 'pdf') => {
+    if (format === 'pdf') {
+      if (['laporan', 'pelean', 'alaman'].includes(activeTab)) {
+        setPrintData({ kategori: activeTab });
+        setPrintType('rekap');
+      } else {
+        // Fallback to simple browser print with a small delay to ensure UI stability
+        setTimeout(() => window.print(), 100);
+      }
+      return;
+    }
+
+    const title = appSettings.title.toUpperCase();
+    const menuName = activeTab.toUpperCase();
+    const date = new Date().toLocaleDateString('id-ID');
+    const filename = `GKLI_${activeTab}_${periodeAktif}.${format === 'excel' ? 'csv' : 'doc'}`;
+
+    if (format === 'word') {
+      let htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>${title}</title>
+        <style>
+          body { font-family: 'Times New Roman', serif; }
+          table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+          th, td { border: 1px solid black; padding: 8px; text-align: left; font-size: 10pt; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .header { text-align: center; margin-bottom: 20px; }
+          .footer { margin-top: 30px; }
+        </style>
+        </head>
+        <body>
+          <div class="header">
+            <h3>${title}</h3>
+            <h4>LAPORAN: ${menuName}</h4>
+            <p>Periode: ${periodeAktif} | Tanggal Unduh: ${date}</p>
+          </div>
+          <table>
+      `;
+
+      if (activeTab === 'gereja') {
+        htmlContent += "<tr><th>NO</th><th>ID</th><th>NAMA JEMAAT</th><th>RESORT</th><th>WHATSAPP</th></tr>";
+        churches.forEach((c, idx) => {
+          htmlContent += `<tr><td>${idx + 1}</td><td>${c.id}</td><td>${c.nama}</td><td>${c.resort}</td><td>${c.wa}</td></tr>`;
+        });
+      } else if (['laporan', 'pelean', 'alaman'].includes(activeTab)) {
+        const columns = SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS];
+        const data = getLaporanData(activeTab as any);
+        htmlContent += `<tr><th>NO</th><th>NAMA JEMAAT</th><th>STATUS</th>${columns.map(c => `<th>${c}</th>`).join('')}<th>TOTAL</th></tr>`;
+        data.forEach((item, idx) => {
+          const detailCells = columns.map(col => `<td>Rp ${formatRupiah(item.details[col] || 0)}</td>`).join('');
+          htmlContent += `<tr><td>${idx + 1}</td><td>${item.nama}</td><td>${item.status}</td>${detailCells}<td>Rp ${formatRupiah(item.jumlah)}</td></tr>`;
+        });
+      } else {
+        htmlContent += "<tr><td>Data untuk menu ini belum dikonfigurasi untuk format Word. Silakan gunakan format Excel.</td></tr>";
+      }
+
+      htmlContent += `
+          </table>
+          <div class="footer">
+            <p>Dicetak secara otomatis melalui Sistem Keuangan GKLI.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([htmlContent], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    // EXCEL (CSV) SECTION
+    let csvContent = "\uFEFF"; // BOM
+    csvContent += `"${title}"\n`;
+    csvContent += `"MENU: ${menuName}"\n`;
+    csvContent += `"PERIODE: ${periodeAktif.toUpperCase()}"\n`;
+    csvContent += `"TANGGAL UNDUH: ${date}"\n\n`;
+
+    if (activeTab === 'gereja') {
+      csvContent += "NO,ID,NAMA JEMAAT,RESORT,WHATSAPP\n";
+      churches.forEach((c, idx) => {
+        csvContent += `${idx + 1},${c.id},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}","${c.wa}"\n`;
+      });
+    } else if (['laporan', 'pelean', 'alaman'].includes(activeTab)) {
+      const columns = SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS];
+      const data = getLaporanData(activeTab as any);
+      const colTotals: Record<string, number> = {};
+      columns.forEach(col => colTotals[col] = 0);
+      let grandTotal = 0;
+
+      csvContent += `NO,ID,NAMA JEMAAT,STATUS,${columns.join(',')},TOTAL (RP)\n`;
+      data.forEach((item, idx) => {
+        const detailValues = columns.map(col => {
+          const val = item.details[col] || 0;
+          colTotals[col] += val;
+          return val;
+        }).join(',');
+        grandTotal += item.jumlah;
+        csvContent += `${idx + 1},${item.id},"${item.nama.replace(/"/g, '""')}",${item.status},${detailValues},${item.jumlah}\n`;
+      });
+      const footerValues = columns.map(col => colTotals[col]).join(',');
+      csvContent += `\n,,TOTAL KESELURUHAN,,${footerValues},${grandTotal}\n`;
+    } else if (activeTab === 'penagihan') {
+      csvContent += "NO,NAMA JEMAAT,RESORT,WHATSAPP,KATEGORI,ITEM TUNGGAKAN\n";
+      churchesWithArrears.forEach((c, idx) => {
+        Object.entries(c.arrears).forEach(([cat, fields]) => {
+          csvContent += `${idx + 1},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}","${c.wa}","${CATEGORY_LABELS[cat] || cat}","${(fields as string[]).join('; ')}"\n`;
+        });
+      });
+    } else if (activeTab === 'sertifikat') {
+      csvContent += "NO,NAMA JEMAAT,RESORT,STATUS\n";
+      lunasChurches.forEach((c, idx) => {
+        csvContent += `${idx + 1},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}",Lunas 100%\n`;
+      });
+    } else if (activeTab === 'dashboard') {
+      csvContent += "RINGKASAN DASHBOARD\n";
+      csvContent += `KETERANGAN,NILAI\n`;
+      csvContent += `Total Pemasukan ${periodeAktif},Rp ${totalPemasukan}\n`;
+      csvContent += `Total Lunas,${stats.totalLunas} Jemaat\n`;
+      csvContent += `Total Menunggak,${stats.totalMenunggak} Jemaat\n`;
+      csvContent += `\nDAFTAR JEMAAT LUNAS SELURUHNYA\n`;
+      lunasChurches.forEach(c => csvContent += `"${c.nama}" (Resort ${c.resort})\n`);
+    } else {
+      alert(`Fitur download untuk menu ${activeTab} belum tersedia.`);
+      return;
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleAddPeriod = () => {
@@ -788,7 +975,16 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       {/* MAIN CONTENT */}
       <main className="flex-1 ml-64 min-h-screen flex flex-col">
         <header className="bg-white shadow-sm px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
-          <h2 className="text-xl font-bold text-slate-800">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
+          <div className="flex items-center space-x-4">
+            <h2 className="text-xl font-bold text-slate-800">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
+            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
+              <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('excel')} icon={<Download size={14} />} label="Excel" color="text-green-600" />
+              {currentUser?.role === 'superadmin' && (
+                <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('word')} icon={<FileText size={14} />} label="Word" color="text-blue-600" />
+              )}
+              <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('pdf')} icon={<Printer size={14} />} label="PDF" color="text-red-600" />
+            </div>
+          </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
               <span className="text-xs text-slate-500 font-bold mr-2">PERIODE AKTIF:</span>
@@ -1329,6 +1525,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         <button onClick={() => alert('Fitur download CSV sedang disiapkan')} className="flex items-center justify-center space-x-3 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-transform hover:scale-[1.02]">
                           <Download size={20} /> <span>Download Excel (CSV)</span>
                         </button>
+                        <button onClick={syncToGoogleSheets} className="flex items-center justify-center space-x-3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-transform hover:scale-[1.02]">
+                          <Database size={20} className="text-green-400" /> <span>Sinkron ke Google Sheet</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1338,6 +1537,31 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <p className="text-sm text-amber-700 leading-relaxed">
                       Untuk menyimpan sebagai PDF, klik tombol <b>Cetak Rekapitulasi</b>, lalu pada jendela cetak yang muncul, pilih <b>"Save as PDF"</b> pada bagian Printer/Destination.
                     </p>
+                  </div>
+
+                  <div className="bg-slate-900 p-8 rounded-xl text-white">
+                    <h4 className="font-bold text-lg mb-4 flex items-center"><Database size={20} className="mr-2 text-green-400" /> Cara Menggunakan Google Sheets sebagai Database</h4>
+                    <div className="space-y-4 text-slate-300 text-sm">
+                      <p>1. Buat Google Sheet baru.</p>
+                      <p>2. Klik <b>Extensions &gt; Apps Script</b>.</p>
+                      <p>3. Hapus semua kode yang ada dan paste kode di bawah ini:</p>
+                      <pre className="bg-slate-800 p-4 rounded text-xs overflow-x-auto text-green-400">
+{`function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("FullBackup") || ss.insertSheet("FullBackup");
+  
+  // Log the sync attempt
+  sheet.appendRow([new Date(), data.action, JSON.stringify(data.payload)]);
+  
+  return ContentService.createTextOutput(JSON.stringify({"result": "success"}))
+    .setMimeType(ContentService.MimeType.JSON);
+}`}
+                      </pre>
+                      <p>4. Klik <b>Deploy &gt; New Deployment</b>.</p>
+                      <p>5. Pilih type <b>Web App</b>. Set 'Execute as' to 'Me' and 'Who has access' to 'Anyone'.</p>
+                      <p>6. Salin URL Web App yang didapat ke menu <b>Edit Tampilan</b> di aplikasi ini.</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1639,6 +1863,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             <SettingInput label="Menu Pelean" value={formSettings.menuPelean} onChange={v => setFormSettings({...formSettings, menuPelean: v})} />
             <SettingInput label="Menu Alaman" value={formSettings.menuAlaman} onChange={v => setFormSettings({...formSettings, menuAlaman: v})} />
           </div>
+
+          <div className="bg-green-50 p-4 rounded-xl border border-green-200">
+            <h4 className="font-bold text-green-800 mb-2 flex items-center"><Database size={18} className="mr-2" /> Integrasi Database Cloud</h4>
+            <SettingInput 
+              label="URL Web App Google Sheets (Apps Script)" 
+              value={formSettings.googleSheetUrl} 
+              onChange={v => setFormSettings({...formSettings, googleSheetUrl: v})} 
+            />
+            <p className="text-[10px] text-green-700 mt-2 leading-relaxed">
+              * Paste URL yang didapat setelah melakukan "Deploy as Web App" pada Google Apps Script di Google Sheet Anda.
+              <br />* Fitur ini memungkinkan Anda menyimpan database secara online agar data dapat diakses dari perangkat lain.
+            </p>
+          </div>
+
           <button onClick={handleSaveSettings} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Simpan Pengaturan</button>
         </div>
       </Modal>
@@ -1663,6 +1901,18 @@ function NavItem({ active, onClick, icon, label, className = "" }: { active: boo
 
 function NavHeader({ label }: { label: string }) {
   return <p className="text-[10px] text-slate-500 uppercase font-bold mt-6 mb-2 px-4 tracking-widest">{label}</p>;
+}
+
+function HeaderDownloadBtn({ onClick, icon, label, color }: { onClick: () => void, icon: React.ReactNode, label: string, color: string }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex items-center space-x-1 hover:bg-white px-2 py-1.5 rounded-md text-[10px] font-bold transition-all ${color} hover:shadow-sm`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
 }
 
 function StatCard({ title, value, icon, color }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' }) {

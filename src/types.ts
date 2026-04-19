@@ -34,6 +34,7 @@ export interface AppSettings {
   menuRekapJudul: string;
   menuRekapMenu: string;
   menuDownloadMenu: string;
+  googleSheetUrl: string;
 }
 
 export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat';
