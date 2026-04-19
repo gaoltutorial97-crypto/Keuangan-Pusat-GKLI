@@ -417,30 +417,28 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     if (!confirmSync) return;
 
     try {
-      // We use a simple structure for Google Apps Script to consume
       const data = {
         action: 'syncData',
         payload: {
           churches,
           payments,
-          users: users.map(u => ({ username: u.username, role: u.role })), // Don't send passwords to Sheet for security? 
+          users: users.map(u => ({ username: u.username, role: u.role })),
           timestamp: new Date().toISOString()
         }
       };
 
-      const response = await fetch(appSettings.googleSheetUrl, {
+      // Kita menghapus header 'Content-Type': 'application/json' karena sering memicu error CORS 
+      // pada fetch mode 'no-cors'. Google Apps Script tetap bisa membaca body-nya.
+      await fetch(appSettings.googleSheetUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-        mode: 'no-cors' // Common for Apps Script
+        mode: 'no-cors',
+        body: JSON.stringify(data)
       });
 
-      alert("Data berhasil dikirim ke antrean Google Sheet. Silakan periksa Spreadsheet Anda.");
+      alert("Data berhasil dikirim ke antrean Google Sheet!\n\nCatatan: Karena alasan keamanan browser, kami tidak bisa memastikan data sudah masuk atau belum secara otomatis. Silakan periksa Spreadsheet Anda.");
     } catch (error) {
-      console.error(error);
-      alert("Gagal menghubungi Google Sheet. Pastikan URL benar dan Apps Script sudah dideploy.");
+      console.error("Sync Error:", error);
+      alert("Gagal menghubungi Google Sheet.\n\nTips: Pastikan URL diakhiri dengan '/exec' dan Apps Script sudah dideploy dengan akses 'Anyone'.");
     }
   };
 
@@ -1547,20 +1545,32 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       <p>3. Hapus semua kode yang ada dan paste kode di bawah ini:</p>
                       <pre className="bg-slate-800 p-4 rounded text-xs overflow-x-auto text-green-400">
 {`function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("FullBackup") || ss.insertSheet("FullBackup");
-  
-  // Log the sync attempt
-  sheet.appendRow([new Date(), data.action, JSON.stringify(data.payload)]);
-  
-  return ContentService.createTextOutput(JSON.stringify({"result": "success"}))
-    .setMimeType(ContentService.MimeType.JSON);
+  try {
+    var contents = e.postData.contents;
+    var data = JSON.parse(contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("FullBackup") || ss.insertSheet("FullBackup");
+    
+    // Header otomatis jika sheet baru
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(["Tanggal", "Aksi", "Data"]);
+    }
+    
+    sheet.appendRow([new Date(), data.action, JSON.stringify(data.payload)]);
+    
+    return ContentService.createTextOutput("Success")
+      .setMimeType(ContentService.MimeType.TEXT);
+  } catch (err) {
+    return ContentService.createTextOutput("Error: " + err.message)
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
 }`}
                       </pre>
                       <p>4. Klik <b>Deploy &gt; New Deployment</b>.</p>
-                      <p>5. Pilih type <b>Web App</b>. Set 'Execute as' to 'Me' and 'Who has access' to 'Anyone'.</p>
-                      <p>6. Salin URL Web App yang didapat ke menu <b>Edit Tampilan</b> di aplikasi ini.</p>
+                      <p>5. Pilih type <b>Web App</b>.</p>
+                      <p>6. **PENTING**: Set 'Execute as' to <b>'Me'</b> dan 'Who has access' to <b>'Anyone'</b>.</p>
+                      <p>7. Salin URL Web App (akhiran /exec) ke menu <b>Edit Tampilan</b>.</p>
+                      <p className="text-amber-400 italic text-[11px]">* Jika Anda mengupdate kode script, Anda wajib melakukan 'Deploy &gt; New Deployment' lagi.</p>
                     </div>
                   </div>
                 </div>
