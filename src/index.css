@@ -1,6 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-gold-50: #fdfcf0;
+  --color-gold-100: #fbf7d5;
+  --color-gold-200: #f7eda8;
+  --color-gold-300: #f1db71;
+  --color-gold-400: #e9c13f;
+  --color-gold-500: #d4af37;
+  --color-gold-600: #b8860b;
+  --color-gold-700: #916a0f;
+  --color-gold-800: #765613;
+  --color-gold-900: #644917;
+  --color-gold-950: #3a2809;
+}
+
 @layer base {
+  body {
+    @apply font-sans text-slate-900 bg-slate-50;
+  }
+  
   @media print {
     .no-print {
       display: none !important;
@@ -12,7 +33,7 @@
     }
     @page {
       size: A4 portrait;
-      margin: 0;
+      margin: 1cm;
     }
     body {
       margin: 0;
@@ -36,10 +57,21 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #cbd5e1;
   border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Gold Theme Utilities */
+.bg-gold-gradient {
+  background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
+}
+.shadow-gold {
+  shadow: 0 10px 15px -3px rgba(212, 175, 55, 0.3);
 }

@@ -20,10 +20,15 @@ import {
   AlertTriangle,
   Award,
   ChevronRight,
-  UserPlus
+  UserPlus,
+  ShieldCheck,
+  TrendingUp,
+  AlertCircle,
+  Truck,
+  Package
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Church, Payment, User, AppSettings, TabType } from './types';
+import { Church, Payment, User, AppSettings, TabType, Distribution } from './types';
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
 import { db, auth } from './firebase';
 import { 
@@ -70,6 +75,7 @@ export default function App() {
   // STATE DATA GEREJA & PEMBAYARAN
   const [churches, setChurches] = useState<Church[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [distributions, setDistributions] = useState<Distribution[]>([]);
 
   // STATE PERIODE TAHUN
   const [periods, setPeriods] = useState(['Tahun 2021', 'Tahun 2022', 'Tahun 2023', 'Tahun 2024', 'Tahun 2025', 'Tahun 2026']);
@@ -126,10 +132,16 @@ export default function App() {
       setPayments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
     }, (error) => console.warn("Payments access restricted:", error.message));
 
+    // 4. Listen to Distributions
+    const unsubDistributions = onSnapshot(collection(db, 'distributions'), (snap) => {
+      setDistributions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distribution)));
+    }, (error) => console.warn("Distributions access restricted:", error.message));
+
     return () => {
       unsubProfile();
       unsubChurches();
       unsubPayments();
+      unsubDistributions();
     };
   }, [firebaseUser, isInitialLoading]);
 
@@ -156,10 +168,12 @@ export default function App() {
 
   // STATE MODAL LAINNYA
   const [showChurchModal, setShowChurchModal] = useState(false);
-  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wa: '', order: 1 });
+  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: 1 });
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'order'>('order');
+  const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order'>('order');
+  const [filterResort, setFilterResort] = useState('Semua Resort');
+  const [filterWilayah, setFilterWilayah] = useState('Semua Wilayah');
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
 
@@ -196,13 +210,30 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   useEffect(() => { localStorage.setItem('gkli_templates', JSON.stringify(templates)); }, [templates]);
 
   const sortedChurches = useMemo(() => {
-    return [...churches].sort((a, b) => {
+    let filtered = [...churches];
+    if (filterResort !== 'Semua Resort') {
+      filtered = filtered.filter(c => c.resort === filterResort);
+    }
+    if (filterWilayah !== 'Semua Wilayah') {
+      filtered = filtered.filter(c => c.wilayah === filterWilayah);
+    }
+
+    return filtered.sort((a, b) => {
       if (sortType === 'nama') return a.nama.localeCompare(b.nama);
       if (sortType === 'resort') return a.resort.localeCompare(b.resort);
+      if (sortType === 'wilayah') return (a.wilayah || '').localeCompare(b.wilayah || '');
       if (sortType === 'order') return (a.order || 0) - (b.order || 0);
       return a.id.localeCompare(b.id);
     });
-  }, [churches, sortType]);
+  }, [churches, sortType, filterResort, filterWilayah]);
+
+  const uniqueResorts = useMemo(() => {
+    return ['Semua Resort', ...Array.from(new Set(churches.map(c => c.resort))).sort()];
+  }, [churches]);
+
+  const uniqueWilayah = useMemo(() => {
+    return ['Semua Wilayah', ...Array.from(new Set(churches.map(c => c.wilayah).filter(Boolean))).sort()];
+  }, [churches]);
   const getLaporanData = (kategori: 'laporan' | 'pelean' | 'alaman') => {
     const columns = SPREADSHEET_COLUMNS[kategori];
     return churches.map(gereja => {
@@ -229,6 +260,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const dataPelean = useMemo(() => getLaporanData('pelean'), [churches, payments, periodeAktif]);
   const dataLaporanKeuangan = useMemo(() => getLaporanData('laporan'), [churches, payments, periodeAktif]);
 
+  const dataDistribusi = useMemo(() => {
+    const columns = SPREADSHEET_COLUMNS.alaman;
+    return churches.map(gereja => {
+      const dist = distributions.find(d => d.gerejaId === gereja.id && d.periode === periodeAktif);
+      return {
+        ...gereja,
+        details: dist ? dist.details : {},
+        periode: periodeAktif
+      };
+    });
+  }, [churches, distributions, periodeAktif]);
+
   const lunasChurches = useMemo(() => {
     return churches.filter(church => {
       const isLaporanLunas = dataLaporanKeuangan.find(d => d.id === church.id)?.status === 'Lunas';
@@ -238,16 +281,28 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     });
   }, [churches, dataLaporanKeuangan, dataPelean, dataAlaman]);
 
-  const totalPemasukan = useMemo(() => payments
-    .filter(p => p.periode === periodeAktif && p.jumlah > 0)
-    .reduce((sum, item) => sum + item.jumlah, 0), [payments, periodeAktif]);
+  const totalPemasukan = useMemo(() => {
+    return payments
+      .filter(p => {
+        const church = churches.find(c => c.id === p.gerejaId);
+        if (!church) return false;
+        const matchResort = filterResort === 'Semua Resort' || church.resort === filterResort;
+        const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
+        return p.periode === periodeAktif && p.jumlah > 0 && matchResort && matchWilayah;
+      })
+      .reduce((sum, item) => sum + item.jumlah, 0);
+  }, [payments, churches, periodeAktif, filterResort, filterWilayah]);
   
   const stats = useMemo(() => {
     let totalMenunggak = 0;
     let totalLunas = 0;
 
     [dataAlaman, dataPelean, dataLaporanKeuangan].forEach((dataset) => {
-      dataset.forEach(item => {
+      dataset.filter(item => {
+        const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+        const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
+        return matchResort && matchWilayah;
+      }).forEach(item => {
         if (item.status === 'Menunggak') {
           totalMenunggak++;
         } else {
@@ -255,8 +310,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         }
       });
     });
-    return { totalMenunggak, totalLunas };
-  }, [dataAlaman, dataPelean, dataLaporanKeuangan]);
+
+    const totalDistribusiItems = dataDistribusi.filter(item => {
+      const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+      const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
+      return matchResort && matchWilayah;
+    }).reduce((sum, item) => {
+      const qty = Object.values(item.details).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
+      return sum + qty;
+    }, 0);
+
+    return { totalMenunggak, totalLunas, totalDistribusiItems };
+  }, [dataAlaman, dataPelean, dataLaporanKeuangan, dataDistribusi, filterResort, filterWilayah]);
 
   const churchesWithArrears = useMemo(() => {
     return churches.map(church => {
@@ -404,6 +469,29 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
+  const handleDistributionChange = async (gerejaId: string, field: string, value: string) => {
+    if (!currentUserProfile) return; 
+
+    let numValue = parseInt(value) || 0;
+
+    const existingDist = distributions.find(d => d.gerejaId === gerejaId && d.periode === periodeAktif);
+    
+    if (existingDist) {
+      const updatedDetails = { ...existingDist.details, [field]: numValue };
+      await updateDoc(doc(db, 'distributions', existingDist.id), {
+        details: updatedDetails,
+        tanggal: new Date().toISOString().split('T')[0]
+      });
+    } else {
+      await addDoc(collection(db, 'distributions'), {
+        gerejaId, 
+        periode: periodeAktif,
+        details: { [field]: numValue },
+        tanggal: new Date().toISOString().split('T')[0]
+      });
+    }
+  };
+
   const handleSaveChurch = async () => {
     if (!currentUserProfile) return;
     if (!formChurch.nama) return alert('Nama wajib diisi!');
@@ -529,26 +617,66 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const handleBulkImport = () => {
+  const handleBulkImport = async () => {
     if (!currentUserProfile) return;
     if (!bulkText.trim()) return;
     const lines = bulkText.split('\n');
-    const newChurches = [...churches];
-    lines.forEach(line => {
+    let addedCount = 0;
+    
+    for (const line of lines) {
       const cols = line.split('\t');
       if (cols.length > 0 && cols[0].trim() !== '') {
-        const newId = (newChurches.length + 1).toString();
-        newChurches.push({
-          id: newId,
+        const churchData: Omit<Church, 'id'> = {
           nama: cols[0].trim(),
           resort: cols[1] ? cols[1].trim() : '-',
-          wa: cols[2] ? cols[2].trim() : ''
-        });
+          wilayah: cols[2] ? cols[2].trim() : '-',
+          wa: cols[3] ? cols[3].trim() : '',
+          order: churches.length + addedCount + 1
+        };
+        try {
+          await addDoc(collection(db, 'churches'), churchData);
+          addedCount++;
+        } catch (err: any) {
+          console.error("Import error line:", line, err);
+        }
       }
-    });
-    setChurches(newChurches);
+    }
+    
     setShowBulkModal(false);
     setBulkText('');
+    alert(`${addedCount} data jemaat berhasil diimpor.`);
+  };
+
+  const handlePullMasterData = async () => {
+    if (!currentUserProfile || currentUserProfile.role !== 'superadmin') return;
+    
+    const confirmImport = window.confirm(
+      "Apakah Anda ingin menarik seluruh Data Jemaat Master (Data Default) ke Database Anda?\n\n" +
+      "Langkah ini akan menyimpan seluruh daftar jemaat yang ada di sistem (Medan, Mentawai, dll.) ke akun Anda sehingga tersimpan permanen."
+    );
+    
+    if (!confirmImport) return;
+
+    try {
+      let added = 0;
+      // We only pull churches that have real names (not placeholders "Jemaat No. X")
+      const masterList = INITIAL_CHURCHES.filter(c => !c.nama.startsWith('Jemaat No.'));
+      const lastOrder = churches.length > 0 ? Math.max(...churches.map(c => c.order || 0)) : 0;
+      
+      for (const church of masterList) {
+        // We use setDoc with its ID to prevent double entry if the ID somehow matches
+        // prepending 'master_' to avoid conflicts with existing auto-ids
+        await setDoc(doc(db, 'churches', `master_${church.id}`), {
+          ...church,
+          order: lastOrder + added + 1
+        });
+        added++;
+      }
+      
+      alert(`✅ BERHASIL!\n\n${added} data jemaat master telah ditarik ke database Anda.`);
+    } catch (err: any) {
+      alert("Gagal menarik data: " + err.message);
+    }
   };
 
   const syncToGoogleSheets = async () => {
@@ -767,7 +895,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
         >
-          <div className="bg-blue-600 p-8 text-center text-white">
+          <div className="bg-gold-600 p-8 text-center text-white">
             <div className="bg-white/20 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md overflow-hidden">
               {appSettings.logoUrl ? (
                 <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
@@ -776,7 +904,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               )}
             </div>
             <h1 className="text-2xl font-bold">{appSettings.title}</h1>
-            <p className="text-blue-100 mt-2">Akses Terbatas: Silakan Masuk</p>
+            <p className="text-gold-100 mt-2">Akses Terbatas: Silakan Masuk</p>
           </div>
           <div className="p-8 space-y-6">
             <div className="space-y-4">
@@ -790,7 +918,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     type="text" 
                     value={gateForm.username} 
                     onChange={e => setGateForm({...gateForm, username: e.target.value})} 
-                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-gold-500 transition-all"
                     placeholder="Username Akses"
                   />
                 </div>
@@ -805,7 +933,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     type="password" 
                     value={gateForm.password} 
                     onChange={e => setGateForm({...gateForm, password: e.target.value})} 
-                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-gold-500 transition-all"
                     placeholder="Password Akses"
                     onKeyDown={e => e.key === 'Enter' && handleGateLogin()}
                   />
@@ -814,7 +942,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             </div>
             <button 
               onClick={handleGateLogin} 
-              className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full bg-gold-600 text-white py-4 rounded-xl font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
             >
               Buka Dashboard
             </button>
@@ -1061,20 +1189,25 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800">
       {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-xl no-print">
-        <div className="p-6 flex items-center space-x-3 border-b border-slate-800">
-          <div className="bg-blue-600 p-2 rounded-lg overflow-hidden flex items-center justify-center w-10 h-10">
-            {appSettings.logoUrl ? (
-              <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-            ) : (
-              <LayoutDashboard size={24} />
-            )}
-          </div>
-          <div>
-            <h1 className="text-lg font-bold leading-tight">{appSettings.title}</h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-              {currentUserProfile?.role === 'superadmin' ? 'Admin Utama' : 'Staf Pengisi'}
-            </p>
+      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-2xl no-print border-r border-white/5">
+        <div className="p-8 flex flex-col border-b border-white/5">
+          <div className="flex items-center space-x-4 mb-6 group cursor-pointer">
+            <div className="bg-gradient-to-br from-gold-400 to-gold-600 p-2.5 rounded-2xl shadow-lg shadow-gold-500/20 flex items-center justify-center w-12 h-12 flex-shrink-0 group-hover:rotate-12 transition-transform">
+              {appSettings.logoUrl ? (
+                <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                <ShieldCheck size={28} className="text-white" />
+              )}
+            </div>
+            <div className="overflow-hidden">
+              <h1 className="text-xl font-black leading-none tracking-tight text-white mb-1 truncate group-hover:text-gold-400 transition-colors">{appSettings.title}</h1>
+              <div className="flex items-center space-x-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${currentUserProfile ? 'bg-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.6)]' : 'bg-slate-500'}`}></div>
+                <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate">
+                  {currentUserProfile?.role === 'superadmin' ? 'Authorized Admin' : currentUserProfile ? 'Staff Access' : 'Public Mode'}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1089,6 +1222,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           <NavItem active={activeTab === 'laporan'} onClick={() => setActiveTab('laporan')} icon={<FileText size={20} />} label={appSettings.menuLaporan} />
           <NavItem active={activeTab === 'pelean'} onClick={() => setActiveTab('pelean')} icon={<FileText size={20} />} label={appSettings.menuPelean} />
           <NavItem active={activeTab === 'alaman'} onClick={() => setActiveTab('alaman')} icon={<FileText size={20} />} label={appSettings.menuAlaman} />
+          <NavItem active={activeTab === 'distribusi'} onClick={() => setActiveTab('distribusi')} icon={<Truck size={20} />} label="Distribusi Literatur" />
 
           <NavHeader label={appSettings.menuRekapJudul} />
           <NavItem active={activeTab === 'pengiriman'} onClick={() => setActiveTab('pengiriman')} icon={<MessageCircle size={20} />} label="Pusat Terima Kasih" />
@@ -1123,13 +1257,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
       {/* MAIN CONTENT */}
       <main className="flex-1 ml-64 min-h-screen flex flex-col">
-        <header className="bg-white shadow-sm px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
-          <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-bold text-slate-800">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
-            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
+          <div className="flex items-center space-x-6">
+            <div className="flex flex-col">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">{activeTab.toUpperCase()}</h2>
+              <div className="flex items-center space-x-1.5 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse"></div>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Live System Online</p>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-slate-200"></div>
+            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
               <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('excel')} icon={<Download size={14} />} label="Excel" color="text-green-600" />
               {currentUserProfile?.role === 'superadmin' && (
-                <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('word')} icon={<FileText size={14} />} label="Word" color="text-blue-600" />
+                <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('word')} icon={<FileText size={14} />} label="Word" color="text-gold-600" />
               )}
               <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('pdf')} icon={<Printer size={14} />} label="PDF" color="text-red-600" />
             </div>
@@ -1140,7 +1281,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               <select 
                 value={periodeAktif} 
                 onChange={(e) => setPeriodeAktif(e.target.value)}
-                className="bg-transparent text-sm font-bold text-blue-700 outline-none cursor-pointer"
+                className="bg-transparent text-sm font-bold text-gold-700 outline-none cursor-pointer"
               >
                 {periods.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -1311,20 +1452,61 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               )}
               {activeTab === 'dashboard' && (
                 <div className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <StatCard title={`Total Pemasukan (${periodeAktif})`} value={`Rp ${formatRupiah(totalPemasukan)}`} icon={<Save className="text-green-600" />} color="green" />
-                    <StatCard title="Status Laporan" value={`${stats.totalLunas} Lunas / ${stats.totalMenunggak} Nunggak`} icon={<CheckCircle2 className="text-blue-600" />} color="blue" />
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center no-print">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-200 pr-4">Filter Dashboard:</span>
+                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                      <span className="text-[9px] font-bold text-gold-600 uppercase">Resort</span>
+                      <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+                        {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                      <span className="text-[9px] font-bold text-gold-600 uppercase">Wilayah</span>
+                      <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+                        {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <StatCard 
+                      title="Total Arus Kas" 
+                      value={`Rp ${formatRupiah(totalPemasukan)}`} 
+                      icon={<TrendingUp size={24} />} 
+                      color="gold" 
+                      subtitle={periodeAktif}
+                    />
+                    <StatCard 
+                      title="Data Terverifikasi" 
+                      value={`${stats.totalLunas}`} 
+                      icon={<CheckCircle2 size={24} />} 
+                      color="gold" 
+                      subtitle="LUNAS"
+                    />
+                     <StatCard 
+                      title="Distribusi Literatur" 
+                      value={`${stats.totalDistribusiItems}`} 
+                      icon={<Package size={24} />} 
+                      color="gold" 
+                      subtitle="TOTAL UNIT"
+                    />
+                    <StatCard 
+                      title="Antrean Tunggakan" 
+                      value={`${stats.totalMenunggak}`} 
+                      icon={<AlertCircle size={24} />} 
+                      color="red" 
+                      subtitle="ACTION REQUIRED"
+                    />
                   </div>
                   
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 flex items-start space-x-4">
-                    <div className="bg-blue-100 p-3 rounded-full">
-                      <AlertTriangle className="text-blue-600" size={24} />
+                  <div className="bg-gold-50 border border-gold-200 rounded-xl p-6 flex items-start space-x-4">
+                    <div className="bg-gold-100 p-3 rounded-full">
+                      <AlertTriangle className="text-gold-600" size={24} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-blue-800 mb-1">
+                      <h3 className="font-bold text-gold-800 mb-1">
                         {currentUserProfile ? `Akses ${currentUserProfile.role === 'superadmin' ? 'Admin' : 'Staf'} Aktif` : "Akses Terbatas (Tamu)"}
                       </h3>
-                      <p className="text-sm text-blue-700 leading-relaxed">
+                      <p className="text-sm text-gold-700 leading-relaxed">
                         {currentUserProfile 
                           ? `Anda masuk sebagai ${currentUserProfile.role === 'superadmin' ? 'Administrator Utama' : 'Staf Pengisi Data'}. Anda dapat mengelola data keuangan dan jemaat secara real-time.`
                           : "Silakan login untuk mendapatkan akses penuh dalam mengelola data keuangan dan administrasi GKLI."}
@@ -1335,15 +1517,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               )}
 
               {activeTab === 'sertifikat' && (
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-yellow-500 to-amber-600 p-8 rounded-2xl text-white shadow-lg">
-                    <div className="flex items-center space-x-4 mb-4">
-                      <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
-                        <Award size={32} />
+                <div className="space-y-8">
+                  <div className="relative overflow-hidden bg-slate-900 rounded-3xl p-8 text-white shadow-2xl">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-gold-600/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-600/10 rounded-full blur-3xl -ml-32 -mb-32"></div>
+                    
+                    <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                      <div className="flex items-center space-x-6">
+                        <div className="bg-gradient-to-br from-gold-300 to-gold-600 p-4 rounded-2xl shadow-xl shadow-gold-500/20">
+                          <Award size={40} className="text-white" />
+                        </div>
+                        <div>
+                          <h2 className="text-3xl font-black tracking-tight uppercase">Prestasi Administrasi</h2>
+                          <p className="text-slate-400 font-medium">Penghargaan untuk Jemaat dengan kedisiplinan setoran 100% pada periode {periodeAktif}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">Apresiasi Prestasi Penyetoran</h2>
-                        <p className="text-yellow-100">Daftar jemaat yang telah menyelesaikan seluruh kewajiban administrasi periode {periodeAktif}</p>
+                      <div className="hidden lg:block text-right">
+                        <p className="text-4xl font-black text-white/10 italic">GKLI PRESTIGE</p>
                       </div>
                     </div>
                   </div>
@@ -1393,80 +1583,112 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
               {activeTab === 'gereja' && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex flex-col md:flex-row items-center gap-4">
+                  <div className="p-6 border-b border-slate-100 space-y-4">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                       <h3 className="font-bold text-lg">Daftar Jemaat</h3>
-                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">Urutkan:</span>
-                        <select 
-                          value={sortType} 
-                          onChange={(e) => setSortType(e.target.value as any)}
-                          className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
-                        >
+                      <div className="flex flex-wrap items-center gap-3">
+                        {currentUserProfile && (
+                          <div className="flex gap-2">
+                             {currentUserProfile.role === 'superadmin' && (
+                              <button 
+                                onClick={handlePullMasterData} 
+                                className="flex items-center space-x-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-lg shadow-slate-500/10"
+                                title="Tarik data jemaat yang sudah saya sediakan sebelumnya"
+                              >
+                                <Database size={16} /> <span>Tarik Master</span>
+                              </button>
+                            )}
+                            <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10">
+                              <Plus size={16} /> <span>Import</span>
+                            </button>
+                            <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: churches.length + 1 }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/10">
+                              <Plus size={16} /> <span>Tambah</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Sort:</span>
+                        <select value={sortType} onChange={(e) => setSortType(e.target.value as any)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
                           <option value="order">Posisi (Manual)</option>
                           <option value="nama">Nama (A-Z)</option>
                           <option value="resort">Resort</option>
-                          <option value="id">ID</option>
+                          <option value="wilayah">Wilayah</option>
                         </select>
                       </div>
-                    </div>
-                    {currentUserProfile && (
-                      <div className="flex gap-2">
-                        <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors">
-                          <Plus size={16} /> <span>Import Massal</span>
-                        </button>
-                        <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wa: '', order: churches.length + 1 }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
-                          <Plus size={16} /> <span>Tambah Jemaat</span>
-                        </button>
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Resort:</span>
+                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
                       </div>
-                    )}
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Wilayah:</span>
+                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
+                          {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-center space-x-2 bg-gold-50 text-gold-700 border border-gold-200 rounded-lg px-3 py-2 text-[10px] font-bold">
+                        TOTAL: {sortedChurches.length} JEMAAT
+                      </div>
+                    </div>
                   </div>
+
                   <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider border-b border-slate-700">
                         <tr>
-                          <th className="px-6 py-4">No / Posisi</th>
-                          <th className="px-6 py-4">Nama Jemaat</th>
-                          <th className="px-6 py-4">Resort</th>
-                          {currentUserProfile?.role === 'superadmin' && <th className="px-6 py-4">WhatsApp</th>}
-                          {currentUserProfile && <th className="px-6 py-4 text-center">Aksi</th>}
+                          <th className="px-6 py-4 border-b border-slate-700">Posisi</th>
+                          <th className="px-6 py-4 border-b border-slate-700">Nama Jemaat</th>
+                          <th className="px-6 py-4 border-b border-slate-700">Resort</th>
+                          <th className="px-6 py-4 border-b border-slate-700">Wilayah</th>
+                          {currentUserProfile?.role === 'superadmin' && <th className="px-6 py-4 border-b border-slate-700">WhatsApp</th>}
+                          {currentUserProfile && <th className="px-6 py-4 border-b border-slate-700 text-center">Aksi</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {sortedChurches.map((church, idx) => (
                           <tr key={church.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 text-slate-500 font-medium">#{church.order || church.id}</td>
+                            <td className="px-6 py-4 text-slate-400 font-mono text-xs">#{church.order || church.id}</td>
                             <td className="px-6 py-4 font-bold text-slate-800">{church.nama}</td>
-                            <td className="px-6 py-4 text-slate-600">{church.resort}</td>
-                            {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-600">{church.wa || '-'}</td>}
+                            <td className="px-6 py-4 text-slate-600 font-medium">
+                              <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600 font-medium">
+                              <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
+                            </td>
+                            {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
                             {currentUserProfile && (
                               <td className="px-6 py-4 text-center">
-                                <div className="flex justify-center space-x-1">
-                                  {currentUserProfile.role === 'superadmin' && sortType === 'order' && (
+                                <div className="flex justify-center flex-wrap gap-1">
+                                  {currentUserProfile.role === 'superadmin' && sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && (
                                     <>
                                       <button 
                                         onClick={() => handleMoveChurch(church.id, 'up')} 
                                         disabled={idx === 0}
-                                        className="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 disabled:opacity-30" 
-                                        title="Pindah ke Atas"
+                                        className="text-slate-400 hover:text-gold-600 p-2 rounded-lg hover:bg-gold-50 disabled:opacity-20" 
+                                        title="Ke Atas"
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                                       </button>
                                       <button 
                                         onClick={() => handleMoveChurch(church.id, 'down')} 
                                         disabled={idx === sortedChurches.length - 1}
-                                        className="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 disabled:opacity-30" 
-                                        title="Pindah ke Bawah"
+                                        className="text-slate-400 hover:text-gold-600 p-2 rounded-lg hover:bg-gold-50 disabled:opacity-20" 
+                                        title="Ke Bawah"
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                                       </button>
                                     </>
                                   )}
-                                  <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50" title="Edit">
+                                  <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
                                     <Edit size={16} />
                                   </button>
                                   {currentUserProfile.role === 'superadmin' && (
-                                    <button onClick={() => handleDeleteChurch(church.id)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50" title="Hapus">
+                                    <button onClick={() => handleDeleteChurch(church.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50" title="Hapus">
                                       <Trash2 size={16} />
                                     </button>
                                   )}
@@ -1491,13 +1713,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         value={newPeriod} 
                         onChange={e => setNewPeriod(e.target.value)} 
                         placeholder="Contoh: Tahun 2027" 
-                        className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" 
+                        className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500" 
                         disabled={!currentUserProfile}
                       />
                       <button 
                         disabled={!currentUserProfile || !newPeriod.trim()} 
                         onClick={handleAddPeriod} 
-                        className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 disabled:opacity-50 transition-colors shadow-lg shadow-gold-500/10"
                       >
                         Tambah Periode
                       </button>
@@ -1521,30 +1743,130 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                 </div>
               )}
 
-              {(activeTab === 'laporan' || activeTab === 'pelean' || activeTab === 'alaman') && (
+              {activeTab === 'distribusi' && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="p-6 border-b border-slate-100">
-                    <h3 className="font-bold text-lg">{appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
+                  <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div>
+                      <h3 className="font-bold text-lg">Distribusi Literatur</h3>
+                      <p className="text-xs text-slate-500">Catatan jumlah pengiriman Almanak, Kalender, dan Buku ({periodeAktif})</p>
+                    </div>
+                    <div className="flex gap-3">
+                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
+                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        <span className="text-[9px] font-bold text-slate-400 capitalize">Wilayah:</span>
+                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+                          {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold sticky top-0 z-10">
+                    <p className="p-4 bg-slate-50 text-[10px] text-slate-500 italic font-medium">INFO: Kolom ini untuk angka (Jumlah Barang). Pembayaran diatur di menu Literatur.</p>
+                    <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
                         <tr>
-                          <th className="px-4 py-4 border-b border-slate-200 sticky left-0 bg-slate-50 z-20 w-12 text-center">No</th>
-                          <th className="px-4 py-4 border-b border-slate-200 sticky left-12 bg-slate-50 z-20 w-48">Nama Jemaat</th>
-                          <th className="px-4 py-4 border-b border-slate-200 text-center w-24">Status</th>
-                          {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => (
-                            <th key={col} className="px-2 py-4 border-b border-slate-200 text-center w-24">{col}</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center">No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48">Nama Jemaat</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
+                          {SPREADSHEET_COLUMNS.alaman.map(col => (
+                            <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
                           ))}
-                          <th className="px-4 py-4 border-b border-slate-200 text-right bg-blue-50 text-blue-900 w-32">Total (Rp)</th>
-                          <th className="px-4 py-4 border-b border-slate-200 text-center w-24">Aksi</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24 bg-gold-600 text-white">TOTAL QTY</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {getLaporanData(activeTab as any).map((item) => (
+                        {dataDistribusi.filter(item => {
+                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
+                          return matchResort && matchWilayah;
+                        }).map((item, idx) => {
+                          const totalQty = Object.values(item.details).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
+                          return (
+                            <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 sticky left-0 bg-white z-10 text-center border-r border-slate-100">{idx + 1}</td>
+                              <td className="px-4 py-3 sticky left-12 bg-white z-10 font-bold border-r border-slate-100">{item.nama}</td>
+                              <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
+                              {SPREADSHEET_COLUMNS.alaman.map(col => {
+                                const val = item.details[col] || 0;
+                                return (
+                                  <td key={col} className="p-0 border-r border-slate-100">
+                                    {currentUserProfile ? (
+                                      <input 
+                                        type="number" 
+                                        value={val === 0 ? '' : val}
+                                        onChange={(e) => handleDistributionChange(item.id, col, e.target.value)}
+                                        className={`w-full py-3 px-2 text-center outline-none bg-transparent font-mono font-bold ${!val ? 'text-slate-300' : 'text-gold-700'}`}
+                                        placeholder="0"
+                                      />
+                                    ) : (
+                                      <div className={`w-full py-3 text-center font-mono ${!val ? 'text-slate-300' : 'text-gold-700 font-bold'}`}>
+                                        {val || '-'}
+                                      </div>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-4 py-3 text-center font-black font-mono text-slate-900 bg-slate-50 min-w-[100px]">{totalQty}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {(activeTab === 'laporan' || activeTab === 'pelean' || activeTab === 'alaman') && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <h3 className="font-bold text-lg">{appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
+                    <div className="flex gap-3">
+                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
+                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        <span className="text-[9px] font-bold text-slate-400 capitalize">Wilayah:</span>
+                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+                          {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="overflow-auto custom-scrollbar max-h-[70vh]">
+                    <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
+                        <tr>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center">No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48">Nama Jemaat</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Wilayah</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Status</th>
+                          {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => (
+                            <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
+                          ))}
+                          <th className="px-4 py-4 border-b border-slate-700 text-right bg-gold-600 text-white w-32 font-black">TOTAL (RP)</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">AKSI</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {getLaporanData(activeTab as any).filter(item => {
+                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
+                          return matchResort && matchWilayah;
+                        }).map((item, idx) => (
                           <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3 sticky left-0 bg-white z-10 text-center border-r border-slate-100">{item.id}</td>
+                            <td className="px-4 py-3 sticky left-0 bg-white z-10 text-center border-r border-slate-100">{idx + 1}</td>
                             <td className="px-4 py-3 sticky left-12 bg-white z-10 font-bold border-r border-slate-100">{item.nama}</td>
+                            <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
+                            <td className="px-4 py-3 text-center text-[10px] text-slate-500 font-bold text-gold-600">{item.wilayah || '-'}</td>
                             <td className="px-4 py-3 text-center">
                               <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                 {item.status.toUpperCase()}
@@ -1562,7 +1884,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                           type="checkbox" 
                                           checked={isSelected}
                                           onChange={() => toggleCellSelection(item.id, col)}
-                                          className="w-3 h-3 cursor-pointer"
+                                          className="w-3 h-3 cursor-pointer text-gold-600 focus:ring-gold-500 rounded"
                                           title="Pilih untuk pesan gabungan"
                                         />
                                       </div>
@@ -1573,11 +1895,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                           type="text" 
                                           value={formatInput(val)}
                                           onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
-                                          className={`w-full py-3 text-right outline-none bg-transparent font-medium ${!val ? 'text-red-400' : 'text-slate-700'}`}
+                                          className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? 'text-red-400 font-medium' : 'text-slate-700 font-bold'}`}
                                           placeholder="0"
                                         />
                                       ) : (
-                                        <div className={`w-full py-3 text-right font-medium ${!val ? 'text-red-300' : 'text-slate-700'}`}>
+                                        <div className={`w-full py-3 text-right font-mono data-value ${!val ? 'text-red-300' : 'text-slate-700 font-bold'}`}>
                                           {val || '-'}
                                         </div>
                                       )}
@@ -1595,7 +1917,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 </td>
                               );
                             })}
-                            <td className="px-4 py-3 text-right font-bold text-blue-900 bg-blue-50/30">{formatRupiah(item.jumlah)}</td>
+                            <td className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-col items-center space-y-1">
                                 <div className="flex justify-center space-x-1">
@@ -1618,14 +1940,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   <div className="flex space-x-1">
                                     <button 
                                       onClick={() => handleKirimWABatch(item)}
-                                      className="bg-green-600 text-white p-1 rounded text-[9px] font-bold"
+                                      className="bg-emerald-600 text-white p-1 rounded text-[9px] font-bold"
                                       title="Kirim WA Gabungan"
                                     >
                                       WA Gabung
                                     </button>
                                     <button 
                                       onClick={() => handlePrintBukti(item, 'penerimaan')}
-                                      className="bg-blue-600 text-white p-1 rounded text-[9px] font-bold"
+                                      className="bg-gold-600 text-white p-1 rounded text-[9px] font-bold"
                                       title="Cetak Bukti Penerimaan"
                                     >
                                       Bukti
@@ -1658,7 +1980,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         <select 
                           value={downloadKategori} 
                           onChange={(e) => setDownloadKategori(e.target.value as any)}
-                          className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-bold"
+                          className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500 bg-slate-50 font-bold"
                         >
                           <option value="laporan">{appSettings.menuLaporan}</option>
                           <option value="pelean">{appSettings.menuPelean}</option>
@@ -1666,10 +1988,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </select>
                       </div>
                       <div className="flex flex-col gap-3">
-                        <button onClick={() => { setPrintData({ kategori: downloadKategori }); setPrintType('rekap'); }} className="flex items-center justify-center space-x-3 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-transform hover:scale-[1.02]">
+                        <button onClick={() => { setPrintData({ kategori: downloadKategori }); setPrintType('rekap'); }} className="flex items-center justify-center space-x-3 bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 transition-transform hover:scale-[1.02] shadow-lg shadow-gold-500/20">
                           <Printer size={20} /> <span>Cetak Rekapitulasi</span>
                         </button>
-                        <button onClick={() => alert('Fitur download CSV sedang disiapkan')} className="flex items-center justify-center space-x-3 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-transform hover:scale-[1.02]">
+                        <button onClick={() => alert('Fitur download CSV sedang disiapkan')} className="flex items-center justify-center space-x-3 bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-transform hover:scale-[1.02] shadow-lg shadow-emerald-500/20">
                           <Download size={20} /> <span>Download Excel (CSV)</span>
                         </button>
                         <button onClick={syncToGoogleSheets} className="flex items-center justify-center space-x-3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-transform hover:scale-[1.02]">
@@ -1733,7 +2055,7 @@ function doPost(e) {
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                     <h3 className="font-bold text-lg">Manajemen Akun Cloud</h3>
-                    <button onClick={() => { setFormUser({ username: '', password: '', role: 'staff' }); setShowUserModal(true); }} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
+                    <button onClick={() => { setFormUser({ username: '', password: '', role: 'staff' }); setShowUserModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/10">
                       <UserPlus size={16} /> <span>Tambah Akun</span>
                     </button>
                   </div>
@@ -1790,7 +2112,7 @@ function doPost(e) {
                                 reader.readAsDataURL(file);
                               }
                             }}
-                            className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gold-50 file:text-gold-700 hover:file:bg-gold-100"
                           />
                           {templates.kopSurat && (
                             <button onClick={() => setTemplates({ ...templates, kopSurat: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus Kop</button>
@@ -1821,7 +2143,7 @@ function doPost(e) {
                                   reader.readAsDataURL(file);
                                 }
                               }}
-                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
                             />
                             {templates.stempelTerimaKasih && (
                               <button onClick={() => setTemplates({ ...templates, stempelTerimaKasih: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus</button>
@@ -1870,7 +2192,7 @@ function doPost(e) {
                           <textarea 
                             value={templates.suratTerimaKasih}
                             onChange={(e) => setTemplates({ ...templates, suratTerimaKasih: e.target.value })}
-                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-serif"
+                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-gold-500 font-serif"
                           ></textarea>
                         </div>
                         <div className="space-y-2">
@@ -1878,14 +2200,14 @@ function doPost(e) {
                           <textarea 
                             value={templates.suratTunggakan}
                             onChange={(e) => setTemplates({ ...templates, suratTunggakan: e.target.value })}
-                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-serif"
+                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-gold-500 font-serif"
                           ></textarea>
                         </div>
                       </div>
 
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-bold text-blue-800 text-xs mb-2 uppercase">Daftar Placeholder (Kode Otomatis)</h4>
-                        <p className="text-[11px] text-blue-700 leading-relaxed">
+                      <div className="bg-gold-50 p-4 rounded-lg border border-gold-100">
+                        <h4 className="font-bold text-gold-800 text-xs mb-2 uppercase">Daftar Placeholder (Kode Otomatis)</h4>
+                        <p className="text-[11px] text-gold-700 leading-relaxed">
                           Gunakan kode di bawah ini dalam teks surat agar sistem mengisi data secara otomatis:
                           <br /><b>[NAMA_JEMAAT]</b> : Nama gereja
                           <br /><b>[RESORT]</b> : Nama resort
@@ -1913,7 +2235,7 @@ function doPost(e) {
               type="text" 
               value={loginForm.username} 
               onChange={e => setLoginForm({...loginForm, username: e.target.value})} 
-              className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" 
+              className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500" 
             />
           </div>
           <div>
@@ -1922,11 +2244,11 @@ function doPost(e) {
               type="password" 
               value={loginForm.password} 
               onChange={e => setLoginForm({...loginForm, password: e.target.value})} 
-              className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" 
+              className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500" 
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
             />
           </div>
-          <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">
+          <button onClick={handleLogin} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">
             Masuk Sebagai Admin
           </button>
           
@@ -1949,36 +2271,46 @@ function doPost(e) {
         <div className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Jemaat</label>
-            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nama Jemaat" />
+            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Nama Jemaat" />
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Resort</label>
-            <input type="text" value={formChurch.resort} onChange={e => setFormChurch({...formChurch, resort: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Resort" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Resort</label>
+              <input type="text" value={formChurch.resort} onChange={e => setFormChurch({...formChurch, resort: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Resort" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Wilayah</label>
+              <input type="text" value={formChurch.wilayah} onChange={e => setFormChurch({...formChurch, wilayah: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Wilayah" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No. WA (628...)</label>
-              <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="628..." />
+              <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="628..." />
             </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Posisi Urutan</label>
-              <input type="number" value={formChurch.order} onChange={e => setFormChurch({...formChurch, order: parseInt(e.target.value) || 0})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Posisi" />
+              <input type="number" value={formChurch.order} onChange={e => setFormChurch({...formChurch, order: parseInt(e.target.value) || 0})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Posisi" />
             </div>
           </div>
-          <button onClick={handleSaveChurch} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Simpan Data Jemaat</button>
+          <button onClick={handleSaveChurch} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">Simpan Data Jemaat</button>
         </div>
       </Modal>
 
       <Modal show={showBulkModal} onClose={() => setShowBulkModal(false)} title="Import Massal Jemaat">
         <div className="space-y-4">
-          <p className="text-xs text-slate-500">Format: Nama Jemaat [TAB] Resort [TAB] No WA. Pisahkan tiap baris untuk jemaat berbeda.</p>
+          <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-[10px] text-amber-800 leading-relaxed font-medium">
+            <p className="font-bold mb-1 uppercase tracking-wider">Format Import (Tab-Delimited):</p>
+            <p>Nama Jemaat [TAB] Resort [TAB] Wilayah [TAB] No WA</p>
+            <p className="mt-1">* Copy data dari Excel mulai dari kolom Nama sampai WA.</p>
+          </div>
           <textarea 
             value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
             placeholder="Paste data dari Excel di sini..."
-            className="w-full h-48 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full h-48 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500 text-sm font-mono"
           ></textarea>
-          <button onClick={handleBulkImport} className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">Import Sekarang</button>
+          <button onClick={handleBulkImport} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-xl shadow-gold-500/10 transition-all">Import Sekarang</button>
         </div>
       </Modal>
 
@@ -1986,18 +2318,18 @@ function doPost(e) {
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
-            <input type="text" value={formUser.username} onChange={e => setFormUser({...formUser, username: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Username" />
+            <input type="text" value={formUser.username} onChange={e => setFormUser({...formUser, username: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Username" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
-            <input type="text" value={formUser.password} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password" />
+            <input type="text" value={formUser.password} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Password" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pilih Peran (Role)</label>
             <select 
               value={formUser.role} 
               onChange={e => setFormUser({...formUser, role: e.target.value as 'superadmin' | 'staff'})}
-              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 bg-white"
             >
               <option value="staff">Staff (Hanya Akses Dashboard)</option>
               <option value="superadmin">Admin (Akses Kelola & Edit Data)</option>
@@ -2007,7 +2339,7 @@ function doPost(e) {
               <br />* Admin digunakan untuk membantu mengelola dan mengedit data.
             </p>
           </div>
-          <button onClick={handleSaveUser} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">Buat Akun Sekarang</button>
+          <button onClick={handleSaveUser} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/20">Buat Akun Sekarang</button>
         </div>
       </Modal>
 
@@ -2029,9 +2361,9 @@ function doPost(e) {
                     reader.readAsDataURL(file);
                   }
                 }}
-                className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-              />
-              {formSettings.logoUrl && (
+                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gold-50 file:text-gold-700 hover:file:bg-gold-100"
+                            />
+                            {formSettings.logoUrl && (
                 <button onClick={() => setFormSettings({ ...formSettings, logoUrl: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus Logo</button>
               )}
             </div>
@@ -2089,7 +2421,7 @@ function doPost(e) {
             </div>
           </div>
 
-          <button onClick={handleSaveSettings} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Simpan Pengaturan</button>
+          <button onClick={handleSaveSettings} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all transform hover:scale-[1.01]">Simpan Pengaturan</button>
         </div>
       </Modal>
     </div>
@@ -2102,11 +2434,24 @@ function NavItem({ active, onClick, icon, label, className = "" }: { active: boo
   return (
     <button 
       onClick={onClick} 
-      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'} ${className}`}
+      className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group relative ${
+        active 
+          ? 'bg-gold-500 text-white shadow-lg shadow-gold-900/40 font-semibold' 
+          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+      } ${className}`}
     >
-      {icon}
-      <span className="text-sm font-medium">{label}</span>
-      {active && <motion.div layoutId="activeNav" className="ml-auto"><ChevronRight size={14} /></motion.div>}
+      <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-gold-400'} transition-colors`}>
+        {icon}
+      </span>
+      <span className="text-sm">{label}</span>
+      {active && (
+        <motion.div 
+          layoutId="activeNavIndicator" 
+          className="absolute left-0 w-1 h-6 bg-white rounded-r-full" 
+          initial={false}
+        />
+      )}
+      {active && <ChevronRight size={14} className="ml-auto opacity-50" />}
     </button>
   );
 }
@@ -2127,21 +2472,33 @@ function HeaderDownloadBtn({ onClick, icon, label, color }: { onClick: () => voi
   );
 }
 
-function StatCard({ title, value, icon, color }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' }) {
-  const colors = {
-    green: 'border-green-500 bg-green-50/30',
-    red: 'border-red-500 bg-red-50/30',
-    blue: 'border-blue-500 bg-blue-50/30'
+function StatCard({ title, value, icon, color, subtitle }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' | 'gold', subtitle?: string }) {
+  const themes = {
+    green: 'from-emerald-500 to-teal-600 shadow-emerald-200/50 text-emerald-600 bg-emerald-50',
+    red: 'from-orange-500 to-red-600 shadow-red-200/50 text-red-600 bg-red-50',
+    blue: 'from-gold-500 to-amber-600 shadow-gold-200/50 text-gold-600 bg-gold-50',
+    gold: 'from-gold-400 to-gold-600 shadow-gold-200/50 text-gold-600 bg-gold-50'
   };
+  
   return (
-    <div className={`bg-white rounded-2xl shadow-sm p-6 border-l-4 ${colors[color]} flex items-center justify-between`}>
-      <div>
-        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">{title}</p>
-        <p className="text-2xl font-black text-slate-800">{value}</p>
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className={`p-3 rounded-xl ${themes[color].split(' shadow')[1].split(' bg')[1]} ${themes[color].split(' text')[1].split(' bg')[0]}`}>
+            {icon}
+          </div>
+          {subtitle && (
+            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-full uppercase tracking-wider">
+              {subtitle}
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">{title}</p>
+        <p className="text-2xl font-mono font-bold text-slate-900 tracking-tight">
+          {value}
+        </p>
       </div>
-      <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-100">
-        {icon}
-      </div>
+      <div className={`h-1 bg-gradient-to-r ${themes[color].split(' shadow')[0]}`}></div>
     </div>
   );
 }
@@ -2177,7 +2534,7 @@ function SettingInput({ label, value, onChange }: { label: string, value: string
         type="text" 
         value={value} 
         onChange={e => onChange(e.target.value)} 
-        className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" 
+        className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-gold-500" 
       />
     </div>
   );

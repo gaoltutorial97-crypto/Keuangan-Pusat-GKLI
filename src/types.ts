@@ -2,7 +2,9 @@ export interface Church {
   id: string;
   nama: string;
   resort: string;
+  wilayah: string;
   wa: string;
+  order?: number;
 }
 
 export interface Payment {
@@ -37,4 +39,12 @@ export interface AppSettings {
   googleSheetUrl: string;
 }
 
-export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat';
+export interface Distribution {
+  id: string;
+  gerejaId: string;
+  periode: string;
+  details: Record<string, number>;
+  tanggal: string;
+}
+
+export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat';
