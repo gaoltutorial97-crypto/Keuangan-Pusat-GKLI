@@ -412,6 +412,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       alert("Silakan atur URL Google Apps Script di Pengaturan terlebih dahulu.");
       return;
     }
+
+    if (!appSettings.googleSheetUrl.includes('/exec')) {
+      alert("⚠️ URL TIDAK VALID\n\nSepertinya Anda memasukkan URL Editor. Harap masukkan URL hasil 'New Deployment' yang berakhiran dengan /exec");
+      return;
+    }
     
     const confirmSync = window.confirm("Apakah Anda ingin mencadangkan seluruh data ke Google Sheet?");
     if (!confirmSync) return;
@@ -427,18 +432,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         }
       };
 
-      // Kita menghapus header 'Content-Type': 'application/json' karena sering memicu error CORS 
-      // pada fetch mode 'no-cors'. Google Apps Script tetap bisa membaca body-nya.
+      // Kita kirim sebagai text/plain untuk menghindari CORS preflight request
       await fetch(appSettings.googleSheetUrl, {
         method: 'POST',
         mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain'
+        },
         body: JSON.stringify(data)
       });
 
-      alert("Data berhasil dikirim ke antrean Google Sheet!\n\nCatatan: Karena alasan keamanan browser, kami tidak bisa memastikan data sudah masuk atau belum secara otomatis. Silakan periksa Spreadsheet Anda.");
+      alert("🚀 INSTRUKSI SINKRONISASI TERKIRIM!\n\nData sedang diproses oleh Google. \n\nTips: Jika data belum muncul di Google Sheet, klik 'Edit Tampilan' lalu tekan tombol 'Cek Koneksi' untuk memastikan link Anda sudah benar.");
     } catch (error) {
       console.error("Sync Error:", error);
-      alert("Gagal menghubungi Google Sheet.\n\nTips: Pastikan URL diakhiri dengan '/exec' dan Apps Script sudah dideploy dengan akses 'Anyone'.");
+      alert("❌ KEGAGALAN SISTEM\n\nTidak dapat menghubungi server Google. Harap periksa koneksi internet Anda atau pastikan URL Apps Script belum kedaluwarsa.");
     }
   };
 
@@ -1878,17 +1885,40 @@ function doPost(e) {
             <SettingInput label="Menu Alaman" value={formSettings.menuAlaman} onChange={v => setFormSettings({...formSettings, menuAlaman: v})} />
           </div>
 
-          <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-            <h4 className="font-bold text-green-800 mb-2 flex items-center"><Database size={18} className="mr-2" /> Integrasi Database Cloud</h4>
-            <SettingInput 
-              label="URL Web App Google Sheets (Apps Script)" 
-              value={formSettings.googleSheetUrl} 
-              onChange={v => setFormSettings({...formSettings, googleSheetUrl: v})} 
-            />
-            <p className="text-[10px] text-green-700 mt-2 leading-relaxed">
-              * Paste URL yang didapat setelah melakukan "Deploy as Web App" pada Google Apps Script di Google Sheet Anda.
-              <br />* Fitur ini memungkinkan Anda menyimpan database secara online agar data dapat diakses dari perangkat lain.
-            </p>
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+            <h4 className="font-bold text-green-400 mb-4 flex items-center"><Database size={18} className="mr-2" /> Integrasi Database Cloud</h4>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">URL Web App Google Sheets (Apps Script)</label>
+                <div className="flex space-x-2">
+                  <input 
+                    type="text" 
+                    value={formSettings.googleSheetUrl} 
+                    onChange={v => setFormSettings({...formSettings, googleSheetUrl: v.target.value})} 
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-green-500 outline-none font-mono text-green-400"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (!formSettings.googleSheetUrl) return alert("Masukkan URL terlebih dahulu");
+                      if (!formSettings.googleSheetUrl.includes('/exec')) return alert("⚠️ URL Salah!\n\nHarap gunakan URL hasil Deploy yang berakhiran /exec");
+                      window.open(formSettings.googleSheetUrl, '_blank');
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    Cek Koneksi
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  <span className="text-green-500 font-bold">CARA TES:</span> Klik tombol <b>Cek Koneksi</b>. Jika muncul tulisan "API Aktif", berarti link sudah benar. Jika muncul "doGet not found", berarti Anda salah melakukan Deploy.
+                </p>
+              </div>
+            </div>
           </div>
 
           <button onClick={handleSaveSettings} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Simpan Pengaturan</button>
