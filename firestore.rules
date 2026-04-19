@@ -81,7 +81,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
       allow list: if isSuperAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId && 
-                    incoming().role == 'staff'; // Default role for auto-provisioned
+                    (incoming().role == 'staff' || request.auth.token.email in ['kpt_gkli@yahoo.com', 'bendum@gkli.org', 'lutheranchurch.priangaol@gmail.com']); 
       allow update: if isSuperAdmin(); // Only admin can promote
       allow delete: if isSuperAdmin();
     }

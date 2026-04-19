@@ -290,11 +290,38 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const handleLogin = async () => {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, loginForm.username, loginForm.password);
+      await signInWithEmailAndPassword(auth, loginForm.username, loginForm.password);
       setShowLoginModal(false);
       setLoginForm({ username: '', password: '' });
     } catch (error: any) {
-      alert('Login Gagal: ' + error.message);
+      if (error.code === 'auth/operation-not-allowed') {
+        alert('KESALAHAN KONFIGURASI: Metode login Email/Password belum diaktifkan di Firebase Console.\n\nHarap ke: Firebase Console > Authentication > Sign-in method > Aktifkan "Email/Password".');
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        alert('Login Gagal: Username atau Password salah.');
+      } else {
+        alert('Login Gagal: ' + error.message);
+      }
+    }
+  };
+
+  const handleRegisterInitialAdmin = async () => {
+    if (users.length > 0) return;
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, loginForm.username, loginForm.password);
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        username: loginForm.username,
+        role: 'superadmin',
+        password: '' // Optional, we use Firebase Auth
+      });
+      setShowLoginModal(false);
+      setLoginForm({ username: '', password: '' });
+      alert("Sukses! Akun Superadmin Pertama telah berhasil dibuat.");
+    } catch (error: any) {
+      if (error.code === 'auth/operation-not-allowed') {
+        alert('KESALAHAN KONFIGURASI: Metode login Email/Password belum diaktifkan di Firebase Console.');
+      } else {
+        alert('Gagal membuat akun: ' + error.message);
+      }
     }
   };
 
@@ -1902,6 +1929,19 @@ function doPost(e) {
           <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">
             Masuk Sebagai Admin
           </button>
+          
+          {users.length === 0 && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-[10px] text-yellow-800 mb-2 font-bold uppercase tracking-widest text-center">Inisialisasi Sistem</p>
+              <p className="text-xs text-yellow-700 mb-4 text-center">Belum ada akun admin di database. Silakan isi form di atas lalu klik tombol di bawah untuk membuat akun Superadmin pertama.</p>
+              <button 
+                onClick={handleRegisterInitialAdmin}
+                className="w-full bg-yellow-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-yellow-700 transition-all"
+              >
+                Buat Akun Admin Pertama
+              </button>
+            </div>
+          )}
         </div>
       </Modal>
 
