@@ -399,12 +399,46 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const handleDeleteChurch = async (id: string) => {
     if (!currentUserProfile) return;
     if (window.confirm("Apakah Anda yakin ingin menghapus jemaat ini? Seluruh data pembayaran jemaat ini juga akan dihapus permanen.")) {
-       await deleteDoc(doc(db, 'churches', id));
-       // Also cleanup payments
-       const toDelete = payments.filter(p => p.gerejaId === id);
-       for (const p of toDelete) {
-         await deleteDoc(doc(db, 'payments', p.id));
+       try {
+         await deleteDoc(doc(db, 'churches', id));
+         // Also cleanup payments
+         const toDelete = payments.filter(p => p.gerejaId === id);
+         for (const p of toDelete) {
+           await deleteDoc(doc(db, 'payments', p.id));
+         }
+       } catch (err: any) {
+         alert("Gagal menghapus: " + err.message);
        }
+    }
+  };
+
+  const handleMoveChurch = async (id: string, direction: 'up' | 'down') => {
+    if (!currentUserProfile) return;
+    const currentIndex = sortedChurches.findIndex(c => c.id === id);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= sortedChurches.length) return;
+
+    const currentChurch = sortedChurches[currentIndex];
+    const targetChurch = sortedChurches[targetIndex];
+
+    try {
+      // Swap orders
+      const currentOrder = currentChurch.order || 0;
+      const targetOrder = targetChurch.order || 0;
+
+      // Handle same order case fallback
+      const finalCurrentOrder = currentOrder === targetOrder 
+        ? (direction === 'up' ? targetOrder - 1 : targetOrder + 1)
+        : targetOrder;
+      
+      const finalTargetOrder = currentOrder;
+
+      await updateDoc(doc(db, 'churches', currentChurch.id), { order: finalCurrentOrder });
+      await updateDoc(doc(db, 'churches', targetChurch.id), { order: finalTargetOrder });
+    } catch (err: any) {
+      alert("Gagal memindahkan: " + err.message);
     }
   };
 
@@ -1372,7 +1406,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {sortedChurches.map((church) => (
+                        {sortedChurches.map((church, idx) => (
                           <tr key={church.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-4 text-slate-500 font-medium">#{church.order || church.id}</td>
                             <td className="px-6 py-4 font-bold text-slate-800">{church.nama}</td>
@@ -1381,12 +1415,34 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             {currentUserProfile && (
                               <td className="px-6 py-4 text-center">
                                 <div className="flex justify-center space-x-1">
+                                  {currentUserProfile.role === 'superadmin' && sortType === 'order' && (
+                                    <>
+                                      <button 
+                                        onClick={() => handleMoveChurch(church.id, 'up')} 
+                                        disabled={idx === 0}
+                                        className="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 disabled:opacity-30" 
+                                        title="Pindah ke Atas"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                                      </button>
+                                      <button 
+                                        onClick={() => handleMoveChurch(church.id, 'down')} 
+                                        disabled={idx === sortedChurches.length - 1}
+                                        className="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 disabled:opacity-30" 
+                                        title="Pindah ke Bawah"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                      </button>
+                                    </>
+                                  )}
                                   <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50" title="Edit">
                                     <Edit size={16} />
                                   </button>
-                                  <button onClick={() => handleDeleteChurch(church.id)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50" title="Hapus">
-                                    <Trash2 size={16} />
-                                  </button>
+                                  {currentUserProfile.role === 'superadmin' && (
+                                    <button onClick={() => handleDeleteChurch(church.id)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50" title="Hapus">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             )}
