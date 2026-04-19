@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Church": {
+      "title": "Church",
+      "description": "Church or congregation data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama": { "type": "string" },
+        "resort": { "type": "string" },
+        "wa": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["nama", "resort"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment records for a church for a specific category and period",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "gerejaId": { "type": "string" },
+        "kategori": { "type": "string", "enum": ["laporan", "pelean", "alaman"] },
+        "periode": { "type": "string" },
+        "details": { "type": "object" },
+        "jumlah": { "type": "number" },
+        "tanggal": { "type": "string", "format": "date-time" }
+      },
+      "required": ["gerejaId", "kategori", "periode"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Configuration for the application appearance and menu names",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "menuMasterData": { "type": "string" },
+        "menuGereja": { "type": "string" },
+        "menuPeriode": { "type": "string" },
+        "menuPembayaran": { "type": "string" },
+        "menuLaporan": { "type": "string" },
+        "menuPelean": { "type": "string" },
+        "menuAlaman": { "type": "string" },
+        "menuRekapJudul": { "type": "string" },
+        "menuRekapMenu": { "type": "string" },
+        "menuDownloadMenu": { "type": "string" },
+        "googleSheetUrl": { "type": "string" }
+      }
+    },
+    "UserRole": {
+      "title": "UserRole",
+      "description": "User role data stored in Firestore",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "role": { "type": "string", "enum": ["superadmin", "staff"] }
+      }
+    }
+  },
+  "firestore": {
+    "/churches/{churchId}": {
+      "schema": "Church",
+      "description": "Collection of jemaat data"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Collection of payment records"
+    },
+    "/settings/config": {
+      "schema": "AppSettings",
+      "description": "Global application configuration"
+    },
+    "/users/{userId}": {
+      "schema": "UserRole",
+      "description": "User roles and metadata"
+    }
+  }
+}

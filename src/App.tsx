@@ -25,29 +25,33 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Church, Payment, User, AppSettings, TabType } from './types';
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
+import { db, auth } from './firebase';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  addDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  orderBy,
+  updateDoc
+} from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword
+} from 'firebase/auth';
 
 export default function App() {
   // STATE NAVIGASI
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   
   // STATE USER & LOGIN
-  const [users, setUsers] = useState<User[]>(() => {
-    const mandatoryUsers: User[] = [
-      { username: 'kpt_gkli@yahoo.com', password: '@Reformasi1517', role: 'superadmin' },
-      { username: 'GKLI180565', password: 'LUTHERAN', role: 'staff' }
-    ];
-    try {
-      const saved = localStorage.getItem('gkli_users');
-      if (saved) {
-        const parsed = JSON.parse(saved) as User[];
-        // Filter out mandatory users from saved list to avoid duplicates, then combine
-        const filteredParsed = parsed.filter(u => !mandatoryUsers.some(m => m.username === u.username));
-        return [...mandatoryUsers, ...filteredParsed];
-      }
-      return mandatoryUsers;
-    } catch { return mandatoryUsers; }
-  });
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [currentUserProfile, setCurrentUserProfile] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [isGatePassed, setIsGatePassed] = useState(() => {
     return sessionStorage.getItem('gkli_gate_passed') === 'true';
   });
@@ -56,41 +60,94 @@ export default function App() {
   const [gateForm, setGateForm] = useState({ username: '', password: '' });
   const [showUserModal, setShowUserModal] = useState(false);
   const [formUser, setFormUser] = useState<User>({ username: '', password: '', role: 'staff' });
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // STATE PENGATURAN TAMPILAN
-  const [appSettings, setAppSettings] = useState<AppSettings>(() => {
-    try {
-      const saved = localStorage.getItem('gkli_settings');
-      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
-    } catch { return DEFAULT_SETTINGS; }
-  });
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [formSettings, setFormSettings] = useState(DEFAULT_SETTINGS);
 
   // STATE DATA GEREJA & PEMBAYARAN
-  const [churches, setChurches] = useState<Church[]>(() => {
-    try {
-      const saved = localStorage.getItem('gkli_churches');
-      return saved ? JSON.parse(saved) : INITIAL_CHURCHES;
-    } catch { return INITIAL_CHURCHES; }
-  });
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    try {
-      const saved = localStorage.getItem('gkli_payments');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-
-  // EFEK AUTO SAVE KE BROWSER
-  useEffect(() => { localStorage.setItem('gkli_users', JSON.stringify(users)); }, [users]);
-  useEffect(() => { localStorage.setItem('gkli_churches', JSON.stringify(churches)); }, [churches]);
-  useEffect(() => { localStorage.setItem('gkli_payments', JSON.stringify(payments)); }, [payments]);
-  useEffect(() => { localStorage.setItem('gkli_settings', JSON.stringify(appSettings)); }, [appSettings]);
+  const [churches, setChurches] = useState<Church[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   // STATE PERIODE TAHUN
   const [periods, setPeriods] = useState(['Tahun 2021', 'Tahun 2022', 'Tahun 2023', 'Tahun 2024', 'Tahun 2025', 'Tahun 2026']);
   const [periodeAktif, setPeriodeAktif] = useState('Tahun 2026');
   const [newPeriod, setNewPeriod] = useState('');
+
+  // REAL-TIME FIREBASE SYNC - Auth & Settings
+  useEffect(() => {
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (docSnap) => {
+      if (docSnap.exists()) setAppSettings(docSnap.data() as AppSettings);
+    });
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      if (!user) {
+        setIsInitialLoading(false);
+        setCurrentUserProfile(null);
+      }
+    });
+
+    return () => {
+      unsubSettings();
+      unsubAuth();
+    };
+  }, []);
+
+  // REAL-TIME FIREBASE SYNC - Protected Data
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    // 1. Fetch profile
+    const unsubProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setCurrentUserProfile(docSnap.data() as User);
+      } else {
+        // Fallback for new accounts
+        setCurrentUserProfile({ username: firebaseUser.email || '', role: 'staff', password: '' });
+      }
+      setIsInitialLoading(false);
+    }, (error) => {
+      console.warn("Profile sync restricted:", error.message);
+      setIsInitialLoading(false);
+    });
+
+    // 2. Listen to Churches
+    const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), (snap) => {
+      const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Church));
+      if (data.length > 0) setChurches(data);
+      else if (isInitialLoading) setChurches(INITIAL_CHURCHES); 
+    }, (error) => console.warn("Churches access restricted:", error.message));
+
+    // 3. Listen to Payments
+    const unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
+      setPayments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
+    }, (error) => console.warn("Payments access restricted:", error.message));
+
+    return () => {
+      unsubProfile();
+      unsubChurches();
+      unsubPayments();
+    };
+  }, [firebaseUser, isInitialLoading]);
+
+  // REAL-TIME FIREBASE SYNC - Admin Only
+  useEffect(() => {
+    if (currentUserProfile?.role !== 'superadmin') {
+      setUsers([]);
+      return;
+    }
+
+    const unsubUsersList = onSnapshot(collection(db, 'users'), (snap) => {
+      setUsers(snap.docs.map(doc => ({ ...doc.data() } as User)));
+    }, (error) => {
+      console.warn("User list restricted:", error.message);
+    });
+
+    return () => unsubUsersList();
+  }, [currentUserProfile]);
 
   // STATE CETAK & DOWNLOAD
   const [printData, setPrintData] = useState<any>(null);
@@ -99,9 +156,10 @@ export default function App() {
 
   // STATE MODAL LAINNYA
   const [showChurchModal, setShowChurchModal] = useState(false);
-  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wa: '' });
+  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wa: '', order: 1 });
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'order'>('order');
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
 
@@ -137,9 +195,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   useEffect(() => { localStorage.setItem('gkli_templates', JSON.stringify(templates)); }, [templates]);
 
-  // ==========================================
-  // FUNGSI PERHITUNGAN LAPORAN
-  // ==========================================
+  const sortedChurches = useMemo(() => {
+    return [...churches].sort((a, b) => {
+      if (sortType === 'nama') return a.nama.localeCompare(b.nama);
+      if (sortType === 'resort') return a.resort.localeCompare(b.resort);
+      if (sortType === 'order') return (a.order || 0) - (b.order || 0);
+      return a.id.localeCompare(b.id);
+    });
+  }, [churches, sortType]);
   const getLaporanData = (kategori: 'laporan' | 'pelean' | 'alaman') => {
     const columns = SPREADSHEET_COLUMNS[kategori];
     return churches.map(gereja => {
@@ -225,104 +288,124 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
-  const handleLogin = () => {
-    const foundUser = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
-    if (foundUser) {
-      setCurrentUser(foundUser);
+  const handleLogin = async () => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, loginForm.username, loginForm.password);
       setShowLoginModal(false);
       setLoginForm({ username: '', password: '' });
-    } else {
-      alert('Email atau Password salah!');
+    } catch (error: any) {
+      alert('Login Gagal: ' + error.message);
     }
   };
 
-  const handleSaveUser = () => {
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
+
+  const handleSaveUser = async () => {
     if (!formUser.username || !formUser.password) return alert('Username dan Password wajib diisi!');
     
-    setUsers(prev => {
-      const exists = prev.findIndex(u => u.username === formUser.username);
-      if (exists !== -1) {
-        const updated = [...prev];
-        updated[exists] = { ...formUser };
-        return updated;
-      }
-      return [...prev, { ...formUser }];
-    });
-    
-    setShowUserModal(false);
-    setFormUser({ username: '', password: '', role: 'staff' });
-    alert('Akun berhasil disimpan!');
-  };
-
-  const handleDeleteUser = (username: string) => {
-    if (username === 'kpt_gkli@yahoo.com') return alert('Akun utama tidak dapat dihapus!');
-    if (window.confirm(`Yakin ingin menghapus akses akun ${username}?`)) {
-      setUsers(users.filter(u => u.username !== username));
+    try {
+      // 1. Create auth account
+      const userCred = await createUserWithEmailAndPassword(auth, formUser.username, formUser.password);
+      // 2. Store role in Firestore
+      await setDoc(doc(db, 'users', userCred.user.uid), {
+        username: formUser.username,
+        role: formUser.role
+      });
+      setShowUserModal(false);
+      setFormUser({ username: '', password: '', role: 'staff' });
+      alert('Akun berhasil dibuat!');
+    } catch (error: any) {
+      alert('Error: ' + error.message);
     }
   };
 
-  const handleSaveSettings = () => {
-    if (currentUser?.role !== 'superadmin') return;
-    setAppSettings(formSettings);
+  const handleDeleteUser = async (uid: string) => {
+    if (window.confirm(`Yakin ingin menghapus akses akun ini?`)) {
+      await deleteDoc(doc(db, 'users', uid));
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (currentUserProfile?.role !== 'superadmin') return;
+    await setDoc(doc(db, 'settings', 'config'), formSettings);
     setShowSettingsModal(false);
   };
 
-  const handleCellChange = (gerejaId: string, kategori: 'laporan' | 'pelean' | 'alaman', field: string, value: string) => {
-    if (!currentUser) return; 
+  const handleCellChange = async (gerejaId: string, kategori: 'laporan' | 'pelean' | 'alaman', field: string, value: string) => {
+    if (!currentUserProfile) return; 
 
     let numValue = parseInt(value.replace(/[^0-9]/g, ''));
     if (isNaN(numValue)) numValue = 0;
 
-    setPayments(prev => {
-      const existingIdx = prev.findIndex(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
-      
-      // Track session updates
-      setSessionUpdatedCells(sess => {
-        const churchSess = sess[gerejaId] || {};
-        const catSess = churchSess[kategori] || [];
-        if (!catSess.includes(field)) {
-          return {
-            ...sess,
-            [gerejaId]: {
-              ...churchSess,
-              [kategori]: [...catSess, field]
-            }
-          };
-        }
-        return sess;
-      });
-
-      if (existingIdx >= 0) {
-        const updated = [...prev];
-        const payment = { ...updated[existingIdx] };
-        payment.details = { ...payment.details, [field]: numValue };
-        payment.jumlah = Object.values(payment.details).reduce((sum: number, val: number) => sum + (val || 0), 0);
-        payment.tanggal = new Date().toISOString().split('T')[0];
-        updated[existingIdx] = payment;
-        return updated;
-      } else {
-        return [...prev, {
-          id: 'P-' + Math.floor(Math.random() * 100000),
-          gerejaId, kategori, periode: periodeAktif,
-          details: { [field]: numValue },
-          jumlah: numValue,
-          tanggal: new Date().toISOString().split('T')[0]
-        }];
+    const existingPayment = payments.find(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
+    
+    // Track session updates
+    setSessionUpdatedCells(sess => {
+      const churchSess = sess[gerejaId] || {};
+      const catSess = churchSess[kategori] || [];
+      if (!catSess.includes(field)) {
+        return {
+          ...sess,
+          [gerejaId]: {
+            ...churchSess,
+            [kategori]: [...catSess, field]
+          }
+        };
       }
+      return sess;
     });
+
+    if (existingPayment) {
+      const updatedDetails = { ...existingPayment.details, [field]: numValue };
+      const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: number) => sum + (val || 0), 0);
+      await updateDoc(doc(db, 'payments', existingPayment.id), {
+        details: updatedDetails,
+        jumlah: updatedJumlah,
+        tanggal: new Date().toISOString().split('T')[0]
+      });
+    } else {
+      await addDoc(collection(db, 'payments'), {
+        gerejaId, 
+        kategori, 
+        periode: periodeAktif,
+        details: { [field]: numValue },
+        jumlah: numValue,
+        tanggal: new Date().toISOString().split('T')[0]
+      });
+    }
   };
 
-  const handleSaveChurch = () => {
-    if (!currentUser) return;
+  const handleSaveChurch = async () => {
+    if (!currentUserProfile) return;
     if (!formChurch.nama) return alert('Nama wajib diisi!');
-    if (formChurch.id) {
-      setChurches(churches.map(c => c.id === formChurch.id ? formChurch : c));
-    } else {
-      const newId = (churches.length + 1).toString();
-      setChurches([...churches, { ...formChurch, id: newId }]);
+    
+    try {
+      if (formChurch.id) {
+        await updateDoc(doc(db, 'churches', formChurch.id), { ...formChurch });
+      } else {
+        await addDoc(collection(db, 'churches'), { 
+          ...formChurch, 
+          order: formChurch.order || (churches.length + 1) 
+        });
+      }
+      setShowChurchModal(false);
+    } catch (e: any) {
+      alert("Error saving: " + e.message);
     }
-    setShowChurchModal(false);
-    setFormChurch({ id: '', nama: '', resort: '', wa: '' });
+  };
+
+  const handleDeleteChurch = async (id: string) => {
+    if (!currentUserProfile) return;
+    if (window.confirm("Apakah Anda yakin ingin menghapus jemaat ini? Seluruh data pembayaran jemaat ini juga akan dihapus permanen.")) {
+       await deleteDoc(doc(db, 'churches', id));
+       // Also cleanup payments
+       const toDelete = payments.filter(p => p.gerejaId === id);
+       for (const p of toDelete) {
+         await deleteDoc(doc(db, 'payments', p.id));
+       }
+    }
   };
 
   const handleKirimWASpesifik = (item: any, colName: string) => {
@@ -386,7 +469,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   };
 
   const handleBulkImport = () => {
-    if (!currentUser) return;
+    if (!currentUserProfile) return;
     if (!bulkText.trim()) return;
     const lines = bulkText.split('\n');
     const newChurches = [...churches];
@@ -592,7 +675,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   };
 
   const handleAddPeriod = () => {
-    if (!currentUser) return alert('Silakan login untuk menambah periode.');
+    if (!currentUserProfile) return alert('Silakan login untuk menambah periode.');
     if (newPeriod.trim() !== '' && !periods.includes(newPeriod.trim())) {
       setPeriods([...periods, newPeriod.trim()]);
       setNewPeriod('');
@@ -929,16 +1012,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           <div>
             <h1 className="text-lg font-bold leading-tight">{appSettings.title}</h1>
             <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-              {currentUser?.role === 'superadmin' ? 'Admin Utama' : 'Staf Pengisi'}
+              {currentUserProfile?.role === 'superadmin' ? 'Admin Utama' : 'Staf Pengisi'}
             </p>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
-          <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={20} />} label="Dashboard" />
-          <NavItem active={activeTab === 'pengiriman'} onClick={() => setActiveTab('pengiriman')} icon={<MessageCircle size={20} className="text-green-500" />} label="Pusat Pengiriman" className="text-green-500 font-bold" />
-          <NavItem active={activeTab === 'penagihan'} onClick={() => setActiveTab('penagihan')} icon={<AlertTriangle size={20} className="text-red-500" />} label="Pusat Penagihan" className="text-red-500 font-bold" />
-          <NavItem active={activeTab === 'sertifikat'} onClick={() => setActiveTab('sertifikat')} icon={<Award size={20} className="text-yellow-500" />} label="Sertifikat Penghargaan" className="text-yellow-500 font-bold" />
+          <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={20} />} label="Dashboard Ringkasan" />
           
           <NavHeader label={appSettings.menuMasterData} />
           <NavItem active={activeTab === 'gereja'} onClick={() => setActiveTab('gereja')} icon={<Users size={20} />} label={appSettings.menuGereja} />
@@ -950,9 +1030,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           <NavItem active={activeTab === 'alaman'} onClick={() => setActiveTab('alaman')} icon={<FileText size={20} />} label={appSettings.menuAlaman} />
 
           <NavHeader label={appSettings.menuRekapJudul} />
+          <NavItem active={activeTab === 'pengiriman'} onClick={() => setActiveTab('pengiriman')} icon={<MessageCircle size={20} />} label="Pusat Terima Kasih" />
+          <NavItem active={activeTab === 'penagihan'} onClick={() => setActiveTab('penagihan')} icon={<AlertTriangle size={20} />} label="Pusat Penagihan" />
+          <NavItem active={activeTab === 'sertifikat'} onClick={() => setActiveTab('sertifikat')} icon={<Award size={20} />} label="Apresiasi Jemaat" />
           <NavItem active={activeTab === 'download'} onClick={() => setActiveTab('download')} icon={<Download size={20} />} label={appSettings.menuDownloadMenu} />
 
-          {currentUser?.role === 'superadmin' && (
+          {currentUserProfile?.role === 'superadmin' && (
             <>
               <NavHeader label="Pengaturan Sistem" />
               <NavItem active={activeTab === 'templates'} onClick={() => setActiveTab('templates')} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
@@ -963,10 +1046,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          {currentUser ? (
-            <button onClick={() => setCurrentUser(null)} className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-800 transition-colors">
+          {currentUserProfile ? (
+            <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-800 transition-colors">
               <LogOut size={20} />
-              <span className="text-sm font-semibold">Keluar</span>
+              <span className="text-sm font-semibold">Keluar ({currentUserProfile.role})</span>
             </button>
           ) : (
             <button onClick={() => setShowLoginModal(true)} className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-green-400 hover:bg-slate-800 transition-colors bg-slate-800/50">
@@ -984,7 +1067,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             <h2 className="text-xl font-bold text-slate-800">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
             <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
               <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('excel')} icon={<Download size={14} />} label="Excel" color="text-green-600" />
-              {currentUser?.role === 'superadmin' && (
+              {currentUserProfile?.role === 'superadmin' && (
                 <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('word')} icon={<FileText size={14} />} label="Word" color="text-blue-600" />
               )}
               <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('pdf')} icon={<Printer size={14} />} label="PDF" color="text-red-600" />
@@ -1013,6 +1096,81 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
+              {activeTab === 'pengiriman' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="font-bold text-lg">Pusat Terima Kasih & Konfirmasi</h3>
+                        <p className="text-sm text-slate-500">Kirim ucapan terima kasih untuk setoran yang sudah masuk pada periode {periodeAktif}.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                      {churches.map(church => {
+                        const paymentsForChurch = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0);
+                        if (paymentsForChurch.length === 0) return null;
+
+                        return (
+                          <div key={church.id} className="border border-green-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-green-50/10">
+                            <div className="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
+                              <div>
+                                <h4 className="font-bold text-slate-800">{church.nama}</h4>
+                                <p className="text-xs text-slate-500">Resort {church.resort}</p>
+                              </div>
+                              <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                                Ada Setoran
+                              </div>
+                            </div>
+                            <div className="p-4 flex flex-col md:flex-row gap-4">
+                              <div className="flex-1 bg-white p-3 rounded-lg border border-green-50">
+                                <p className="text-[10px] font-bold text-green-400 uppercase mb-2">Rincian Setoran Terakhir:</p>
+                                <div className="space-y-2">
+                                  {paymentsForChurch.map(p => (
+                                    <div key={p.id} className="flex justify-between items-center text-xs border-b border-slate-50 pb-1">
+                                      <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                      <span className="text-green-600 font-bold">Rp {formatRupiah(p.jumlah)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex flex-col justify-center space-y-2 min-w-[150px]">
+                                <button 
+                                  onClick={() => {
+                                    const total = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
+                                    const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih banyak atas persembahan periode ${periodeAktif} dengan TOTAL sebesar Rp ${formatRupiah(total)}. Tuhan memberkati pelayanan kita bersama.`;
+                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+                                >
+                                  <MessageCircle size={16} /> <span>Kirim Terima Kasih</span>
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const latest = paymentsForChurch[0];
+                                    setPrintData({
+                                      ...church,
+                                      periode: periodeAktif,
+                                      kategori: latest.kategori,
+                                      jumlah: latest.jumlah,
+                                      allDetails: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
+                                      updates: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {})
+                                    });
+                                    setPrintType('global-receipt');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
+                                >
+                                  <Printer size={16} /> <span>Cetak Bukti</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
               {activeTab === 'penagihan' && (
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -1090,125 +1248,6 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   </div>
                 </div>
               )}
-
-              {activeTab === 'pengiriman' && (
-                <div className="space-y-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-center mb-6">
-                      <div>
-                        <h3 className="font-bold text-lg">Pusat Pengiriman Terima Kasih</h3>
-                        <p className="text-sm text-slate-500">Daftar jemaat yang baru saja melakukan pembayaran di sesi ini.</p>
-                      </div>
-                      <button 
-                        onClick={() => setSessionUpdatedCells({})}
-                        className="text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg border border-red-100 transition-colors"
-                      >
-                        Bersihkan Daftar Baru
-                      </button>
-                    </div>
-
-                    {Object.keys(sessionUpdatedCells).length === 0 ? (
-                      <div className="text-center py-20 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                        <MessageCircle size={48} className="mx-auto text-slate-300 mb-4" />
-                        <p className="text-slate-500 font-medium">Belum ada data pembayaran baru yang diisi di sesi ini.</p>
-                        <p className="text-xs text-slate-400 mt-2">Silakan isi angka pada menu Laporan, Pelean, atau Almanak terlebih dahulu.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-6">
-                        {Object.entries(sessionUpdatedCells).map(([gerejaId, updates]) => {
-                          const church = churches.find(c => c.id === gerejaId);
-                          if (!church) return null;
-
-                          let totalGabungan = 0;
-                          const summaryLines: string[] = [];
-
-                          Object.entries(updates).forEach(([cat, fields]) => {
-                            const payment = payments.find(p => p.gerejaId === gerejaId && p.kategori === cat && p.periode === periodeAktif);
-                            if (payment) {
-                              summaryLines.push(`*${(CATEGORY_LABELS[cat] || cat).toUpperCase()}*:`);
-                              fields.forEach(f => {
-                                const val = payment.details[f] || 0;
-                                totalGabungan += val;
-                                summaryLines.push(`- ${f}: Rp ${formatRupiah(val)}`);
-                              });
-                            }
-                          });
-
-                          return (
-                            <div key={gerejaId} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
-                              <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                                <div>
-                                  <h4 className="font-bold text-slate-800">{church.nama}</h4>
-                                  <p className="text-xs text-slate-500">Resort {church.resort}</p>
-                                </div>
-                                <div className="text-right flex flex-col items-end">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Total Baru</p>
-                                  <p className="font-bold text-blue-600">Rp {formatRupiah(totalGabungan)}</p>
-                                  <button 
-                                    onClick={() => {
-                                      const newSess = { ...sessionUpdatedCells };
-                                      delete newSess[gerejaId];
-                                      setSessionUpdatedCells(newSess);
-                                    }}
-                                    className="text-[10px] text-red-500 hover:underline mt-1"
-                                  >
-                                    Hapus dari Daftar
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="p-4 flex flex-col md:flex-row gap-4">
-                                  <div className="flex-1 bg-slate-50/50 p-3 rounded-lg border border-slate-100">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Rincian Pembayaran Baru:</p>
-                                    <div className="text-xs text-slate-600 space-y-1">
-                                      {Object.entries(updates).map(([cat, fields]) => (
-                                        <div key={cat} className="mb-2">
-                                          <p className="font-bold text-slate-800">{(CATEGORY_LABELS[cat] || cat).toUpperCase()}</p>
-                                          <p className="pl-2">{(fields as string[]).join(', ')}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                <div className="flex flex-col justify-center space-y-2 min-w-[150px]">
-                                  <button 
-                                    onClick={() => {
-                                      const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan periode ${periodeAktif} yang baru saja kami terima:\n\n${summaryLines.join('\n')}\n\n*Total Keseluruhan: Rp ${formatRupiah(totalGabungan)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
-                                      window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
-                                    }}
-                                    className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
-                                  >
-                                    <MessageCircle size={16} /> <span>Kirim WA</span>
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      const allDetails: any = {};
-                                      payments.filter(p => p.gerejaId === gerejaId && p.periode === periodeAktif).forEach(p => {
-                                        allDetails[p.kategori] = p.details;
-                                      });
-                                      setPrintData({
-                                        nama: church.nama,
-                                        resort: church.resort,
-                                        periode: periodeAktif,
-                                        updates,
-                                        allDetails,
-                                        total: totalGabungan
-                                      });
-                                      setPrintType('global-receipt');
-                                    }}
-                                    className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
-                                  >
-                                    <Printer size={16} /> <span>Cetak Bukti</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {activeTab === 'dashboard' && (
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1222,11 +1261,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     </div>
                     <div>
                       <h3 className="font-bold text-blue-800 mb-1">
-                        {currentUser ? `Akses ${currentUser.role === 'superadmin' ? 'Admin' : 'Staf'} Aktif` : "Akses Terbatas (Tamu)"}
+                        {currentUserProfile ? `Akses ${currentUserProfile.role === 'superadmin' ? 'Admin' : 'Staf'} Aktif` : "Akses Terbatas (Tamu)"}
                       </h3>
                       <p className="text-sm text-blue-700 leading-relaxed">
-                        {currentUser 
-                          ? `Anda masuk sebagai ${currentUser.role === 'superadmin' ? 'Administrator Utama' : 'Staf Pengisi Data'}. Anda dapat mengelola data keuangan dan jemaat.`
+                        {currentUserProfile 
+                          ? `Anda masuk sebagai ${currentUserProfile.role === 'superadmin' ? 'Administrator Utama' : 'Staf Pengisi Data'}. Anda dapat mengelola data keuangan dan jemaat secara real-time.`
                           : "Silakan login untuk mendapatkan akses penuh dalam mengelola data keuangan dan administrasi GKLI."}
                       </p>
                     </div>
@@ -1293,14 +1332,29 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
               {activeTab === 'gereja' && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                    <h3 className="font-bold text-lg">Daftar Jemaat</h3>
-                    {currentUser && (
+                  <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                      <h3 className="font-bold text-lg">Daftar Jemaat</h3>
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Urutkan:</span>
+                        <select 
+                          value={sortType} 
+                          onChange={(e) => setSortType(e.target.value as any)}
+                          className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                        >
+                          <option value="order">Posisi (Manual)</option>
+                          <option value="nama">Nama (A-Z)</option>
+                          <option value="resort">Resort</option>
+                          <option value="id">ID</option>
+                        </select>
+                      </div>
+                    </div>
+                    {currentUserProfile && (
                       <div className="flex gap-2">
                         <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors">
                           <Plus size={16} /> <span>Import Massal</span>
                         </button>
-                        <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wa: '' }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
+                        <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wa: '', order: churches.length + 1 }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
                           <Plus size={16} /> <span>Tambah Jemaat</span>
                         </button>
                       </div>
@@ -1310,25 +1364,30 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <table className="w-full text-sm text-left">
                       <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold tracking-wider">
                         <tr>
-                          <th className="px-6 py-4">No</th>
+                          <th className="px-6 py-4">No / Posisi</th>
                           <th className="px-6 py-4">Nama Jemaat</th>
                           <th className="px-6 py-4">Resort</th>
-                          {currentUser?.role === 'superadmin' && <th className="px-6 py-4">WhatsApp</th>}
-                          {currentUser && <th className="px-6 py-4 text-center">Aksi</th>}
+                          {currentUserProfile?.role === 'superadmin' && <th className="px-6 py-4">WhatsApp</th>}
+                          {currentUserProfile && <th className="px-6 py-4 text-center">Aksi</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {churches.map((church) => (
+                        {sortedChurches.map((church) => (
                           <tr key={church.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 text-slate-500 font-medium">{church.id}</td>
+                            <td className="px-6 py-4 text-slate-500 font-medium">#{church.order || church.id}</td>
                             <td className="px-6 py-4 font-bold text-slate-800">{church.nama}</td>
                             <td className="px-6 py-4 text-slate-600">{church.resort}</td>
-                            {currentUser?.role === 'superadmin' && <td className="px-6 py-4 text-slate-600">{church.wa || '-'}</td>}
-                            {currentUser && (
+                            {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-600">{church.wa || '-'}</td>}
+                            {currentUserProfile && (
                               <td className="px-6 py-4 text-center">
-                                <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50">
-                                  <Edit size={18} />
-                                </button>
+                                <div className="flex justify-center space-x-1">
+                                  <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50" title="Edit">
+                                    <Edit size={16} />
+                                  </button>
+                                  <button onClick={() => handleDeleteChurch(church.id)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50" title="Hapus">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
                               </td>
                             )}
                           </tr>
@@ -1350,10 +1409,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         onChange={e => setNewPeriod(e.target.value)} 
                         placeholder="Contoh: Tahun 2027" 
                         className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" 
-                        disabled={!currentUser}
+                        disabled={!currentUserProfile}
                       />
                       <button 
-                        disabled={!currentUser || !newPeriod.trim()} 
+                        disabled={!currentUserProfile || !newPeriod.trim()} 
                         onClick={handleAddPeriod} 
                         className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors"
                       >
@@ -1426,7 +1485,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       </div>
                                     )}
                                     <div className="flex-1 relative flex items-center">
-                                      {currentUser ? (
+                                      {currentUserProfile ? (
                                         <input 
                                           type="text" 
                                           value={formatInput(val)}
@@ -1587,19 +1646,18 @@ function doPost(e) {
                 </div>
               )}
 
-              {activeTab === 'akun' && currentUser?.role === 'superadmin' && (
+              {activeTab === 'akun' && currentUserProfile?.role === 'superadmin' && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                    <h3 className="font-bold text-lg">Manajemen Pengguna</h3>
-                    <button onClick={() => { setFormUser({ username: '', password: '' }); setShowUserModal(true); }} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
+                    <h3 className="font-bold text-lg">Manajemen Akun Cloud</h3>
+                    <button onClick={() => { setFormUser({ username: '', password: '', role: 'staff' }); setShowUserModal(true); }} className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
                       <UserPlus size={16} /> <span>Tambah Akun</span>
                     </button>
                   </div>
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold">
                       <tr>
-                        <th className="px-6 py-4">Username</th>
-                        <th className="px-6 py-4">Password</th>
+                        <th className="px-6 py-4">Username (Email)</th>
                         <th className="px-6 py-4">Role</th>
                         <th className="px-6 py-4 text-center">Aksi</th>
                       </tr>
@@ -1608,7 +1666,6 @@ function doPost(e) {
                       {users.map((user) => (
                         <tr key={user.username}>
                           <td className="px-6 py-4 font-bold">{user.username}</td>
-                          <td className="px-6 py-4 font-mono text-xs">{user.password}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${user.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                               {user.role.toUpperCase()}
@@ -1628,7 +1685,7 @@ function doPost(e) {
                 </div>
               )}
 
-              {activeTab === 'templates' && currentUser?.role === 'superadmin' && (
+              {activeTab === 'templates' && currentUserProfile?.role === 'superadmin' && (
                 <div className="space-y-8">
                   <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="font-bold text-lg mb-6">Manajemen Template Surat</h3>
@@ -1794,10 +1851,25 @@ function doPost(e) {
 
       <Modal show={showChurchModal} onClose={() => setShowChurchModal(false)} title={formChurch.id ? 'Edit Jemaat' : 'Tambah Jemaat'}>
         <div className="space-y-4">
-          <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border p-3 rounded-lg" placeholder="Nama Jemaat" />
-          <input type="text" value={formChurch.resort} onChange={e => setFormChurch({...formChurch, resort: e.target.value})} className="w-full border p-3 rounded-lg" placeholder="Resort" />
-          <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border p-3 rounded-lg" placeholder="No. WA (628...)" />
-          <button onClick={handleSaveChurch} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Simpan Data</button>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Jemaat</label>
+            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nama Jemaat" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Resort</label>
+            <input type="text" value={formChurch.resort} onChange={e => setFormChurch({...formChurch, resort: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Resort" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No. WA (628...)</label>
+              <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="628..." />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Posisi Urutan</label>
+              <input type="number" value={formChurch.order} onChange={e => setFormChurch({...formChurch, order: parseInt(e.target.value) || 0})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Posisi" />
+            </div>
+          </div>
+          <button onClick={handleSaveChurch} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Simpan Data Jemaat</button>
         </div>
       </Modal>
 

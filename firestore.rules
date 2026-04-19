@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      // Relaxing for now to ensure connectivity; verify in production
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && getUserData().role == 'superadmin';
+    }
+
+    function isStaff() {
+      let role = getUserData().role;
+      return isSignedIn() && (role == 'staff' || role == 'superadmin');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validations ---
+    function isValidChurch(data) {
+      return data.nama is string && data.nama.size() <= 200 &&
+             data.resort is string && data.resort.size() <= 200;
+    }
+
+    function isValidPayment(data) {
+      return data.gerejaId is string &&
+             data.kategori in ['laporan', 'pelean', 'alaman'] &&
+             data.periode is string &&
+             data.jumlah is number && data.jumlah >= 0;
+    }
+
+    // --- Match Rules ---
+
+    // Churches
+    match /churches/{churchId} {
+      allow read: if isSignedIn();
+      allow create: if isSuperAdmin() && isValidChurch(incoming()) && isValidId(churchId);
+      allow update: if isSuperAdmin() && isValidChurch(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read: if isSignedIn();
+      allow create: if isStaff() && isValidPayment(incoming()) && 
+                    exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
+      allow update: if isStaff() && isValidPayment(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    // Settings
+    match /settings/config {
+      allow read: if true; // Public view for branding
+      allow write: if isSuperAdmin();
+    }
+
+    // User Roles
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && 
+                    incoming().role == 'staff'; // Default role for auto-provisioned
+      allow update: if isSuperAdmin(); // Only admin can promote
+      allow delete: if isSuperAdmin();
+    }
+  }
+}
