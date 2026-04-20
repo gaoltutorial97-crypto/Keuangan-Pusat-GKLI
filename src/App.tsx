@@ -1052,7 +1052,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               min-height: 297mm;
               margin: 0 auto;
               background-color: white;
-              padding: 2.54cm;
+              padding: 2cm 2.54cm 2.54cm 2.54cm;
               box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
               position: relative;
             }
@@ -1068,35 +1068,85 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           <div className="flex gap-3">
             <button onClick={() => setPrintType(null)} className="px-5 py-2.5 bg-slate-700 rounded-xl font-bold hover:bg-slate-600 transition-all">Kembali</button>
             <button 
-              onClick={async () => {
-                const el = document.getElementById('printable-page');
-                if (el) {
-                  const dataUrl = await toJpeg(el, { quality: 0.95, backgroundColor: '#ffffff' });
-                  const link = document.createElement('a');
-                  link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
-                  link.href = dataUrl;
-                  link.click();
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = 'Memproses...';
+                
+                try {
+                  const el = document.getElementById('printable-page');
+                  if (el) {
+                    // Force complete rendering and capture
+                    const dataUrl = await toJpeg(el, { 
+                      quality: 1, 
+                      backgroundColor: '#ffffff',
+                      pixelRatio: 2,
+                      width: el.scrollWidth,
+                      height: el.scrollHeight,
+                      style: {
+                        transform: 'scale(1)',
+                        transformOrigin: 'top left',
+                        margin: '0',
+                        padding: '2cm 2.54cm 2.54cm 2.54cm',
+                      }
+                    });
+                    const link = document.createElement('a');
+                    link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
+                    link.href = dataUrl;
+                    link.click();
+                  }
+                } catch (err) {
+                  console.error(err);
+                  alert("Gagal menyimpan gambar. Silakan coba lagi.");
+                } finally {
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
                 }
               }} 
-              className="px-5 py-2.5 bg-emerald-600 rounded-xl font-bold hover:bg-emerald-500 flex items-center gap-2 shadow-lg transition-all"
+              className="px-5 py-2.5 bg-emerald-600 rounded-xl font-bold hover:bg-emerald-500 flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
             >
               <Download size={18} /> Simpan JPG
             </button>
             <button 
-              onClick={async () => {
-                const el = document.getElementById('printable-page');
-                if (el) {
-                  const dataUrl = await toJpeg(el, { quality: 0.95, backgroundColor: '#ffffff' });
-                  const link = document.createElement('a');
-                  link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
-                  link.href = dataUrl;
-                  link.click();
-                  
-                  const waMessage = `Halo Majelis Jemaat GKLI ${printData?.nama}. Terlampir Surat Ucapan Terima Kasih periode ${printData?.periode || periodeAktif}. Terima kasih.`;
-                  window.open(`https://wa.me/${printData.wa}?text=${encodeURIComponent(waMessage)}`, '_blank');
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = 'Memproses...';
+
+                try {
+                  const el = document.getElementById('printable-page');
+                  if (el) {
+                    const dataUrl = await toJpeg(el, { 
+                      quality: 1, 
+                      backgroundColor: '#ffffff',
+                      pixelRatio: 2,
+                      width: el.scrollWidth,
+                      height: el.scrollHeight,
+                      style: {
+                        transform: 'scale(1)',
+                        transformOrigin: 'top left',
+                        margin: '0',
+                        padding: '2cm 2.54cm 2.54cm 2.54cm',
+                      }
+                    });
+                    const link = document.createElement('a');
+                    link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
+                    link.href = dataUrl;
+                    link.click();
+                    
+                    const waMessage = `Halo Majelis Jemaat GKLI ${printData?.nama}. Terlampir Surat Ucapan Terima Kasih periode ${printData?.periode || periodeAktif}. Terima kasih.`;
+                    window.open(`https://wa.me/${printData.wa}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                  }
+                } catch (err) {
+                  console.error(err);
+                } finally {
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
                 }
               }} 
-              className="px-5 py-2.5 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 flex items-center gap-2 shadow-lg transition-all"
+              className="px-5 py-2.5 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
             >
               <Share2 size={18} /> Kirim WA
             </button>
@@ -1111,9 +1161,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
         <div className="print-preview-container">
           <div id="printable-page" className="font-serif text-black" ref={printRef}>
-      <div className="print-section mt-20 print:mt-0">
+      <div className="print-section mt-0">
          {/* Header */}
-         <div className="text-center mb-8 relative pt-2">
+         <div className="text-center mb-8 relative pt-0">
             {templates.kopSurat ? (
               <div className="border-b-[3px] border-black pb-4 text-center">
                 <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-w-4xl max-h-40 object-contain mx-auto" />
