@@ -51,11 +51,18 @@ service cloud.firestore {
              data.jumlah is number && data.jumlah >= 0;
     }
 
+    function isValidDistribution(data) {
+      return data.gerejaId is string &&
+             data.periode is string &&
+             data.details is map &&
+             data.tanggal is string;
+    }
+
     // --- Match Rules ---
 
     // Churches
     match /churches/{churchId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSuperAdmin() && isValidChurch(incoming()) && isValidId(churchId);
       allow update: if isSuperAdmin() && isValidChurch(incoming());
       allow delete: if isSuperAdmin();
@@ -63,10 +70,19 @@ service cloud.firestore {
 
     // Payments
     match /payments/{paymentId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isStaff() && isValidPayment(incoming()) && 
                     exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
       allow update: if isStaff() && isValidPayment(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    // Distributions
+    match /distributions/{distId} {
+      allow read: if true;
+      allow create: if isStaff() && isValidDistribution(incoming()) && 
+                    exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
+      allow update: if isStaff() && isValidDistribution(incoming());
       allow delete: if isSuperAdmin();
     }
 
@@ -78,10 +94,9 @@ service cloud.firestore {
 
     // User Roles
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
-      allow list: if isSuperAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId && 
-                    (incoming().role == 'staff' || request.auth.token.email in ['kpt_gkli@yahoo.com', 'bendum@gkli.org', 'lutheranchurch.priangaol@gmail.com']); 
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.auth != null && request.auth.uid == userId; 
       allow update: if isSuperAdmin(); // Only admin can promote
       allow delete: if isSuperAdmin();
     }
