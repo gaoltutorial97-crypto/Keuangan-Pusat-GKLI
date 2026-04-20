@@ -1032,56 +1032,85 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         <style>
           {`
             @media print {
-              @page { size: portrait; margin-top: 0.5cm; margin-bottom: 0.5cm; margin-left: 2.54cm; margin-right: 2.54cm; }
-              .printable { width: 100%; }
-              .no-print { display: none; }
+              @page { size: portrait; margin: 0; }
+              .no-print { display: none !important; }
+              #printable-page { 
+                width: 100% !important; 
+                margin: 0 !important; 
+                padding: 1.5cm !important; 
+                box-shadow: none !important;
+                border: none !important;
+              }
+            }
+            .print-preview-container {
+              background-color: #f1f5f9;
+              min-height: 100vh;
+              padding: 60px 0;
+            }
+            #printable-page {
+              width: 210mm;
+              min-height: 297mm;
+              margin: 0 auto;
+              background-color: white;
+              padding: 2.54cm;
+              box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+              position: relative;
             }
           `}
         </style>
-        <div className="printable font-serif text-black p-12 bg-white" ref={printRef}>
-          <div className="no-print fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-50">
-        <h3 className="font-bold">Mode Siap Cetak</h3>
-        <div className="flex gap-2">
-          <button onClick={() => setPrintType(null)} className="px-4 py-2 bg-slate-700 rounded hover:bg-slate-600">Kembali</button>
-          <button 
-            onClick={async () => {
-              if (printRef.current) {
-                const dataUrl = await toJpeg(printRef.current, { quality: 0.95, backgroundColor: '#ffffff' });
-                const link = document.createElement('a');
-                link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
-                link.href = dataUrl;
-                link.click();
-              }
-            }} 
-            className="px-4 py-2 bg-green-600 rounded hover:bg-green-500 flex items-center gap-2"
-          >
-            <Download size={18} /> Simpan JPG
-          </button>
-          <button 
-            onClick={async () => {
-              if (printRef.current) {
-                const dataUrl = await toJpeg(printRef.current, { quality: 0.95, backgroundColor: '#ffffff' });
-                // Note: Direct file share to WA via URL is not possible with pure web API, 
-                // but we can suggest the user to paste or we can open WA.
-                // For a more helpful experience, we download then open WA.
-                const link = document.createElement('a');
-                link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
-                link.href = dataUrl;
-                link.click();
-                
-                const waMessage = `Halo Majelis Jemaat GKLI ${printData?.nama}. Terlampir Surat Ucapan Terima Kasih periode ${printData?.periode || periodeAktif}. Terima kasih.`;
-                window.open(`https://wa.me/?text=${encodeURIComponent(waMessage)}`, '_blank');
-              }
-            }} 
-            className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-400 flex items-center gap-2"
-          >
-            <Share2 size={18} /> Kirim WA
-          </button>
-          <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 flex items-center gap-2">
-            <Printer size={18} /> Cetak
-          </button>
+        <div className="no-print fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-50 shadow-xl">
+          <div className="flex items-center gap-3">
+             <div className="bg-gold-500 p-2 rounded-lg">
+                <Printer size={20} className="text-slate-900" />
+             </div>
+             <h3 className="font-bold text-lg tracking-tight">Mode Siap Cetak (Potret)</h3>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setPrintType(null)} className="px-5 py-2.5 bg-slate-700 rounded-xl font-bold hover:bg-slate-600 transition-all">Kembali</button>
+            <button 
+              onClick={async () => {
+                const el = document.getElementById('printable-page');
+                if (el) {
+                  const dataUrl = await toJpeg(el, { quality: 0.95, backgroundColor: '#ffffff' });
+                  const link = document.createElement('a');
+                  link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
+                  link.href = dataUrl;
+                  link.click();
+                }
+              }} 
+              className="px-5 py-2.5 bg-emerald-600 rounded-xl font-bold hover:bg-emerald-500 flex items-center gap-2 shadow-lg transition-all"
+            >
+              <Download size={18} /> Simpan JPG
+            </button>
+            <button 
+              onClick={async () => {
+                const el = document.getElementById('printable-page');
+                if (el) {
+                  const dataUrl = await toJpeg(el, { quality: 0.95, backgroundColor: '#ffffff' });
+                  const link = document.createElement('a');
+                  link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
+                  link.href = dataUrl;
+                  link.click();
+                  
+                  const waMessage = `Halo Majelis Jemaat GKLI ${printData?.nama}. Terlampir Surat Ucapan Terima Kasih periode ${printData?.periode || periodeAktif}. Terima kasih.`;
+                  window.open(`https://wa.me/${printData.wa}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                }
+              }} 
+              className="px-5 py-2.5 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 flex items-center gap-2 shadow-lg transition-all"
+            >
+              <Share2 size={18} /> Kirim WA
+            </button>
+            <button 
+              onClick={() => window.print()} 
+              className="px-5 py-2.5 bg-gold-600 rounded-xl font-bold hover:bg-gold-500 flex items-center gap-2 shadow-lg transition-all"
+            >
+              <Printer size={18} /> Cetak Sekarang
+            </button>
+          </div>
         </div>
-      </div>
+
+        <div className="print-preview-container">
+          <div id="printable-page" className="font-serif text-black" ref={printRef}>
       <div className="print-section mt-20 print:mt-0">
          {/* Header */}
          <div className="text-center mb-8 relative pt-2">
@@ -1354,8 +1383,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               </div>
             ) : null}
         </div>
-      </div>
-    </>
+          </div>
+        </div>
+      </>
     );
   }
 
