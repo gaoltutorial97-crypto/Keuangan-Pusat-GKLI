@@ -26,7 +26,8 @@ import {
   AlertCircle,
   Truck,
   Package,
-  Share2
+  Share2,
+  Archive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toJpeg } from 'html-to-image';
@@ -559,6 +560,19 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       await updateDoc(doc(db, 'churches', targetChurch.id), { order: finalTargetOrder });
     } catch (err: any) {
       alert("Gagal memindahkan: " + err.message);
+    }
+  };
+
+  const handleMarkPaymentsAsSent = async (paymentIds: string[]) => {
+    try {
+      for (const id of paymentIds) {
+        await updateDoc(doc(db, 'payments', id), { 
+          receiptSent: true,
+          receiptSentAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      console.error("Gagal update status pengiriman: ", err);
     }
   };
 
@@ -1156,6 +1170,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             >
               <Printer size={18} /> Cetak Sekarang
             </button>
+            {printData.paymentIds && (
+              <button 
+                onClick={async (e) => {
+                  const btn = e.currentTarget;
+                  if (window.confirm("Pindahkan data ini ke menu Arsip?")) {
+                    btn.disabled = true;
+                    await handleMarkPaymentsAsSent(printData.paymentIds);
+                    alert("Berhasil dipindahkan ke Arsip.");
+                    setPrintType(null);
+                  }
+                }} 
+                className="px-5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl font-bold hover:bg-slate-700 flex items-center gap-2 shadow-lg transition-all"
+              >
+                <Archive size={18} className="text-yellow-500" /> 
+                <span className="text-yellow-500">Arsipkan Sekarang</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1479,6 +1510,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
           <NavHeader label={appSettings.menuRekapJudul} />
           <NavItem active={activeTab === 'pengiriman'} onClick={() => setActiveTab('pengiriman')} icon={<MessageCircle size={20} />} label="Pusat Terima Kasih" />
+          <NavItem active={activeTab === 'arsip'} onClick={() => setActiveTab('arsip')} icon={<Archive size={20} />} label="Arsip Tanda Terima" />
           <NavItem active={activeTab === 'penagihan'} onClick={() => setActiveTab('penagihan')} icon={<AlertTriangle size={20} />} label="Pusat Penagihan" />
           <NavItem active={activeTab === 'sertifikat'} onClick={() => setActiveTab('sertifikat')} icon={<Award size={20} />} label="Apresiasi Jemaat" />
           <NavItem active={activeTab === 'download'} onClick={() => setActiveTab('download')} icon={<Download size={20} />} label={appSettings.menuDownloadMenu} />
@@ -1563,7 +1595,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
                     <div className="grid grid-cols-1 gap-6">
                       {churches.map(church => {
-                        const paymentsForChurch = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0);
+                        const paymentsForChurch = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && !p.receiptSent);
                         if (paymentsForChurch.length === 0) return null;
 
                         return (
@@ -1574,12 +1606,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 <p className="text-xs text-slate-500">Resort {church.resort}</p>
                               </div>
                               <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                Ada Setoran
+                                Belum Terkirim
                               </div>
                             </div>
                             <div className="p-4 flex flex-col md:flex-row gap-4">
                               <div className="flex-1 bg-white p-3 rounded-lg border border-green-50">
-                                <p className="text-[10px] font-bold text-green-400 uppercase mb-2">Rincian Setoran Terakhir:</p>
+                                <p className="text-[10px] font-bold text-green-400 uppercase mb-2">Rincian Setoran:</p>
                                 <div className="space-y-2">
                                   {paymentsForChurch.map(p => (
                                     <div key={p.id} className="text-xs border-b border-slate-100 pb-2 mb-2">
@@ -1601,9 +1633,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   ))}
                                 </div>
                               </div>
-                              <div className="flex flex-col justify-center space-y-2 min-w-[150px]">
+                              <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
                                 <button 
-                                  onClick={() => {
+                                  onClick={async () => {
                                     const total = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
                                     let rincian = "";
                                     paymentsForChurch.forEach(p => {
@@ -1616,13 +1648,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     });
                                     const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas persembahan/setoran periode ${periodeAktif}.\n\nRincian yang diterima:${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama. Anda juga dapat meminta cetak PDF resmi dari bukti ini kepada kami.`;
                                     window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                    
+                                    // Pindahkan ke arsip
+                                    if (window.confirm("Apakah Anda ingin memindahkan data ini ke arsip (pemberitahuan terkirim)?")) {
+                                      await handleMarkPaymentsAsSent(paymentsForChurch.map(p => p.id));
+                                    }
                                   }}
                                   className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
                                 >
-                                  <MessageCircle size={16} /> <span>Kirim Terima Kasih</span>
+                                  <MessageCircle size={16} /> <span>Kirim & Arsipkan</span>
                                 </button>
                                 <button 
-                                  onClick={() => {
+                                  onClick={async () => {
                                     const latest = paymentsForChurch[0];
                                     const totalAmount = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
                                     setPrintData({
@@ -1632,13 +1669,122 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       jumlah: latest.jumlah,
                                       total: totalAmount,
                                       allDetails: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
-                                      updates: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {})
+                                      updates: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {}),
+                                      paymentIds: paymentsForChurch.map(p => p.id) // Carry IDs for marking
                                     });
                                     setPrintType('global-receipt');
                                   }}
                                   className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
                                 >
-                                  <Printer size={16} /> <span>Cetak Bukti</span>
+                                  <Printer size={16} /> <span>Cetak & Pindahkan</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'arsip' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="font-bold text-lg">Arsip Tanda Terima</h3>
+                        <p className="text-sm text-slate-500">Daftar ucapan terima kasih yang sudah dikirim atau dipindahkan ke arsip pada periode {periodeAktif}.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                      {churches.map(church => {
+                        const sentPayments = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && p.receiptSent);
+                        if (sentPayments.length === 0) return null;
+
+                        return (
+                          <div key={church.id} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-slate-50">
+                            <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center">
+                              <div>
+                                <h4 className="font-bold text-slate-800">{church.nama}</h4>
+                                <p className="text-xs text-slate-500">Resort {church.resort}</p>
+                              </div>
+                              <div className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1">
+                                <Archive size={10} /> Terarsip
+                              </div>
+                            </div>
+                            <div className="p-4 flex flex-col md:flex-row gap-4">
+                              <div className="flex-1 bg-white p-3 rounded-lg border border-slate-100">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Histori Setoran:</p>
+                                <div className="space-y-2">
+                                  {sentPayments.map(p => (
+                                    <div key={p.id} className="text-xs border-b border-slate-50 pb-2 mb-2 last:border-0 last:mb-0 last:pb-0">
+                                      <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                        <span className="text-slate-500 italic text-[10px] ml-2">Dikirim: {p.receiptSentAt ? new Date(p.receiptSentAt).toLocaleDateString('id-ID') : '-'}</span>
+                                        <span className="text-green-600 font-bold ml-auto">Rp {formatRupiah(p.jumlah)}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
+                                <button 
+                                  onClick={() => {
+                                    const total = sentPayments.reduce((sum, p) => sum + p.jumlah, 0);
+                                    let rincian = "";
+                                    sentPayments.forEach(p => {
+                                      rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
+                                      Object.entries(p.details || {}).forEach(([key, val]) => {
+                                        if ((val as number) > 0) {
+                                          rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
+                                        }
+                                      });
+                                    });
+                                    const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), berikut kami kirimkan ulang rincian tanda terima periode ${periodeAktif}.\n\nRincian:${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nTerima kasih, Tuhan memberkati.`;
+                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-slate-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors"
+                                >
+                                  <MessageCircle size={16} /> <span>Kirim Ulang WA</span>
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const latest = sentPayments[0];
+                                    const totalAmount = sentPayments.reduce((sum, p) => sum + p.jumlah, 0);
+                                    setPrintData({
+                                      ...church,
+                                      periode: periodeAktif,
+                                      kategori: latest.kategori,
+                                      jumlah: latest.jumlah,
+                                      total: totalAmount,
+                                      allDetails: sentPayments.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
+                                      updates: sentPayments.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {})
+                                    });
+                                    setPrintType('global-receipt');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-amber-700 transition-colors"
+                                >
+                                  <Printer size={16} /> <span>Lihat/Download Ulang</span>
+                                </button>
+                                <button 
+                                  onClick={async () => {
+                                    if (window.confirm("Keluarkan dari arsip? Data akan kembali ke menu 'Pusat Terima Kasih'.")) {
+                                      try {
+                                        for (const p of sentPayments) {
+                                          await updateDoc(doc(db, 'payments', p.id), { 
+                                            receiptSent: false,
+                                            receiptSentAt: null
+                                          });
+                                        }
+                                      } catch (err) {
+                                        console.error(err);
+                                      }
+                                    }
+                                  }}
+                                  className="text-[10px] text-slate-400 hover:text-red-500 transition-colors font-bold uppercase mt-1 text-center"
+                                >
+                                  Kembalikan ke Pending
                                 </button>
                               </div>
                             </div>
@@ -1652,10 +1798,38 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               {activeTab === 'penagihan' && (
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex justify-between items-start mb-6">
                       <div>
                         <h3 className="font-bold text-lg">Pusat Penagihan Tunggakan</h3>
                         <p className="text-sm text-slate-500">Daftar jemaat yang memiliki tunggakan (belum lunas) pada periode {periodeAktif}.</p>
+                      </div>
+                      <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-700 min-w-[300px]">
+                        <div className="flex items-center justify-between mb-2">
+                           <h4 className="text-xs font-bold text-green-400 uppercase tracking-widest flex items-center">
+                              <Calendar size={14} className="mr-1" /> Penagihan Otomatis
+                           </h4>
+                           <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs">AKTIF</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+                           Sistem akan mengirim pesan WA penagihan otomatis setiap tanggal <b>15</b> & <b>30</b> jam 09:00 WIB melalui Watzap.id.
+                        </p>
+                        <button 
+                           onClick={async () => {
+                              if (!appSettings.watzapApiKey) return alert("Mohon konfigurasi API Key Watzap di Pengaturan terlebih dahulu.");
+                              if (window.confirm("Kirim tagihan ke seluruh jemaat yang menunggak sekarang?")) {
+                                 try {
+                                    const res = await fetch('/api/cron/trigger', { method: 'POST' });
+                                    const data = await res.json();
+                                    alert(data.message || "Proses dimulai di latar belakang.");
+                                 } catch (err) {
+                                    alert("Gagal memicu penagihan otomatis.");
+                                 }
+                              }
+                           }}
+                           className="w-full bg-green-600 hover:bg-green-700 text-white py-1.5 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"
+                        >
+                           <Share2 size={12} /> Jalankan Penagihan Sekarang
+                        </button>
                       </div>
                     </div>
 
@@ -2659,6 +2833,25 @@ function doPost(e) {
             <SettingInput label="Menu Laporan" value={formSettings.menuLaporan} onChange={v => setFormSettings({...formSettings, menuLaporan: v})} />
             <SettingInput label="Menu Pelean" value={formSettings.menuPelean} onChange={v => setFormSettings({...formSettings, menuPelean: v})} />
             <SettingInput label="Menu Alaman" value={formSettings.menuAlaman} onChange={v => setFormSettings({...formSettings, menuAlaman: v})} />
+          </div>
+
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+            <h4 className="font-bold text-green-400 mb-4 flex items-center"><MessageCircle size={18} className="mr-2" /> Integrasi Penagihan Otomatis (Watzap.id)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <SettingInput 
+                label="Watzap API Key" 
+                value={formSettings.watzapApiKey || ''} 
+                onChange={v => setFormSettings({...formSettings, watzapApiKey: v})} 
+              />
+              <SettingInput 
+                label="Watzap Sender Number (Device Key)" 
+                value={formSettings.watzapSender || ''} 
+                onChange={v => setFormSettings({...formSettings, watzapSender: v})} 
+              />
+            </div>
+            <p className="text-[10px] text-slate-400 leading-relaxed italic">
+              * Digunakan untuk pengiriman tagihan otomatis setiap tanggal 15 & 30. Pastikan Device di Watzap.id dalam status Connected.
+            </p>
           </div>
 
           <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">

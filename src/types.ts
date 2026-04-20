@@ -15,6 +15,8 @@ export interface Payment {
   details: Record<string, number>;
   jumlah: number;
   tanggal: string;
+  receiptSent?: boolean;
+  receiptSentAt?: string;
 }
 
 export interface User {
@@ -37,6 +39,8 @@ export interface AppSettings {
   menuRekapMenu: string;
   menuDownloadMenu: string;
   googleSheetUrl: string;
+  watzapApiKey?: string;
+  watzapSender?: string;
 }
 
 export interface Distribution {
@@ -47,4 +51,4 @@ export interface Distribution {
   tanggal: string;
 }
 
-export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat';
+export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat' | 'arsip';
