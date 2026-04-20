@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -25,9 +25,11 @@ import {
   TrendingUp,
   AlertCircle,
   Truck,
-  Package
+  Package,
+  Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toJpeg } from 'html-to-image';
 import { Church, Payment, User, AppSettings, TabType, Distribution } from './types';
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
 import { db, auth } from './firebase';
@@ -50,6 +52,7 @@ import {
 } from 'firebase/auth';
 
 export default function App() {
+  const printRef = useRef<HTMLDivElement>(null);
   // STATE NAVIGASI
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   
@@ -495,7 +498,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   };
 
   const handleSaveChurch = async () => {
-    if (!currentUserProfile) return;
+    if (currentUserProfile?.role !== 'superadmin') return;
     if (!formChurch.nama) return alert('Nama wajib diisi!');
     
     try {
@@ -562,11 +565,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const handleKirimWASpesifik = (item: any, colName: string) => {
     const val = item.details[colName] || 0;
     const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
+    const formattedName = getFormattedPaymentName(item.kategori, colName);
     let text = "";
     if (val > 0) {
-      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan *${colName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} sebesar *Rp ${formatRupiah(val)}*. Tuhan memberkati.`;
+      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} sebesar *Rp ${formatRupiah(val)}*. Tuhan memberkati.`;
     } else {
-      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, dari Kantor Pusat GKLI ingin mengingatkan bahwa catatan kas kami untuk item *${colName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} masih kosong (menunggak). Mohon agar dapat segera diselesaikan. Terima kasih, Tuhan memberkati.`;
+      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, dari Kantor Pusat GKLI ingin mengingatkan bahwa catatan kas kami untuk item *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} masih kosong (menunggak). Mohon agar dapat segera diselesaikan. Terima kasih, Tuhan memberkati.`;
     }
     window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -576,7 +580,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     if (selected.length === 0) return;
 
     const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
-    const details = selected.map(col => `- *${col.toUpperCase()}*: Rp ${formatRupiah(item.details[col])}`).join('\n');
+    const details = selected.map(col => `- *${getFormattedPaymentName(item.kategori, col).toUpperCase()}*: Rp ${formatRupiah(item.details[col])}`).join('\n');
     const total = selected.reduce((sum, col) => sum + (item.details[col] || 0), 0);
     
     const text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan (${catLabel.toUpperCase()}) periode ${item.periode} untuk item berikut:\n${details}\n\n*Total: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
@@ -903,6 +907,52 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const today = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  const getNomorSurat = (item: any) => {
+    // Find index in sorted payments
+    const sorted = [...payments].sort((a, b) => {
+      const ta = (a as any).createdAt?.seconds || 0;
+      const tb = (b as any).createdAt?.seconds || 0;
+      return ta - tb;
+    });
+    const index = sorted.findIndex(p => p.id === item.id);
+    const base = 1956;
+    const currentNum = index >= 0 ? base + index : base;
+    return currentNum.toLocaleString('id-ID');
+  };
+
+  const getFormattedPaymentName = (cat: string, field: string) => {
+    const monthMap: Record<string, string> = {
+      'Jan': 'Januari', 'Feb': 'Februari', 'Mar': 'Maret', 'Apr': 'April',
+      'Mei': 'Mei', 'Jun': 'Juni', 'Jul': 'Juli', 'Agu': 'Agustus',
+      'Agt': 'Agustus', 'Sep': 'September', 'Okt': 'Oktober', 'Nov': 'November', 'Des': 'Desember'
+    };
+
+    const nCat = cat.toLowerCase();
+    const nField = field.toLowerCase();
+
+    // PERSEMBAHAN II (LAPORAN)
+    if (nCat === 'laporan' || nCat === 'ii') {
+      const month = monthMap[field] || field;
+      return `Persembahan II bulan ${month} ${currentYear}`;
+    }
+
+    // PERSEMBAHAN KHUSUS (PELEAN)
+    if (nCat === 'pelean' || nCat === 'khusus') {
+      if (nField.includes('pendidikan')) return "Persembahan Dana Pendidikan";
+      if (nField.includes('zending')) return "Persembahan Zending";
+      return `Persembahan ${field}`;
+    }
+
+    // LITERATUR (ALAMAN)
+    if (nCat === 'alaman' || nCat === 'literatur') {
+      return field;
+    }
+
+    // DEFAULT FALLBACK
+    const catLabel = CATEGORY_LABELS[cat] || cat;
+    return `${catLabel} ${field}`;
+  };
+
   // ==========================================
   // RENDER COMPONENTS
   // ==========================================
@@ -978,56 +1028,96 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   if (printType && printData) {
     // Print View Implementation (Simplified for brevity, but maintaining the core logic)
     return (
-      <div className="min-h-screen bg-white p-10 print:p-0 font-serif text-black">
-        <div className="no-print fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-50">
-          <h3 className="font-bold">Mode Siap Cetak</h3>
-          <div className="flex gap-2">
-            <button onClick={() => setPrintType(null)} className="px-4 py-2 bg-slate-700 rounded hover:bg-slate-600">Kembali</button>
-            <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500">Cetak Sekarang</button>
-          </div>
+      <>
+        <style>
+          {`
+            @media print {
+              @page { size: portrait; margin-top: 0.5cm; margin-bottom: 0.5cm; margin-left: 2.54cm; margin-right: 2.54cm; }
+              .printable { width: 100%; }
+              .no-print { display: none; }
+            }
+          `}
+        </style>
+        <div className="printable font-serif text-black p-12 bg-white" ref={printRef}>
+          <div className="no-print fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-50">
+        <h3 className="font-bold">Mode Siap Cetak</h3>
+        <div className="flex gap-2">
+          <button onClick={() => setPrintType(null)} className="px-4 py-2 bg-slate-700 rounded hover:bg-slate-600">Kembali</button>
+          <button 
+            onClick={async () => {
+              if (printRef.current) {
+                const dataUrl = await toJpeg(printRef.current, { quality: 0.95, backgroundColor: '#ffffff' });
+                const link = document.createElement('a');
+                link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
+                link.href = dataUrl;
+                link.click();
+              }
+            }} 
+            className="px-4 py-2 bg-green-600 rounded hover:bg-green-500 flex items-center gap-2"
+          >
+            <Download size={18} /> Simpan JPG
+          </button>
+          <button 
+            onClick={async () => {
+              if (printRef.current) {
+                const dataUrl = await toJpeg(printRef.current, { quality: 0.95, backgroundColor: '#ffffff' });
+                // Note: Direct file share to WA via URL is not possible with pure web API, 
+                // but we can suggest the user to paste or we can open WA.
+                // For a more helpful experience, we download then open WA.
+                const link = document.createElement('a');
+                link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
+                link.href = dataUrl;
+                link.click();
+                
+                const waMessage = `Halo Majelis Jemaat GKLI ${printData?.nama}. Terlampir Surat Ucapan Terima Kasih periode ${printData?.periode || periodeAktif}. Terima kasih.`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(waMessage)}`, '_blank');
+              }
+            }} 
+            className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-400 flex items-center gap-2"
+          >
+            <Share2 size={18} /> Kirim WA
+          </button>
+          <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 flex items-center gap-2">
+            <Printer size={18} /> Cetak
+          </button>
         </div>
-        <div className="print-section mt-20 print:mt-0">
-           {/* Header */}
-           <div className="text-center mb-8 relative">
-              {templates.kopSurat ? (
-                <div className="border-b-[3px] border-black pb-4">
-                  <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-w-4xl max-h-48 object-contain mx-auto" />
+      </div>
+      <div className="print-section mt-20 print:mt-0">
+         {/* Header */}
+         <div className="text-center mb-8 relative pt-2">
+            {templates.kopSurat ? (
+              <div className="border-b-[3px] border-black pb-4 text-center">
+                <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-w-4xl max-h-40 object-contain mx-auto" />
+              </div>
+            ) : (
+              <div className="w-full border-b-[3px] border-black pb-4">
+                <div className="flex items-center justify-between mb-2 gap-4">
+                  <div className="w-32 h-32 flex items-center justify-center shrink-0 relative">
+                     <div className="absolute inset-0 rounded-full border-[3px] border-blue-800 flex items-center justify-center bg-yellow-400 overflow-hidden shadow-sm">
+                        <div className="w-20 h-20 rounded-full border-2 border-red-600 flex items-center justify-center bg-white">
+                          <span className="text-2xl text-blue-800 font-serif font-black">GKLI</span>
+                        </div>
+                     </div>
+                  </div>
+                  <div className="flex-1 text-center font-serif leading-tight">
+                     <h1 className="text-2xl md:text-[26px] font-medium uppercase tracking-widest text-black mb-1">KANTOR PUSAT</h1>
+                     <h2 className="text-3xl md:text-[32px] font-bold text-blue-700 uppercase tracking-wider mb-1">GEREJA KRISTEN LUTHER INDONESIA</h2>
+                     <h3 className="text-xl md:text-2xl italic text-red-600 font-bold mb-1">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</h3>
+                     <p className="text-[12px] font-bold text-blue-800 tracking-wide mt-1">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
+                     <p className="text-[12px] font-bold text-blue-800 tracking-wide">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
+                  </div>
+                  <div className="w-32 shrink-0"></div>
                 </div>
-              ) : (
-                <div className="w-full">
-                  <div className="flex items-center justify-between mb-2 gap-4">
-                    <div className="w-32 h-32 flex items-center justify-center shrink-0 relative">
-                       <div className="absolute inset-0 rounded-full border-[3px] border-blue-800 flex items-center justify-center bg-yellow-400 overflow-hidden shadow-sm">
-                          <div className="w-20 h-20 rounded-full border-2 border-red-600 flex items-center justify-center bg-white">
-                            {appSettings.logoUrl ? (
-                              <img src={appSettings.logoUrl} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-2xl text-blue-800 font-serif font-black">GKLI</span>
-                            )}
-                          </div>
-                          <div className="absolute top-2 text-[9px] font-bold text-black font-serif uppercase tracking-widest text-center w-full">Gereja Kristen</div>
-                          <div className="absolute bottom-2 text-[9px] font-bold text-black font-serif uppercase tracking-widest text-center w-full">Indonesia</div>
-                       </div>
-                    </div>
-                    <div className="flex-1 text-center font-serif leading-tight">
-                       <h1 className="text-2xl md:text-[26px] font-medium uppercase tracking-widest text-black mb-1">KANTOR PUSAT</h1>
-                       <h2 className="text-3xl md:text-[32px] font-bold text-blue-700 uppercase tracking-wider mb-1">GEREJA KRISTEN LUTHER INDONESIA</h2>
-                       <h3 className="text-xl md:text-2xl italic text-red-600 font-bold mb-1">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</h3>
-                       <p className="text-[12px] font-bold text-blue-800 tracking-wide mt-1">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
-                       <p className="text-[12px] font-bold text-blue-800 tracking-wide">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
-                    </div>
-                    <div className="w-32 shrink-0"></div>
-                  </div>
-                  <div className="text-center font-serif text-[12px] leading-tight mb-2 tracking-wide text-black">
-                    <p>Sihabonghabong, Kec. Parlilitan, Kab. Humbang Hasundutan, Prov. Sumatera Utara, 22456 e-mail : kpt_gkli@yahoo.com</p>
-                    <p>Bank BNI KLN Doloksanggul, No. Rek. :0061254308-BRI Parlilitan Rek.7796-01-003362-53-4</p>
-                  </div>
-                  <div className="border-t-[3px] border-black pb-[1px]"></div>
-                  <div className="border-t-[1px] border-black pt-[3px] mb-6">
-                     <p className="text-center text-red-600 font-bold text-[16px] tracking-wider font-sans transform scale-y-110">ANGGOTA PERSEKUTUAN GEREJA-GEREJA DI INDONESIA (PGI)</p>
-                  </div>
+                <div className="text-center font-serif text-[12px] leading-tight mb-2 tracking-wide text-black">
+                  <p>Sihabonghabong, Kec. Parlilitan, Kab. Humbang Hasundutan, Prov. Sumatera Utara, 22456 e-mail : kpt_gkli@yahoo.com</p>
+                  <p>Bank BNI KLN Doloksanggul, No. Rek. :0061254308-BRI Parlilitan Rek.7796-01-003362-53-4</p>
                 </div>
-              )}
+                <div className="border-t-[3px] border-black pb-[1px]"></div>
+                <div className="border-t-[1px] border-black pt-[3px] mb-6">
+                   <p className="text-center text-red-600 font-bold text-[16px] tracking-wider font-sans transform scale-y-110">ANGGOTA PERSEKUTUAN GEREJA-GEREJA DI INDONESIA (PGI)</p>
+                </div>
+              </div>
+            )}
            </div>
            
            {printType === 'rekap' ? (
@@ -1062,97 +1152,103 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                 
                 {printType === 'global-receipt' || printType === 'penerimaan' || printType === 'terimakasih' ? (
                   <>
-                    <div className="flex justify-between items-start leading-relaxed font-sans -mt-4">
+                    <div className="flex justify-between items-start leading-relaxed font-sans -mt-4 mb-4">
                       <div className="flex-1">
                         <table className="w-full text-left max-w-sm">
                           <tbody>
-                            <tr><td className="w-20">Nomor</td><td className="w-4">:</td><td>1.952/E.12/{currentRomanMonth}/{currentYear}</td></tr>
-                            <tr><td>Lamp</td><td>:</td><td>1 (satu)</td></tr>
-                            <tr><td>Hal</td><td>:</td><td>Ucapan Terimakasih</td></tr>
+                            <tr><td className="w-16">Nomor</td><td className="w-4">:</td><td>{getNomorSurat(printData)}/E.12/{currentRomanMonth}/{currentYear}</td></tr>
+                            <tr><td>Lamp</td><td>:</td><td>-</td></tr>
+                            <tr><td>Hal</td><td>:</td><td><b>Ucapan Terimakasih</b></td></tr>
                           </tbody>
                         </table>
                       </div>
-                      <div className="text-left w-64">
-                        <p className="text-right">Sihabonghabong, {today}</p>
-                        <p className="mt-4">Kepada, Yth.</p>
-                        <p className="font-bold">Majelis Jemaat GKLI {printData.nama}</p>
-                        <p>Resort {printData.resort}</p>
+                      <div className="text-left w-64 pt-0">
+                        <p className="text-right mb-0">Sihabonghabong, {today}</p>
+                        <div className="mt-6">
+                          <p className="mb-0">Kepada, Yth.</p>
+                          <p className="font-extrabold italic mb-0">Majelis Jemaat {printData.nama.startsWith('GKLI') ? '' : 'GKLI '}{printData.nama}</p>
+                          <p className="mb-0">Resort {printData.resort}</p>
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="text-justify leading-relaxed whitespace-pre-wrap mt-8">
+                    <div className="text-justify leading-relaxed whitespace-pre-wrap">
                       <p>Salam sejahtera dalam Nama Tuhan Yesus Kristus, Tuhan kita!</p>
                       <br/>
                       <p>Terpujilah Allah Tuhan kita di dalam nama Yesus Kristus, sebagai kepala gereja, yang senantiasa menolong dan memberkati gereja-Nya.</p>
                       <br/>
                       <p>
-                        Melalui surat ini kami juga mengucapkan banyak terima kasih kepada bapak/ibu Majelis Jemaat/Resort yang telah setia memberikan persembahan ke Kantor Pusat, pada tanggal {today} telah diterima sebanyak <b>Rp. {formatRupiah(printData.total || printData.jumlah || 0)},- ({terbilang(printData.total || printData.jumlah || 0).trim().replace(/\s+/g, ' ')} Rupiah)</b> dengan rincian, sebagai berikut:
+                        Melalui surat ini kami juga mengucapkan banyak terima kasih kepada bapak/ibu Majelis Jemaat/Resort yang telah setia memberikan persembahan ke Kantor Pusat, pada tanggal {today} telah diterima sebanyak <span className="font-bold">Rp. {formatRupiah(printData.total || printData.jumlah || 0)},-</span> <span className="font-bold italic">({terbilang(printData.total || printData.jumlah || 0).trim().replace(/\s+/g, ' ')} Rupiah)</span> dengan rincian, sebagai berikut:
                       </p>
                     </div>
 
-                    <div className="pl-12 pr-12 my-6">
-                      <p className="font-bold italic mb-2">Pembayaran:</p>
-                      <table className="w-full">
+                    <div className="pl-8 pr-12 my-6">
+                      <p className="font-bold underline mb-2">❖ <u>Pembayaran:</u></p>
+                      <table className="w-full border-collapse">
                         <tbody>
                           {printType === 'global-receipt' ? (
-                            Object.entries(printData.updates || {}).map(([cat, fields]: [any, any]) => (
-                              fields.map((f: string) => {
-                                const val = printData.allDetails?.[cat]?.[f] || 0;
-                                if (val <= 0) return null;
-                                return (
-                                  <tr key={cat+f}>
-                                    <td className="w-6 align-top">-</td>
-                                    <td>{cat === 'alaman' ? 'Literatur / Alamanak' : 'Persembahan'} {f}</td>
-                                    <td className="w-12 text-left pt-1">Rp.</td>
-                                    <td className="w-32 text-right pt-1">{formatRupiah(val)},-</td>
-                                  </tr>
-                                );
-                              })
-                            ))
+                            (() => {
+                              let count = 0;
+                              return Object.entries(printData.updates || {}).flatMap(([cat, fields]: [any, any]) => (
+                                fields.map((f: string) => {
+                                  const val = printData.allDetails?.[cat]?.[f] || 0;
+                                  if (val <= 0) return null;
+                                  count++;
+                                  return (
+                                    <tr key={cat+f}>
+                                      <td className="w-5 align-top text-left font-sans text-sm">{count}.</td>
+                                      <td className="text-[15px] font-sans">{getFormattedPaymentName(cat, f)}</td>
+                                      <td className="w-12 text-left text-[15px] font-sans">Rp.</td>
+                                      <td className="w-32 text-right text-[15px] font-sans">{formatRupiah(val)},-</td>
+                                    </tr>
+                                  );
+                                })
+                              ));
+                            })()
                           ) : (
-                            (printData.items || []).map((col: string) => {
+                            (printData.items || []).map((col: string, idx: number) => {
                               const val = printData.details?.[col] || 0;
                               if (val <= 0) return null;
                               return (
                                 <tr key={col}>
-                                  <td className="w-6 align-top">-</td>
-                                  <td>{printData.kategori === 'alaman' ? 'Literatur / Alamanak' : 'Persembahan'} {col}</td>
-                                  <td className="w-12 text-left pt-1">Rp.</td>
-                                  <td className="w-32 text-right pt-1">{formatRupiah(val)},-</td>
+                                  <td className="w-5 align-top text-left font-sans text-sm">{idx + 1}.</td>
+                                  <td className="text-[15px] font-sans">{getFormattedPaymentName(printData.kategori, col)}</td>
+                                  <td className="w-12 text-left text-[15px] font-sans">Rp.</td>
+                                  <td className="w-32 text-right text-[15px] font-sans">{formatRupiah(val)},-</td>
                                 </tr>
                               );
                             })
                           )}
                           <tr className="border-t border-black">
+                            <td className="font-bold pt-1 text-center font-sans tracking-widest uppercase">Jumlah</td>
                             <td></td>
-                            <td className="font-bold pt-2 pb-1">Jumlah</td>
-                            <td className="font-bold pt-2 pb-1 text-left">Rp.</td>
-                            <td className="font-bold pt-2 pb-1 text-right tracking-tight">{formatRupiah(printData.total || printData.jumlah || 0)},-</td>
+                            <td className="font-bold pt-1 text-left text-[16px] font-sans">Rp.</td>
+                            <td className="font-bold pt-1 text-right text-[16px] font-sans tracking-tight">{formatRupiah(printData.total || printData.jumlah || 0)},-</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
 
-                    <p className="text-justify leading-relaxed mt-6">
+                    <p className="text-justify leading-relaxed mt-4">
                       Demikianlah kami sampaikan, kiranya kasih setia Allah senantiasa memberkati setiap pelayanan kita, Tuhan memberkati dan menyertai kita.
                     </p>
 
-                    <div className="flex justify-end mt-4 print:mt-4 relative w-full mb-12">
-                      <div className="text-left w-64 relative z-10">
-                        <p>Teriring Salam dan Doa</p>
-                        <p>Pucuk Pimpinan GKLI</p>
-                        <p>A.n. Bishop</p>
-                        <div className="relative h-20 my-1 pointer-events-none">
+                    <div className="flex justify-end mt-2 print:mt-2 relative w-full mb-12">
+                      <div className="text-left w-72 relative z-10">
+                        <p className="mb-0 text-[14px]">Teriring Salam dan Doa</p>
+                        <p className="mb-0 leading-tight text-[14px]">Pucuk Pimpinan GKLI</p>
+                        <p className="mb-0 leading-tight text-[14px]">A.n. Bishop</p>
+                        <div className="relative h-4 my-1 pointer-events-none -ml-16">
                           {templates.stempelTerimaKasih && (
                             <img 
                               src={templates.stempelTerimaKasih} 
                               alt="Stempel & Tanda Tangan" 
-                              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-full object-contain mix-blend-multiply"
+                              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-40 w-auto max-w-none object-contain mix-blend-multiply opacity-90 scale-125 pt-2"
                             />
                           )}
                         </div>
-                        <p className="font-bold underline text-center pl-4 pt-12 relative z-10">Pdt. Lamris Malau, M.Th.</p>
-                        <p className="text-center pl-4 relative z-10">Sekretaris Jenderal</p>
+                        <p className="font-bold underline text-center relative z-20 leading-tight text-[15px] mt-6">Pdt. Lamris Malau, M.Th.</p>
+                        <p className="text-center relative z-20 leading-none text-[13px]">Sekretaris Jenderal</p>
                       </div>
                     </div>
 
@@ -1167,8 +1263,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <div className="fixed bottom-0 left-0 w-full text-center text-[8.5px] pb-4 font-sans leading-tight hidden print:block">
                       Bishop: Pdt. Jon Albert Saragih, M.Th. Hp. 081376987167 – Email: jon.albert98@yahoo.com – Sekjen: Pdt. Lamris Malau, M.Th. Hp. 085278577148 – Email: lamrismalau29@gmail.com
                     </div>
-                  </>
-                ) : (
+                  </> ) : (
                   <>
                     <div className="flex justify-between items-start leading-relaxed font-sans -mt-4">
                       <div className="flex-1">
@@ -1234,21 +1329,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     </div>
                     
                     <div className="flex justify-end mt-4 print:mt-4 relative w-full mb-12">
-                      <div className="text-left w-64 relative z-10">
-                        <p>Teriring Salam dan Doa</p>
+                      <div className="text-left w-72 relative z-10">
+                        <p className="mb-1">Teriring Salam dan Doa</p>
                         <p>Pucuk Pimpinan GKLI</p>
-                        <p>A.n. Bishop</p>
-                        <div className="relative h-20 my-1 pointer-events-none">
+                        <div className="relative h-32 my-2 pointer-events-none">
                           {templates.stempelTunggakan && (
                             <img 
                               src={templates.stempelTunggakan} 
                               alt="Stempel & Tanda Tangan" 
-                              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-full object-contain mix-blend-multiply"
+                              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-full w-auto object-contain mix-blend-multiply"
                             />
                           )}
                         </div>
-                        <p className="font-bold underline text-center pl-4 pt-12 relative z-10">Pdt. Lamris Malau, M.Th.</p>
-                        <p className="text-center pl-4 relative z-10">Sekretaris Jenderal</p>
+                        <p className="font-bold underline text-center pt-2 relative z-10">Pdt. Lamris Malau, M.Th.</p>
+                        <p className="text-center relative z-10">Sekretaris Jenderal</p>
                       </div>
                     </div>
                     
@@ -1257,10 +1351,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     </div>
                   </>
                 )}
-             </div>
-           ) : null}
+              </div>
+            ) : null}
         </div>
       </div>
+    </>
     );
   }
 
@@ -1416,7 +1511,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                         {Object.entries(p.details || {}).map(([key, val]) => (
                                           (val as number) > 0 && (
                                             <div key={key} className="flex justify-between text-slate-500">
-                                              <span>- {key}</span>
+                                              <span>- {getFormattedPaymentName(p.kategori, key)}</span>
                                               <span>Rp {formatRupiah(val as number)}</span>
                                             </div>
                                           )
@@ -1435,7 +1530,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
                                       Object.entries(p.details || {}).forEach(([key, val]) => {
                                         if ((val as number) > 0) {
-                                          rincian += `\n- ${key} : Rp ${formatRupiah(val as number)}`;
+                                          rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
                                         }
                                       });
                                     });
@@ -1991,7 +2086,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       </div>
                                     )}
                                     <div className="flex-1 relative flex items-center">
-                                      {currentUserProfile ? (
+                                      {currentUserProfile?.role === 'superadmin' ? (
                                         <input 
                                           type="text" 
                                           value={val === 0 ? '' : formatInput(val)}

@@ -70,19 +70,19 @@ service cloud.firestore {
 
     // Payments
     match /payments/{paymentId} {
-      allow read: if true;
-      allow create: if isStaff() && isValidPayment(incoming()) && 
+      allow read: if isSignedIn();
+      allow create: if isSuperAdmin() && isValidPayment(incoming()) && 
                     exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
-      allow update: if isStaff() && isValidPayment(incoming());
+      allow update: if isSuperAdmin() && isValidPayment(incoming());
       allow delete: if isSuperAdmin();
     }
 
     // Distributions
     match /distributions/{distId} {
-      allow read: if true;
-      allow create: if isStaff() && isValidDistribution(incoming()) && 
+      allow read: if isSignedIn();
+      allow create: if isSuperAdmin() && isValidDistribution(incoming()) && 
                     exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
-      allow update: if isStaff() && isValidDistribution(incoming());
+      allow update: if isSuperAdmin() && isValidDistribution(incoming());
       allow delete: if isSuperAdmin();
     }
 
