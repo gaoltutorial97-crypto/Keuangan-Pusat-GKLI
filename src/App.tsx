@@ -27,9 +27,11 @@ import {
   Truck,
   Package,
   Share2,
-  Archive
+  Archive,
+  Search,
+  GripVertical
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
 import { Church, Payment, User, AppSettings, TabType, Distribution } from './types';
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
@@ -43,7 +45,8 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { 
   signInWithEmailAndPassword, 
@@ -173,6 +176,7 @@ export default function App() {
   const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order'>('order');
   const [filterResort, setFilterResort] = useState('Semua Resort');
   const [filterWilayah, setFilterWilayah] = useState('Semua Wilayah');
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [billingSelections, setBillingSelections] = useState<Record<string, Record<string, string[]>>>({}); // { churchId: { category: [colNames] } }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
@@ -216,6 +220,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
     if (filterWilayah !== 'Semua Wilayah') {
       filtered = filtered.filter(c => c.wilayah === filterWilayah);
+    }
+    if (searchTerm.trim()) {
+      const lower = searchTerm.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.nama.toLowerCase().includes(lower) || 
+        c.resort.toLowerCase().includes(lower)
+      );
     }
 
     return filtered.sort((a, b) => {
@@ -598,6 +609,26 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       await updateDoc(doc(db, 'churches', targetChurch.id), { order: finalTargetOrder });
     } catch (err: any) {
       alert("Gagal memindahkan: " + err.message);
+    }
+  };
+
+  const handleReorderChurches = async (newOrder: Church[]) => {
+    if (!currentUserProfile || sortType !== 'order') return;
+    
+    // Batch update order fields in Firestore
+    const batch = writeBatch(db);
+    newOrder.forEach((church, index) => {
+      const newIdx = index + 1;
+      // We only update if the order has actually changed to save quota
+      if (church.order !== newIdx) {
+        batch.update(doc(db, 'churches', church.id), { order: newIdx });
+      }
+    });
+    
+    try {
+      await batch.commit();
+    } catch (err: any) {
+      console.error("Reorder failed:", err);
     }
   };
 
@@ -2125,12 +2156,33 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         TOTAL: {sortedChurches.length} JEMAAT
                       </div>
                     </div>
+
+                    {/* SEARCH BAR */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="text" 
+                        placeholder="Cari nama jemaat atau resort..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-gold-500 focus:bg-white transition-all"
+                      />
+                      {searchTerm && (
+                        <button 
+                          onClick={() => setSearchTerm('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-sm text-left border-collapse">
                       <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider border-b border-slate-700">
                         <tr>
+                          <th className="px-2 py-4 border-b border-slate-700 w-8"></th>
                           <th className="px-6 py-4 border-b border-slate-700">Posisi</th>
                           <th className="px-6 py-4 border-b border-slate-700">Nama Jemaat</th>
                           <th className="px-6 py-4 border-b border-slate-700">Resort</th>
@@ -2139,9 +2191,31 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           {currentUserProfile && <th className="px-6 py-4 border-b border-slate-700 text-center">Aksi</th>}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <Reorder.Group 
+                        axis="y" 
+                        values={sortedChurches} 
+                        onReorder={handleReorderChurches} 
+                        as="tbody" 
+                        className="divide-y divide-slate-100"
+                      >
                         {sortedChurches.map((church, idx) => (
-                          <tr key={church.id} className="hover:bg-slate-50 transition-colors">
+                          <Reorder.Item 
+                            key={church.id} 
+                            value={church} 
+                            as="tr" 
+                            className="hover:bg-slate-50 transition-colors group cursor-move"
+                            dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                          >
+                            <td className="px-2 py-4">
+                              {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                <div 
+                                  className="text-slate-300 hover:text-gold-500 transition-all ml-2"
+                                  title="Tarik untuk urutkan"
+                                >
+                                  <GripVertical size={18} />
+                                </div>
+                              )}
+                            </td>
                             <td className="px-6 py-4 text-slate-400 font-mono text-xs">#{church.order || church.id}</td>
                             <td className="px-6 py-4 font-bold text-slate-800">{church.nama}</td>
                             <td className="px-6 py-4 text-slate-600 font-medium">
@@ -2154,26 +2228,6 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             {currentUserProfile && (
                               <td className="px-6 py-4 text-center">
                                 <div className="flex justify-center flex-wrap gap-1">
-                                  {currentUserProfile.role === 'superadmin' && sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && (
-                                    <>
-                                      <button 
-                                        onClick={() => handleMoveChurch(church.id, 'up')} 
-                                        disabled={idx === 0}
-                                        className="text-slate-400 hover:text-gold-600 p-2 rounded-lg hover:bg-gold-50 disabled:opacity-20" 
-                                        title="Ke Atas"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-                                      </button>
-                                      <button 
-                                        onClick={() => handleMoveChurch(church.id, 'down')} 
-                                        disabled={idx === sortedChurches.length - 1}
-                                        className="text-slate-400 hover:text-gold-600 p-2 rounded-lg hover:bg-gold-50 disabled:opacity-20" 
-                                        title="Ke Bawah"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                      </button>
-                                    </>
-                                  )}
                                   <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
                                     <Edit size={16} />
                                   </button>
@@ -2185,9 +2239,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 </div>
                               </td>
                             )}
-                          </tr>
+                          </Reorder.Item>
                         ))}
-                      </tbody>
+                      </Reorder.Group>
                     </table>
                   </div>
                 </div>
@@ -2253,6 +2307,16 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
                         </select>
                       </div>
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+                        <input 
+                          type="text" 
+                          placeholder="Cari..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-7 pr-4 py-1 bg-white border border-slate-200 rounded-lg text-[10px] outline-none focus:ring-1 focus:ring-gold-500 min-w-[150px]"
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
@@ -2260,8 +2324,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
                       <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
                         <tr>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center">No</th>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48">Nama Jemaat</th>
+                          {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-30 w-8"></th>
+                          )}
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>Nama Jemaat</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
                           {SPREADSHEET_COLUMNS.alaman.map(col => (
                             <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
@@ -2269,17 +2336,44 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24 bg-gold-600 text-white">TOTAL QTY</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <Reorder.Group 
+                        axis="y" 
+                        values={dataDistribusi.filter(item => {
+                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
+                          const matchSearch = !searchTerm.trim() || 
+                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
+                          return matchResort && matchWilayah && matchSearch;
+                        })} 
+                        onReorder={(newOrder) => handleReorderChurches(newOrder as any)} 
+                        as="tbody" 
+                        className="divide-y divide-slate-100"
+                      >
                         {dataDistribusi.filter(item => {
                           const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
                           const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-                          return matchResort && matchWilayah;
+                          const matchSearch = !searchTerm.trim() || 
+                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
+                          return matchResort && matchWilayah && matchSearch;
                         }).map((item, idx) => {
                           const totalQty = Object.values(item.details).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
                           return (
-                            <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                              <td className="px-4 py-3 sticky left-0 bg-white z-10 text-center border-r border-slate-100">{idx + 1}</td>
-                              <td className="px-4 py-3 sticky left-12 bg-white z-10 font-bold border-r border-slate-100">{item.nama}</td>
+                            <Reorder.Item 
+                              key={item.id} 
+                              value={item} 
+                              as="tr" 
+                              className="hover:bg-slate-50 transition-colors group"
+                              dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                            >
+                              {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                <td className="px-1 py-3 sticky left-0 bg-white z-20 border-r border-slate-100 cursor-move">
+                                  <GripVertical size={14} className="text-slate-300" />
+                                </td>
+                              )}
+                              <td className="px-4 py-3 sticky bg-white z-10 text-center border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>{idx + 1}</td>
+                              <td className="px-4 py-3 sticky bg-white z-10 font-bold border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>{item.nama}</td>
                               <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
                               {SPREADSHEET_COLUMNS.alaman.map(col => {
                                 const val = item.details[col] || 0;
@@ -2302,10 +2396,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 );
                               })}
                               <td className="px-4 py-3 text-center font-black font-mono text-slate-900 bg-slate-50 min-w-[100px]">{totalQty}</td>
-                            </tr>
+                            </Reorder.Item>
                           );
                         })}
-                      </tbody>
+                      </Reorder.Group>
                     </table>
                   </div>
                 </div>
@@ -2328,14 +2422,27 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
                         </select>
                       </div>
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+                        <input 
+                          type="text" 
+                          placeholder="Cari..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-7 pr-4 py-1 bg-white border border-slate-200 rounded-lg text-[10px] outline-none focus:ring-1 focus:ring-gold-500 min-w-[150px]"
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
                     <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
                       <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
                         <tr>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center">No</th>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48">Nama Jemaat</th>
+                          {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-30 w-8"></th>
+                          )}
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>Nama Jemaat</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Wilayah</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Status</th>
@@ -2346,15 +2453,42 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">AKSI</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <Reorder.Group 
+                        axis="y" 
+                        values={getLaporanData(activeTab as any).filter(item => {
+                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
+                          const matchSearch = !searchTerm.trim() || 
+                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
+                          return matchResort && matchWilayah && matchSearch;
+                        })} 
+                        onReorder={(newOrder) => handleReorderChurches(newOrder as any)} 
+                        as="tbody" 
+                        className="divide-y divide-slate-100"
+                      >
                         {getLaporanData(activeTab as any).filter(item => {
                           const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
                           const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-                          return matchResort && matchWilayah;
+                          const matchSearch = !searchTerm.trim() || 
+                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
+                          return matchResort && matchWilayah && matchSearch;
                         }).map((item, idx) => (
-                          <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3 sticky left-0 bg-white z-10 text-center border-r border-slate-100">{idx + 1}</td>
-                            <td className="px-4 py-3 sticky left-12 bg-white z-10 font-bold border-r border-slate-100">{item.nama}</td>
+                          <Reorder.Item 
+                            key={item.id} 
+                            value={item} 
+                            as="tr" 
+                            className="hover:bg-slate-50 transition-colors group"
+                            dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                          >
+                            {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                              <td className="px-1 py-3 sticky left-0 bg-white z-20 border-r border-slate-100 cursor-move">
+                                <GripVertical size={14} className="text-slate-300" />
+                              </td>
+                            )}
+                            <td className="px-4 py-3 sticky bg-white z-10 text-center border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>{idx + 1}</td>
+                            <td className="px-4 py-3 sticky bg-white z-10 font-bold border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>{item.nama}</td>
                             <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
                             <td className="px-4 py-3 text-center text-[10px] text-slate-500 font-bold text-gold-600">{item.wilayah || '-'}</td>
                             <td className="px-4 py-3 text-center">
@@ -2452,9 +2586,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 </button>
                               </div>
                             </td>
-                          </tr>
+                          </Reorder.Item>
                         ))}
-                      </tbody>
+                      </Reorder.Group>
                     </table>
                   </div>
                 </div>
