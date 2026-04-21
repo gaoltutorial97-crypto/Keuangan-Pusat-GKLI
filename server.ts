@@ -68,6 +68,7 @@ async function sendAutomatedReminders() {
 
   try {
     const currentPeriod = new Date().getFullYear().toString();
+    const currentMonthIdx = new Date().getMonth(); // 0-11
     
     // 1. Fetch Churches
     const churchSnap = await getDocs(collection(db, 'churches'));
@@ -87,7 +88,16 @@ async function sendAutomatedReminders() {
 
       Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
         const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === currentPeriod);
-        const unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+        let unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+        
+        // Smart Filter: Only include months up to current month for 'laporan'
+        if (cat === 'laporan') {
+          unpaid = unpaid.filter(col => {
+            const monthIdx = SPREADSHEET_COLUMNS.laporan.indexOf(col);
+            return monthIdx !== -1 && monthIdx <= currentMonthIdx;
+          });
+        }
+
         if (unpaid.length > 0) {
           arrears[cat] = unpaid;
           hasArrears = true;

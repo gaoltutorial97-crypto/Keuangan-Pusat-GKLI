@@ -174,6 +174,7 @@ export default function App() {
   const [filterResort, setFilterResort] = useState('Semua Resort');
   const [filterWilayah, setFilterWilayah] = useState('Semua Wilayah');
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
+  const [billingSelections, setBillingSelections] = useState<Record<string, Record<string, string[]>>>({}); // { churchId: { category: [colNames] } }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
 
   // STATE TEMPLATES
@@ -323,22 +324,59 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   }, [dataAlaman, dataPelean, dataLaporanKeuangan, dataDistribusi, filterResort, filterWilayah]);
 
   const churchesWithArrears = useMemo(() => {
+    const currentMonthIdx = new Date().getMonth(); // 0-11
+    
     return churches.map(church => {
-      const arrears: Record<string, string[]> = {};
-      let hasArrears = false;
+      const allPotentialArrears: Record<string, string[]> = {};
+      let hasPotential = false;
 
       Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
         const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
         const unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
         if (unpaid.length > 0) {
-          arrears[cat] = unpaid;
-          hasArrears = true;
+          allPotentialArrears[cat] = unpaid;
+          hasPotential = true;
         }
       });
 
-      return hasArrears ? { ...church, arrears } : null;
-    }).filter((c): c is (Church & { arrears: Record<string, string[]> }) => c !== null);
-  }, [churches, payments, periodeAktif]);
+      if (!hasPotential) return null;
+
+      // Smart Defaults for first time view of this church
+      if (!billingSelections[church.id]) {
+        const defaults: Record<string, string[]> = {};
+        Object.entries(allPotentialArrears).forEach(([cat, cols]) => {
+          if (cat === 'laporan') {
+            // Only months up to current month
+            defaults[cat] = cols.filter(col => {
+              const monthIdx = SPREADSHEET_COLUMNS.laporan.indexOf(col);
+              return monthIdx !== -1 && monthIdx <= currentMonthIdx;
+            });
+          } else {
+            defaults[cat] = [...cols];
+          }
+        });
+        
+        // Use setTimeout to avoid side effect in useMemo
+        setTimeout(() => {
+          setBillingSelections(prev => ({ ...prev, [church.id]: defaults }));
+        }, 0);
+      }
+
+      const activeArrears = billingSelections[church.id] || {};
+      const hasActive = Object.values(activeArrears).some((cols: string[]) => cols.length > 0);
+
+      return { 
+        ...church, 
+        allPotentialArrears, 
+        activeArrears,
+        hasActive
+      };
+    }).filter((c): c is (Church & { 
+      allPotentialArrears: Record<string, string[]>, 
+      activeArrears: Record<string, string[]>,
+      hasActive: boolean 
+    }) => c !== null);
+  }, [churches, payments, periodeAktif, billingSelections]);
 
   // ==========================================
   // FUNGSI AKSI & TOMBOL
@@ -1801,7 +1839,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <div className="flex justify-between items-start mb-6">
                       <div>
                         <h3 className="font-bold text-lg">Pusat Penagihan Tunggakan</h3>
-                        <p className="text-sm text-slate-500">Daftar jemaat yang memiliki tunggakan (belum lunas) pada periode {periodeAktif}.</p>
+                        <p className="text-sm text-slate-500">Daftar jemaat yang memiliki tunggakan (belum lunas) pada periode {periodeAktif}. Anda dapat memilih item mana yang ingin ditagih.</p>
                       </div>
                       <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-700 min-w-[300px]">
                         <div className="flex items-center justify-between mb-2">
@@ -1836,44 +1874,95 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <div className="grid grid-cols-1 gap-6">
                       {churchesWithArrears.map(church => {
                         const summaryLines: string[] = [];
-                        Object.entries(church.arrears).forEach(([cat, fields]) => {
+                        Object.entries(church.activeArrears).forEach(([cat, fields]) => {
                           const f = fields as string[];
-                          summaryLines.push(`*${(CATEGORY_LABELS[cat] || cat).toUpperCase()}*:`);
-                          summaryLines.push(`  - ${f.join(', ')}`);
+                          if (f.length > 0) {
+                            summaryLines.push(`*${(CATEGORY_LABELS[cat] || cat).toUpperCase()}*:`);
+                            summaryLines.push(`  - ${f.join(', ')}`);
+                          }
                         });
 
                         return (
-                          <div key={church.id} className="border border-red-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-red-50/10">
+                          <div key={church.id} className="border border-red-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-red-50/5">
                             <div className="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
                               <div>
                                 <h4 className="font-bold text-slate-800">{church.nama}</h4>
                                 <p className="text-xs text-slate-500">Resort {church.resort}</p>
                               </div>
-                              <div className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                Ada Tunggakan
+                              <div className="flex items-center gap-2">
+                                {!church.hasActive && <span className="text-[10px] text-red-500 italic font-bold">Item Tagihan Kosong</span>}
+                                <div className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                                  Tunggakan Terdeteksi
+                                </div>
                               </div>
                             </div>
-                            <div className="p-4 flex flex-col md:flex-row gap-4">
-                              <div className="flex-1 bg-white p-3 rounded-lg border border-red-50">
-                                <p className="text-[10px] font-bold text-red-400 uppercase mb-2">Daftar Item Belum Terbayar:</p>
-                                <div className="text-xs text-slate-600 space-y-2">
-                                  {Object.entries(church.arrears).map(([cat, fields]) => (
-                                    <div key={cat}>
-                                      <span className="font-bold text-slate-800">{(CATEGORY_LABELS[cat] || cat).toUpperCase()}:</span>
-                                      <p className="pl-2 text-red-600">{(fields as string[]).join(', ')}</p>
+                            <div className="p-4 flex flex-col lg:flex-row gap-6">
+                              <div className="flex-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
+                                  <span>Pilih Item Untuk Ditagih:</span>
+                                  <span className="text-slate-300 normal-case font-normal">(Centang yang ingin dimasukkan ke pesan WA)</span>
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {Object.entries(church.allPotentialArrears).map(([cat, fields]) => (
+                                    <div key={cat} className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                                      <h5 className="text-[11px] font-bold text-slate-800 border-b border-slate-50 pb-1 mb-2">{(CATEGORY_LABELS[cat] || cat).toUpperCase()}</h5>
+                                      <div className="flex flex-wrap gap-2">
+                                        {(fields as string[]).map(field => {
+                                          const isSelected = church.activeArrears[cat]?.includes(field);
+                                          return (
+                                            <button
+                                              key={field}
+                                              onClick={() => {
+                                                setBillingSelections(prev => {
+                                                  const churchSels = prev[church.id] ? { ...prev[church.id] } : {};
+                                                  const catSels = [...(churchSels[cat] || [])];
+                                                  if (isSelected) {
+                                                    churchSels[cat] = catSels.filter(f => f !== field);
+                                                  } else {
+                                                    churchSels[cat] = [...catSels, field];
+                                                  }
+                                                  return { ...prev, [church.id]: churchSels };
+                                                });
+                                              }}
+                                              className={`text-[10px] px-2 py-1 rounded-md border transition-all flex items-center gap-1.5 ${
+                                                isSelected 
+                                                ? 'bg-red-600 border-red-600 text-white font-bold shadow-sm' 
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-red-300 hover:text-red-500'
+                                              }`}
+                                            >
+                                              <div className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center ${isSelected ? 'bg-white border-white' : 'bg-slate-50 border-slate-300'}`}>
+                                                {isSelected && <div className="w-1.5 h-1.5 bg-red-600 rounded-px" />}
+                                              </div>
+                                              {field}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
                               </div>
-                              <div className="flex flex-col justify-center space-y-2 min-w-[150px]">
+                              
+                              <div className="flex flex-col justify-center space-y-3 min-w-[200px] border-t lg:border-t-0 lg:border-l border-slate-100 pt-4 lg:pt-0 lg:pl-6">
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                   <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Status Penagihan:</p>
+                                   <p className="text-[11px] text-slate-700">
+                                      {summaryLines.length > 0 ? `${summaryLines.length} kategori dipilih` : 'Belum ada item dipilih'}
+                                   </p>
+                                </div>
                                 <button 
+                                  disabled={!church.hasActive}
                                   onClick={() => {
                                     const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan periode ${periodeAktif} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.`;
                                     window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
                                   }}
-                                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+                                  className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-lg ${
+                                    church.hasActive 
+                                    ? 'bg-green-600 text-white hover:bg-green-700 hover:scale-[1.02] shadow-green-500/20' 
+                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                  }`}
                                 >
-                                  <MessageCircle size={16} /> <span>Tagih via WA</span>
+                                  <MessageCircle size={18} /> <span>Tagih via WA</span>
                                 </button>
                                 <button 
                                   onClick={() => {
