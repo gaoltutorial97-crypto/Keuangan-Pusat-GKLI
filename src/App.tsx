@@ -3132,7 +3132,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
        return output;
     }
     
-    var values = sheet.getRange(2, 3, lastRow).getValues();
+    var values = sheet.getRange(2, 3, lastRow - 1).getValues();
     var latestData = "";
     
     // Cari mundur memastikan selalu mengambil data terakhir yang paling valid
