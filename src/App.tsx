@@ -588,6 +588,16 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
+  const handleThemeChange = async (newTheme: string) => {
+    if (currentUserProfile?.role !== 'superadmin') {
+      alert("Hanya admin yang dapat mengganti tema!");
+      return;
+    }
+    const updatedSettings = { ...appSettings, theme: newTheme as any };
+    setAppSettings(updatedSettings); // Optimistic UI
+    await setDoc(doc(db, 'settings', 'config'), updatedSettings);
+  };
+
   const handleSaveSettings = async () => {
     if (currentUserProfile?.role !== 'superadmin') return;
     await setDoc(doc(db, 'settings', 'config'), formSettings);
@@ -996,27 +1006,37 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     try {
       // Create a URL object to carefully append the parameter to avoid ? vs & issues
       const cleanUrl = appSettings.googleSheetUrl.trim();
-      const fetchUrl = cleanUrl + (cleanUrl.includes('?') ? '&' : '?') + 'action=pull';
+      const fetchUrl = cleanUrl + (cleanUrl.includes('?') ? '&' : '?') + 'action=pull&nocache=' + Date.now();
 
-      const response = await fetch(fetchUrl);
-      const outputConfig = await response.json();
-      
-      if (outputConfig.error) {
-         return alert("Gagal memulihkan: " + outputConfig.error + "\n\nPastikan Anda sudah memperbarui Script Apps Anda dan menyimpannya.");
-      }
+      const response = await fetch(fetchUrl, {
+        cache: 'no-store'
+      });
+      let outputText = await response.text();
+      console.log("Raw output from Google:", outputText);
 
-      // outputConfig could be a string if JSON.stringify was done twice, parse it if needed
-      let data = outputConfig;
-      if (typeof outputConfig === 'string') {
-        try {
-          data = JSON.parse(outputConfig);
-        } catch (e) {
-          // Keep original
+      let data;
+      try {
+        data = JSON.parse(outputText);
+        if (typeof data === 'string') {
+          data = JSON.parse(data);
         }
+        if (typeof data === 'string') {
+           data = JSON.parse(data);
+        }
+      } catch(e) {
+        console.error("JSON Parsing failed completely:", e);
+        return alert("Data dari Google Sheet tidak valid atau rusak.");
+      }
+      
+      if (data.error) {
+         return alert("Gagal memulihkan: " + data.error + "\n\nPastikan Anda sudah memperbarui Script Apps Anda dan menyimpannya.");
       }
 
-      if (!data.churches || !data.payments) {
-          return alert("Format data cadangan tidak valid atau rusak.");
+      console.log("Ultimately Parsed Data:", data);
+
+      if (!data || !data.churches || !data.payments) {
+          console.log("Data structure unrecognized:", data);
+          return alert("Format data cadangan tidak memiliki array churches atau payments.");
       }
 
       const totalItems = data.churches.length + data.payments.length;
@@ -1851,6 +1871,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             </div>
           </div>
           <div className="flex items-center space-x-2 lg:space-x-4">
+            {currentUserProfile?.role === 'superadmin' && (
+              <div className="hidden lg:flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 lg:px-3 py-1 lg:py-1.5 shadow-sm">
+                <span className="text-[10px] lg:text-xs text-slate-500 font-bold mr-2 uppercase">Tema:</span>
+                <select 
+                  value={appSettings.theme || 'default'} 
+                  onChange={(e) => handleThemeChange(e.target.value)}
+                  className="bg-transparent text-[10px] lg:text-sm font-bold text-indigo-600 outline-none cursor-pointer"
+                >
+                  <option value="default">Default Emas</option>
+                  <option value="ocean">Samudra Biru</option>
+                  <option value="nature">Alam Hijau</option>
+                  <option value="monochrome">Monokrom</option>
+                </select>
+              </div>
+            )}
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 lg:px-3 py-1 lg:py-1.5">
               <span className="hidden sm:inline text-[10px] lg:text-xs text-slate-500 font-bold mr-2 uppercase">Periode:</span>
               <select 
@@ -3080,17 +3115,49 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       <pre className="bg-slate-800 p-4 rounded text-xs overflow-x-auto text-green-400">
 {`function doGet(e) {
   var action = e.parameter ? e.parameter.action : null;
+  var output = ContentService.createTextOutput();
+  
   if (action === 'pull') {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("FullBackup");
-    if (!sheet) return ContentService.createTextOutput(JSON.stringify({error: "No backup found"})).setMimeType(ContentService.MimeType.JSON);
+    if (!sheet) {
+       output.setContent(JSON.stringify({error: "No backup found"}));
+       output.setMimeType(ContentService.MimeType.JSON);
+       return output;
+    }
     var lastRow = sheet.getLastRow();
-    if (lastRow <= 1) return ContentService.createTextOutput(JSON.stringify({error: "No backup data"})).setMimeType(ContentService.MimeType.JSON);
-    var data = sheet.getRange(lastRow, 3).getValue();
-    return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
+    if (lastRow <= 1) {
+       output.setContent(JSON.stringify({error: "No backup data"}));
+       output.setMimeType(ContentService.MimeType.JSON);
+       return output;
+    }
+    
+    var values = sheet.getRange(2, 3, lastRow).getValues();
+    var latestData = "";
+    
+    // Cari mundur memastikan selalu mengambil data terakhir yang paling valid
+    for (var i = values.length - 1; i >= 0; i--) {
+      var val = values[i][0];
+      if (val && typeof val === 'string' && val.indexOf('churches') !== -1) {
+         latestData = val;
+         break;
+      }
+    }
+    
+    if (!latestData) {
+       output.setContent(JSON.stringify({error: "No valid backup payload found"}));
+       output.setMimeType(ContentService.MimeType.JSON);
+       return output;
+    }
+    
+    output.setContent(latestData);
+    output.setMimeType(ContentService.MimeType.JSON);
+    return output;
   }
-  return ContentService.createTextOutput("✅ API Keuangan GKLI Aktif! (Tarik Data Supported)")
-    .setMimeType(ContentService.MimeType.TEXT);
+  
+  output.setContent("✅ API Keuangan GKLI Aktif! (Cache-Busted & Tarik Data Secure Supported)");
+  output.setMimeType(ContentService.MimeType.TEXT);
+  return output;
 }
 
 function doPost(e) {
