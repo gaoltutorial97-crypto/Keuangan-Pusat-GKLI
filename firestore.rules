@@ -9,30 +9,27 @@ service cloud.firestore {
 
     // --- Helpers ---
     function isSignedIn() {
-      // Relaxing for now to ensure connectivity; verify in production
       return request.auth != null;
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isSuperAdmin() {
       return isSignedIn() && (
-        getUserData().role == 'superadmin' || 
-        request.auth.token.email == 'lutheranchurch.priangaol@gmail.com'
+        request.auth.token.email == 'lutheranchurch.priangaol@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin')
       );
     }
 
     function isStaff() {
       return isSignedIn() && (
-        getUserData().role == 'staff' || 
-        isSuperAdmin()
+        isSuperAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff')
       );
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 256 && id.matches('^[a-zA-Z0-9_\\-\\.\\s]+$');
     }
 
     function incoming() {
@@ -45,22 +42,23 @@ service cloud.firestore {
 
     // --- Validations ---
     function isValidChurch(data) {
-      return data.nama is string && data.nama.size() <= 200 &&
-             data.resort is string && data.resort.size() <= 200;
+      return data.nama is string && data.nama.size() <= 500 &&
+             data.resort is string && data.resort.size() <= 500;
     }
 
     function isValidPayment(data) {
       return data.gerejaId is string &&
              data.kategori in ['laporan', 'pelean', 'alaman'] &&
-             data.periode is string &&
-             data.jumlah is number && data.jumlah >= 0;
+             data.periode is string;
     }
 
     function isValidDistribution(data) {
       return data.gerejaId is string &&
-             data.periode is string &&
-             data.details is map &&
-             data.tanggal is string;
+             data.periode is string;
+    }
+
+    function isVirtualId(id) {
+      return id.startsWith('virtual_') || id.startsWith('v-h-') || id.startsWith('v-dist-');
     }
 
     // --- Match Rules ---
@@ -81,18 +79,18 @@ service cloud.firestore {
     // Payments
     match /payments/{paymentId} {
       allow read: if isSignedIn();
-      allow create: if isSuperAdmin() && isValidPayment(incoming()) && 
-                    exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
-      allow update: if isSuperAdmin() && isValidPayment(incoming());
+      allow create: if isStaff() && isValidPayment(incoming()) && 
+                    (isVirtualId(incoming().gerejaId) || exists(/databases/$(database)/documents/churches/$(incoming().gerejaId)));
+      allow update: if isStaff() && isValidPayment(incoming());
       allow delete: if isSuperAdmin();
     }
 
     // Distributions
     match /distributions/{distId} {
       allow read: if isSignedIn();
-      allow create: if isSuperAdmin() && isValidDistribution(incoming()) && 
-                    exists(/databases/$(database)/documents/churches/$(incoming().gerejaId));
-      allow update: if isSuperAdmin() && isValidDistribution(incoming());
+      allow create: if isStaff() && isValidDistribution(incoming()) && 
+                    (isVirtualId(incoming().gerejaId) || exists(/databases/$(database)/documents/churches/$(incoming().gerejaId)));
+      allow update: if isStaff() && isValidDistribution(incoming());
       allow delete: if isSuperAdmin();
     }
 

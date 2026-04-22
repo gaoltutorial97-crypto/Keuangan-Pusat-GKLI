@@ -2859,7 +2859,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 )}
                                 <td className="px-6 py-4 text-slate-400 font-mono text-xs text-center">{rowCounterGereja}</td>
                                 <td className="px-6 py-4 font-bold text-slate-800">
-                                  {church.type === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
+                                  {String(church.type) === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
                                   {church.nama}
                                 </td>
                                 <td className="px-6 py-4 text-slate-600 font-medium">
@@ -3029,8 +3029,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             let showingPosPIHeader = false;
                             
                             dataDistribusi.forEach(item => {
-                              const isPosPI = item.nama.toLowerCase().includes('pos pi');
-                              if (!searchTerm && isPosPI) {
+                              if (!searchTerm && item.nama.toLowerCase().includes('pos pi')) {
                                 if (!showingPosPIHeader) {
                                   showingPosPIHeader = true;
                                   result.push({ 
@@ -3056,22 +3055,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 currentResort = item.resort;
                                 resRomanCount++;
                                 const roman = translateToRoman(resRomanCount);
-                                if (item.type === 'resort') {
-                                  result.push({ ...item, romanPrefix: roman, id: `dist-h-${currentWilayah}-${currentResort}` });
-                                } else {
-                                  result.push({ 
-                                    id: `virtual_dist_h_${currentWilayah}_${currentResort}`, 
-                                    type: 'resort', 
-                                    nama: currentResort.toUpperCase(), 
-                                    resort: currentResort, 
-                                    romanPrefix: roman,
-                                    details: {},
-                                    status: ''
-                                  });
+                                result.push({ ...item, romanPrefix: roman });
+                              } else {
+                                if (item.type !== 'resort' || searchTerm || filterResort !== 'Semua Resort') {
                                   result.push(item);
                                 }
-                              } else {
-                                result.push(item);
                               }
                             });
 
@@ -3094,41 +3082,36 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.romanPrefix ? '' : rowCounter}
                                   </td>
-                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.romanPrefix ? 'bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
-                                    <div className="flex items-center gap-2">
-                                      <div>
-                                        {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
-                                        <span className={item.romanPrefix ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
-                                          {item.romanPrefix ? `${item.romanPrefix}. ${item.nama.toUpperCase()}` : item.nama}
-                                        </span>
-                                      </div>
+                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.romanPrefix ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
+                                    <div className={`flex items-center gap-2 ${item.romanPrefix ? 'font-black text-indigo-950 uppercase text-[10px] tracking-widest' : 'font-medium text-slate-700'}`}>
+                                      {item.romanPrefix ? `${item.romanPrefix}. ${item.nama}` : item.nama}
                                     </div>
                                   </td>
-                              <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
-                              {SPREADSHEET_COLUMNS.alaman.map(col => {
-                                const val = item.details[col] || 0;
-                                return (
-                                  <td key={col} className="p-0 border-r border-slate-100">
-                                    {currentUserProfile ? (
-                                      <input 
-                                        type="text" 
-                                        value={val === 0 ? '' : formatInput(val)}
-                                        onChange={(e) => handleDistributionChange(item.id, col, e.target.value)}
-                                        className={`w-full py-3 px-2 text-center outline-none bg-transparent font-mono font-bold ${!val ? 'text-slate-300' : 'text-gold-700'}`}
-                                        placeholder="0"
-                                      />
-                                    ) : (
-                                      <div className={`w-full py-3 text-center font-mono ${!val ? 'text-slate-300' : 'text-gold-700 font-bold'}`}>
-                                        {formatRupiah(val)}
-                                      </div>
-                                    )}
-                                  </td>
-                                );
-                              })}
-                              <td className="px-4 py-3 text-center font-black font-mono text-slate-900 bg-slate-50 min-w-[100px]">{formatRupiah(totalQty as number)}</td>
+                                  <td className={`px-4 py-3 text-center text-[10px] ${item.romanPrefix ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
+                                  {SPREADSHEET_COLUMNS.alaman.map(col => {
+                                    const val = item.details[col] || 0;
+                                    return (
+                                      <td key={col} className={`p-0 border-r border-slate-100 relative z-10 hover:z-20 ${item.romanPrefix ? 'bg-indigo-50/30' : ''}`}>
+                                        {currentUserProfile ? (
+                                          <input 
+                                            type="text" 
+                                            value={val === 0 ? '' : formatInput(val)}
+                                            onChange={(e) => handleDistributionChange(item.id, col, e.target.value)}
+                                            className={`w-full py-3 px-2 text-center outline-none bg-transparent font-mono font-bold transition-all focus:bg-indigo-50/50 cursor-text ${!val ? (item.romanPrefix ? 'text-slate-400' : 'text-slate-300') : 'text-gold-700'}`}
+                                            placeholder="0"
+                                          />
+                                        ) : (
+                                          <div className={`w-full py-3 text-center font-mono ${!val ? 'text-slate-300' : 'text-gold-700 font-bold'}`}>
+                                            {formatInput(val)}
+                                          </div>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className={`px-4 py-3 text-center font-black font-mono text-slate-900 min-w-[100px] ${item.romanPrefix ? 'bg-indigo-50/50' : 'bg-slate-50'}`}>{formatInput(totalQty as number)}</td>
                                 </Reorder.Item>
                               );
                             });
@@ -3290,11 +3273,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     const roman = (wLevel < 9999 && wLevel > 0) ? translateToRoman(wLevel) : '';
                                     result.push({ 
                                       id: `v-h-wilayah-${activeTab}-${currentWilayah}`, 
-                                      type: 'wilayah-header', // We'll treat this as a row
-                                      nama: isPosPI ? 'DAFTAR POS PI' : currentWilayah.toUpperCase(),
+                                      type: 'wilayah-header',
+                                      nama: currentWilayah.toUpperCase(),
                                       romanPrefix: roman
                                     });
-                                    currentResort = ''; // Reset resort when wilayah changes
+                                    currentResort = '';
                                   }
                                 }
 
@@ -3303,18 +3286,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   currentResort = item.resort;
                                   resRomanCount++;
                                   const roman = translateToRoman(resRomanCount);
-                                  result.push({ 
-                                    id: `v-h-resort-${activeTab}-${currentWilayah}-${currentResort}`, 
-                                    type: 'resort', 
-                                    nama: currentResort.toUpperCase(), 
-                                    resort: currentResort, 
-                                    romanPrefix: roman,
-                                    details: {},
-                                    status: ''
-                                  });
+                                  result.push({ ...item, romanPrefix: roman });
+                                  return;
                                 }
                               }
-                              result.push(item);
+                              
+                              if (item.type !== 'resort' || searchTerm || filterResort !== 'Semua Resort') {
+                                result.push(item);
+                              }
                             });
 
                             let rowCounterFin = 0;
@@ -3349,23 +3328,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.type === 'resort' ? '' : rowCounterFin}
                                   </td>
-                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.type === 'resort' ? 'bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
-                                    <div className="flex items-center gap-2">
-                                      <div>
-                                        {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
-                                        <span className={item.type === 'resort' ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
-                                          {item.type === 'resort' ? `${item.romanPrefix}. ${item.nama.toUpperCase()}` : item.nama}
-                                        </span>
-                                      </div>
+                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
+                                    <div className={`flex items-center gap-2 ${item.type === 'resort' ? 'font-black text-indigo-950 uppercase text-[10px] tracking-widest' : ''}`}>
+                                      {item.type === 'resort' ? `${item.romanPrefix}. ${item.nama}` : item.nama}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
-                                  <td className="px-4 py-3 text-center text-[10px] text-slate-500 font-bold text-gold-600">{item.wilayah || '-'}</td>
-                                  <td className="px-4 py-3 text-center">
-                                    {(item.type !== 'resort') && item.status && (
+                                  <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
+                                  <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-gold-700 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.wilayah || '-'}</td>
+                                  <td className={`px-4 py-3 text-center ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`}>
+                                    {item.type !== 'resort' && item.status && (
                                       <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                         {item.status.toUpperCase()}
                                       </span>
@@ -3375,7 +3349,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     const val = item.details[col] || 0;
                                     const isSelected = (selectedCells[item.id] || []).includes(col);
                                     return (
-                                      <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px]">
+                                      <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px] z-10 hover:z-20">
                                         <div className="flex items-center h-full px-2">
                                           {val > 0 && (
                                             <div className="mr-1">
@@ -3394,12 +3368,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                                 type="text" 
                                                 value={val === 0 ? '' : formatInput(val)}
                                                 onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
-                                                className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-300' : 'text-red-400 font-medium') : 'text-slate-700 font-bold'}`}
+                                                className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-400 font-bold' : 'text-red-400 font-medium') : (item.type === 'resort' ? 'text-indigo-700 font-bold' : 'text-slate-700 font-bold')}`}
                                                 placeholder="0"
                                               />
                                             ) : (
-                                              <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-200' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
-                                                {formatRupiah(val)}
+                                              <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-300' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
+                                                {activeTab === 'alaman' ? formatInput(val) : formatRupiah(val)}
                                               </div>
                                             )}
                                             

@@ -6,6 +6,8 @@ export interface Church {
   wa: string;
   order?: number;
   type?: 'jemaat' | 'resort'; // Tambahkan tipe untuk membedakan Jemaat dan Resort
+  isSynthesized?: boolean;
+  isVirtual?: boolean;
 }
 
 export interface Payment {
