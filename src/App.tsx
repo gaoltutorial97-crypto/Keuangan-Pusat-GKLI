@@ -809,10 +809,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     if (existingPayment) {
       const updatedDetails = { ...existingPayment.details, [field]: numValue };
       const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: number) => sum + (val || 0), 0);
+      const updatesLog = existingPayment.updatesLog ? [...existingPayment.updatesLog] : [];
+      updatesLog.push({ field, value: numValue, timestamp: new Date().toISOString(), acknowledged: false });
+
       await updateDoc(doc(db, 'payments', existingPayment.id), {
         details: updatedDetails,
         jumlah: updatedJumlah,
-        tanggal: new Date().toISOString().split('T')[0]
+        tanggal: new Date().toISOString().split('T')[0],
+        updatesLog,
+        receiptSent: false
       });
     } else {
       // Deterministic ID to prevent race conditions during fast typing
@@ -823,6 +828,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         periode: periodeAktif,
         details: { [field]: numValue },
         jumlah: numValue,
+        updatesLog: [{ field, value: numValue, timestamp: new Date().toISOString(), acknowledged: false }],
         tanggal: new Date().toISOString().split('T')[0]
       });
     }
@@ -1951,22 +1957,24 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
       {/* SIDEBAR */}
       <aside className={`w-64 bg-slate-900 text-white flex flex-col fixed h-full z-40 lg:z-20 shadow-2xl no-print border-r border-white/5 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-8 flex flex-col border-b border-white/5">
+        <div className="p-6 flex flex-col border-b border-white/5 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex justify-between items-center lg:block">
-            <div className="flex items-center space-x-4 mb-0 lg:mb-6 group cursor-pointer">
-              <div className="bg-gradient-to-br from-gold-400 to-gold-600 p-2.5 rounded-2xl shadow-lg shadow-gold-500/20 flex items-center justify-center w-12 h-12 flex-shrink-0 group-hover:rotate-12 transition-transform">
+            <div className="flex items-center space-x-4 mb-0 lg:mb-2 group cursor-pointer">
+              <div className="bg-emerald-600 p-1 rounded-full shadow-lg shadow-emerald-900/40 flex items-center justify-center w-14 h-14 flex-shrink-0 group-hover:scale-110 transition-transform border-4 border-slate-800">
                 {appSettings.logoUrl ? (
-                  <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" />
+                  <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-full" />
                 ) : (
-                  <ShieldCheck size={28} className="text-white" />
+                  <div className="bg-white rounded-full p-2">
+                    <ShieldCheck size={24} className="text-emerald-600" />
+                  </div>
                 )}
               </div>
               <div className="overflow-hidden">
-                <h1 className="text-xl font-black leading-none tracking-tight text-white mb-1 truncate group-hover:text-gold-400 transition-colors">{appSettings.title}</h1>
-                <div className="flex items-center space-x-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${currentUserProfile ? 'bg-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.6)]' : 'bg-slate-500'}`}></div>
-                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate">
-                    {currentUserProfile?.role === 'superadmin' ? 'Authorized Admin' : currentUserProfile ? 'Staff Access' : 'Public Mode'}
+                <h1 className="text-lg font-extrabold leading-tight tracking-tight text-white group-hover:text-gold-400 transition-colors uppercase">Keuangan GKLI</h1>
+                <div className="flex items-center space-x-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest truncate">
+                    AUTHORIZED ADMIN
                   </p>
                 </div>
               </div>
@@ -2098,118 +2106,97 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
                     <div className="grid grid-cols-1 gap-6">
                       {churches.map(church => {
-                        const paymentsForChurch = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && !p.receiptSent);
-                        if (paymentsForChurch.length === 0) return null;
+                        const paymentsForChurch = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif);
+                        const updatesToAcknowledge = paymentsForChurch.flatMap(p => 
+                          (p.updatesLog || [])
+                            .filter(log => !log.acknowledged)
+                            .map((log, idx) => ({ ...log, paymentId: p.id, payment: p, logIdx: idx }))
+                        );
+                        if (updatesToAcknowledge.length === 0) return null;
 
                         return (
                           <div key={church.id} className="border border-green-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-green-50/10">
                             <div className="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
                               <div>
                                 <h4 className="font-bold text-slate-800">
-                                  {church.type === 'resort' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">Resort</span>}
                                   {church.nama}
                                 </h4>
-                                <p className="text-xs text-slate-500">Resort {church.resort}</p>
+                                <p className="text-[10px] text-slate-500">Resort {church.resort}</p>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                  Belum Terkirim
-                                </div>
-                                {currentUserProfile?.role === 'superadmin' && (
-                                  <button 
-                                    onClick={async () => {
-                                      if (window.confirm(`Hapus SEMUA data setoran ${church.nama} yang belum terkirim? Data akan dihapus permanen dari sistem.`)) {
-                                        try {
-                                          for (const p of paymentsForChurch) {
-                                            await deleteDoc(doc(db, 'payments', p.id));
-                                          }
-                                        } catch (err: any) {
-                                          alert("Error: " + err.message);
-                                        }
-                                      }
-                                    }}
-                                    className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
-                                    title="Hapus Semua Data Ini"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                )}
+                              <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                                {updatesToAcknowledge.length} Pembaruan Baru
                               </div>
                             </div>
-                            <div className="p-4 flex flex-col md:flex-row gap-4">
-                              <div className="flex-1 bg-white p-3 rounded-lg border border-green-50">
-                                <p className="text-[10px] font-bold text-green-400 uppercase mb-2">Rincian Setoran:</p>
-                                <div className="space-y-2">
-                                  {paymentsForChurch.map(p => (
-                                    <div key={p.id} className="text-xs border-b border-slate-100 pb-2 mb-2">
-                                      <div className="flex justify-between items-center mb-1">
-                                        <div className="flex items-center space-x-2">
-                                          <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
-                                          <button onClick={() => handleDeletePayment(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-0.5 rounded" title="Hapus Data">
-                                            <Trash2 size={12} />
-                                          </button>
-                                        </div>
-                                        <span className="angka-keuangan text-green-600">Rp {formatRupiah(p.jumlah)}</span>
-                                      </div>
-                                      <div className="pl-4 space-y-1">
-                                        {Object.entries(p.details || {}).map(([key, val]) => (
-                                          (val as number) > 0 && (
-                                            <div key={key} className="flex justify-between text-slate-500">
-                                              <span>- {getFormattedPaymentName(p.kategori, key)}</span>
-                                              <span>Rp {formatRupiah(val as number)}</span>
-                                            </div>
-                                          )
-                                        ))}
+                            <div className="p-4 flex flex-col gap-4">
+                              <div className="space-y-2">
+                                {updatesToAcknowledge.map((logEntry, idx) => (
+                                  <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg border border-green-50">
+                                    <div className="text-sm">
+                                      <span className="font-bold text-slate-700">{(CATEGORY_LABELS[logEntry.payment.kategori as keyof typeof CATEGORY_LABELS] || logEntry.payment.kategori).toUpperCase()}</span>
+                                      <span className="text-slate-500 ml-2">({getFormattedPaymentName(logEntry.payment.kategori, logEntry.field)})</span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                      <span className="angka-keuangan text-green-600 font-bold">Rp {formatRupiah(logEntry.value)}</span>
+                                      <div className="flex gap-2">
+                                        <button 
+                                          onClick={async () => {
+                                            const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas pembaruan setoran untuk ${getFormattedPaymentName(logEntry.payment.kategori, logEntry.field)} periode ${periodeAktif}.\n\nNilai: *Rp ${formatRupiah(logEntry.value)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama.`;
+                                            window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                          }}
+                                          className="text-green-600 hover:text-green-700 p-1"
+                                          title="Kirim WA"
+                                        >
+                                          <MessageCircle size={16} />
+                                        </button>
+                                        <button 
+                                          onClick={() => {
+                                            setPrintData({
+                                              ...church,
+                                              periode: periodeAktif,
+                                              kategori: logEntry.payment.kategori,
+                                              jumlah: logEntry.value, // Specific update value
+                                              total: logEntry.value, // Specific update value
+                                              allDetails: { [logEntry.payment.kategori]: { [logEntry.field]: logEntry.value } }, // Pass only the updated field
+                                              updates: { [logEntry.payment.kategori]: [logEntry.field] }, // Pass only the updated field
+                                              paymentIds: [logEntry.paymentId] // Track the source record
+                                            });
+                                            setPrintType('global-receipt');
+                                          }}
+                                          className="text-blue-600 hover:text-blue-700 p-1"
+                                          title="Cetak PDF"
+                                        >
+                                          <Printer size={16} />
+                                        </button>
+                                        <button 
+                                          onClick={async () => {
+                                            if (window.confirm("Apakah Anda ingin menghapus data pembaruan ini?")) {
+                                              const updatedLog = [...(logEntry.payment.updatesLog || [])];
+                                              updatedLog.splice(logEntry.logIdx, 1);
+                                              await updateDoc(doc(db, 'payments', logEntry.paymentId), { updatesLog: updatedLog });
+                                            }
+                                          }}
+                                          className="text-red-400 hover:text-red-600 p-1"
+                                          title="Hapus Pembaruan"
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
+                                        <button 
+                                          onClick={async () => {
+                                            if (window.confirm("Apakah Anda ingin menandai pembaruan ini sudah dikirim?")) {
+                                              const updatedLog = [...(logEntry.payment.updatesLog || [])];
+                                              updatedLog[logEntry.logIdx].acknowledged = true;
+                                              await updateDoc(doc(db, 'payments', logEntry.paymentId), { updatesLog: updatedLog });
+                                            }
+                                          }}
+                                          className="text-slate-400 hover:text-slate-600 p-1"
+                                          title="Arsipkan Pembaruan"
+                                        >
+                                          <Archive size={16} />
+                                        </button>
                                       </div>
                                     </div>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
-                                <button 
-                                  onClick={async () => {
-                                    const total = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
-                                    let rincian = "";
-                                    paymentsForChurch.forEach(p => {
-                                      rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
-                                      Object.entries(p.details || {}).forEach(([key, val]) => {
-                                        if ((val as number) > 0) {
-                                          rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
-                                        }
-                                      });
-                                    });
-                                    const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas persembahan/setoran periode ${periodeAktif}.\n\nRincian yang diterima:${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama. Anda juga dapat meminta cetak PDF resmi dari bukti ini kepada kami.`;
-                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
-                                    
-                                    // Pindahkan ke arsip
-                                    if (window.confirm("Apakah Anda ingin memindahkan data ini ke arsip (pemberitahuan terkirim)?")) {
-                                      await handleMarkPaymentsAsSent(paymentsForChurch.map(p => p.id));
-                                    }
-                                  }}
-                                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
-                                >
-                                  <MessageCircle size={16} /> <span>Kirim & Arsipkan</span>
-                                                <button 
-                                      onClick={async () => {
-                                        const latest = paymentsForChurch[0];
-                                        const totalAmount = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
-                                        setPrintData({
-                                          ...church,
-                                          periode: periodeAktif,
-                                          kategori: latest.kategori,
-                                          jumlah: latest.jumlah,
-                                          total: totalAmount,
-                                          allDetails: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
-                                          updates: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {}),
-                                          paymentIds: paymentsForChurch.map(p => p.id) 
-                                        });
-                                        setPrintType('global-receipt');
-                                      }}
-                                      className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
-                                    >
-                                      <Printer size={16} /> <span>Cetak & Pindahkan</span>
-                                    </button>
-                    </button>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           </div>
@@ -3301,6 +3288,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             let rowCounterFin = 0;
                             return result.map((item, idx3) => {
                               const isHeader = item.type === 'resort' || item.type === 'wilayah-header';
+                              if (item.type === 'resort') {
+                                rowCounterFin = 0; // Reset numbering for each new Resort
+                              }
                               if (!isHeader) {
                                 rowCounterFin++;
                               }
