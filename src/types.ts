@@ -42,6 +42,7 @@ export interface AppSettings {
   googleSheetUrl: string;
   watzapApiKey?: string;
   watzapSender?: string;
+  theme?: 'default' | 'ocean' | 'nature' | 'monochrome';
 }
 
 export interface Distribution {

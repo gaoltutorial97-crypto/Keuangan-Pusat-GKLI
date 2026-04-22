@@ -70,8 +70,50 @@
 
 /* Gold Theme Utilities */
 .bg-gold-gradient {
-  background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
+  background: linear-gradient(135deg, var(--color-gold-500) 0%, var(--color-gold-600) 100%);
 }
 .shadow-gold {
-  shadow: 0 10px 15px -3px rgba(212, 175, 55, 0.3);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme="ocean"] {
+  --color-gold-50: #eff6ff;
+  --color-gold-100: #dbeafe;
+  --color-gold-200: #bfdbfe;
+  --color-gold-300: #93c5fd;
+  --color-gold-400: #60a5fa;
+  --color-gold-500: #3b82f6;
+  --color-gold-600: #2563eb;
+  --color-gold-700: #1d4ed8;
+  --color-gold-800: #1e40af;
+  --color-gold-900: #1e3a8a;
+  --color-gold-950: #172554;
+}
+
+:root[data-theme="nature"] {
+  --color-gold-50: #f0fdf4;
+  --color-gold-100: #dcfce7;
+  --color-gold-200: #bbf7d0;
+  --color-gold-300: #86efac;
+  --color-gold-400: #4ade80;
+  --color-gold-500: #22c55e;
+  --color-gold-600: #16a34a;
+  --color-gold-700: #15803d;
+  --color-gold-800: #166534;
+  --color-gold-900: #14532d;
+  --color-gold-950: #052e16;
+}
+
+:root[data-theme="monochrome"] {
+  --color-gold-50: #f8fafc;
+  --color-gold-100: #f1f5f9;
+  --color-gold-200: #e2e8f0;
+  --color-gold-300: #cbd5e1;
+  --color-gold-400: #94a3b8;
+  --color-gold-500: #64748b;
+  --color-gold-600: #475569;
+  --color-gold-700: #334155;
+  --color-gold-800: #1e293b;
+  --color-gold-900: #0f172a;
+  --color-gold-950: #020617;
 }

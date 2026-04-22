@@ -258,6 +258,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   useEffect(() => { localStorage.setItem('gkli_templates', JSON.stringify(templates)); }, [templates]);
 
+  // APPLY THEME
+  useEffect(() => {
+    if (appSettings.theme) {
+      document.documentElement.setAttribute('data-theme', appSettings.theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }, [appSettings.theme]);
+
   const uniqueResortsOrdered = useMemo(() => {
     return Array.from(new Set(churches.map(c => c.resort))).filter(r => r && r !== '-').sort();
   }, [churches]);
@@ -967,6 +976,87 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     } catch (error) {
       console.error("Sync Error:", error);
       alert("❌ KEGAGALAN SISTEM\n\nTidak dapat menghubungi server Google. Harap periksa koneksi internet Anda atau pastikan URL Apps Script belum kedaluwarsa.");
+    }
+  };
+
+  const pullFromGoogleSheets = async () => {
+    if (!appSettings.googleSheetUrl) {
+      alert("Silakan atur URL Google Apps Script di Pengaturan terlebih dahulu.");
+      return;
+    }
+
+    if (!appSettings.googleSheetUrl.includes('/exec')) {
+      alert("⚠️ URL TIDAK VALID\n\nSepertinya Anda memasukkan URL Editor. Harap masukkan URL hasil 'New Deployment' yang berakhiran dengan /exec");
+      return;
+    }
+
+    const confirmPull = window.confirm("PERINGATAN BAHAYA ⚠️\n\nMenarik data dari Google Sheet akan MENIMPA SERTA MENGHAPUS seluruh data Anda saat ini dan menggantinya dengan versi cadangan terakhir.\n\nApakah Anda sungguh-sungguh yakin ingin memulihkan (restore) data?");
+    if (!confirmPull) return;
+
+    try {
+      // Create a URL object to carefully append the parameter to avoid ? vs & issues
+      const cleanUrl = appSettings.googleSheetUrl.trim();
+      const fetchUrl = cleanUrl + (cleanUrl.includes('?') ? '&' : '?') + 'action=pull';
+
+      const response = await fetch(fetchUrl);
+      const outputConfig = await response.json();
+      
+      if (outputConfig.error) {
+         return alert("Gagal memulihkan: " + outputConfig.error + "\n\nPastikan Anda sudah memperbarui Script Apps Anda dan menyimpannya.");
+      }
+
+      // outputConfig could be a string if JSON.stringify was done twice, parse it if needed
+      let data = outputConfig;
+      if (typeof outputConfig === 'string') {
+        try {
+          data = JSON.parse(outputConfig);
+        } catch (e) {
+          // Keep original
+        }
+      }
+
+      if (!data.churches || !data.payments) {
+          return alert("Format data cadangan tidak valid atau rusak.");
+      }
+
+      const totalItems = data.churches.length + data.payments.length;
+      if (!window.confirm("Berdasarkan cadangan, ditemukan " + data.churches.length + " data gereja dan " + data.payments.length + " transaksi. Tekan 'OK' untuk memulai proses pemulihan (restore). Jangan tutup halaman sampai selesai!")) return;
+
+      // 1. Delete all existing churches
+      for (const c of churches) {
+        await deleteDoc(doc(db, 'churches', c.id));
+      }
+      
+      // 2. Delete all existing payments
+      for (const p of payments) {
+        await deleteDoc(doc(db, 'payments', p.id));
+      }
+
+      // 3. Restore records 1 by 1 precisely from the array to maintain exact sync order
+      let restoredP = 0;
+      let restoredC = 0;
+
+      for (const c of data.churches) {
+        // We setDoc using original ID to maintain exact reference and ordering structure
+        await setDoc(doc(db, 'churches', c.id), c);
+        restoredC++;
+      }
+
+      for (const p of data.payments) {
+        await setDoc(doc(db, 'payments', p.id), p);
+        restoredP++;
+      }
+
+      alert("🎉 RESTORE SELESAI!\n\nBerhasil memulihkan " + restoredC + " data jemaat dan " + restoredP + " data pembayaran. Halaman mungkin akan mengalami reload sendirinya.");
+      
+      // We might need to refresh manually to ensure state synchronization catches up safely
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
+    } catch (err: any) {
+      console.error(err);
+      alert("Terjadi kesalahan teknis saat mencoba menarik (pull) data.\nPastikan Anda sudah memperbarui Google Apps Script Anda!");
     }
   };
 
@@ -2962,9 +3052,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         <button onClick={() => alert('Fitur download CSV sedang disiapkan')} className="flex items-center justify-center space-x-3 bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-transform hover:scale-[1.02] shadow-lg shadow-emerald-500/20">
                           <Download size={20} /> <span>Download Excel (CSV)</span>
                         </button>
-                        <button onClick={syncToGoogleSheets} className="flex items-center justify-center space-x-3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-transform hover:scale-[1.02]">
-                          <Database size={20} className="text-green-400" /> <span>Sinkron ke Google Sheet</span>
-                        </button>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button onClick={syncToGoogleSheets} className="flex items-center justify-center space-x-3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-transform hover:scale-[1.02]">
+                            <Database size={20} className="text-green-400" /> <span>Sinkron ke Sheet</span>
+                          </button>
+                          <button onClick={pullFromGoogleSheets} className="flex items-center justify-center space-x-3 bg-red-900 text-white py-3 rounded-lg font-bold hover:bg-red-800 transition-transform hover:scale-[1.02]">
+                            <Download size={20} className="text-red-400" /> <span>Tarik Data</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2981,10 +3076,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <div className="space-y-4 text-slate-300 text-sm">
                       <p>1. Buat Google Sheet baru.</p>
                       <p>2. Klik <b>Extensions &gt; Apps Script</b>.</p>
-                      <p>3. Hapus semua kode yang ada dan paste kode di bawah ini:</p>
+                      <p>3. Hapus semua kode yang ada dan paste kode di bawah ini <b>(Update: Mendukung Tarik Data Penuh)</b>:</p>
                       <pre className="bg-slate-800 p-4 rounded text-xs overflow-x-auto text-green-400">
-{`function doGet() {
-  return ContentService.createTextOutput("✅ API Keuangan GKLI Aktif!")
+{`function doGet(e) {
+  var action = e.parameter ? e.parameter.action : null;
+  if (action === 'pull') {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("FullBackup");
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({error: "No backup found"})).setMimeType(ContentService.MimeType.JSON);
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return ContentService.createTextOutput(JSON.stringify({error: "No backup data"})).setMimeType(ContentService.MimeType.JSON);
+    var data = sheet.getRange(lastRow, 3).getValue();
+    return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput("✅ API Keuangan GKLI Aktif! (Tarik Data Supported)")
     .setMimeType(ContentService.MimeType.TEXT);
 }
 
@@ -3355,6 +3460,21 @@ function doPost(e) {
 
           <div className="grid grid-cols-2 gap-4">
             <SettingInput label="Judul Aplikasi" value={formSettings.title} onChange={v => setFormSettings({...formSettings, title: v})} />
+            
+            <div className="flex flex-col mb-4">
+              <label className="block text-sm font-bold text-slate-700 mb-2">Tema Aplikasi</label>
+              <select 
+                value={formSettings.theme || 'default'} 
+                onChange={e => setFormSettings({...formSettings, theme: e.target.value as any})}
+                className="w-full border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 py-3 px-4 bg-slate-50 text-sm font-bold text-slate-800"
+              >
+                <option value="default">Default Emas (Mewah)</option>
+                <option value="ocean">Samudra Biru (Profesional)</option>
+                <option value="nature">Alam Hijau (Sejuk)</option>
+                <option value="monochrome">Monokrom (Klasik/Minimalis)</option>
+              </select>
+            </div>
+
             <SettingInput label="Menu Master Data" value={formSettings.menuMasterData} onChange={v => setFormSettings({...formSettings, menuMasterData: v})} />
             <SettingInput label="Menu Jemaat" value={formSettings.menuGereja} onChange={v => setFormSettings({...formSettings, menuGereja: v})} />
             <SettingInput label="Menu Periode" value={formSettings.menuPeriode} onChange={v => setFormSettings({...formSettings, menuPeriode: v})} />

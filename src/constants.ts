@@ -25,7 +25,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   menuRekapJudul: 'Laporan & Rekap',
   menuRekapMenu: 'Cetak Rekapitulasi',
   menuDownloadMenu: 'Download Excel/Word/PDF',
-  googleSheetUrl: ''
+  googleSheetUrl: '',
+  theme: 'default'
 };
 
 const knownChurches: any[] = [
