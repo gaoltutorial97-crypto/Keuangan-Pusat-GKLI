@@ -29,7 +29,8 @@ import {
   Share2,
   Archive,
   Search,
-  GripVertical
+  GripVertical,
+  Menu
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
@@ -55,10 +56,54 @@ import {
   createUserWithEmailAndPassword
 } from 'firebase/auth';
 
+function translateToRoman(num: number): string {
+  if (num <= 0) return num.toString();
+  const lookup: { [key: string]: number } = {
+    M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1
+  };
+  let roman = '';
+  for (let i in lookup) {
+    while (num >= lookup[i]) {
+      roman += i;
+      num -= lookup[i];
+    }
+  }
+  return roman;
+}
+
+function romanToNum(roman: string): number {
+  const lookup: { [key: string]: number } = {
+    I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000
+  };
+  let num = 0;
+  for (let i = 0; i < roman.length; i++) {
+    const current = lookup[roman[i].toUpperCase()];
+    const next = lookup[roman[i+1]?.toUpperCase()];
+    if (next && current < next) {
+      num -= current;
+    } else {
+      num += current;
+    }
+  }
+  return num || 0;
+}
+
+function getWilayahLevel(w: any): number {
+  if (!w) return 9999;
+  const s = String(w).trim().toUpperCase();
+  if (!s) return 9999;
+  if (/^\d+$/.test(s)) return parseInt(s);
+  if (/^[IVXLCDM]+$/.test(s)) return romanToNum(s);
+  const match = s.match(/\d+/);
+  if (match) return parseInt(match[0]);
+  return 9999;
+}
+
 export default function App() {
   const printRef = useRef<HTMLDivElement>(null);
   // STATE NAVIGASI
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   
   // STATE USER & LOGIN
   const [users, setUsers] = useState<User[]>([]);
@@ -170,7 +215,7 @@ export default function App() {
 
   // STATE MODAL LAINNYA
   const [showChurchModal, setShowChurchModal] = useState(false);
-  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: 1 });
+  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: 1, type: 'jemaat' });
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order'>('order');
@@ -213,8 +258,33 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   useEffect(() => { localStorage.setItem('gkli_templates', JSON.stringify(templates)); }, [templates]);
 
+  const uniqueResortsOrdered = useMemo(() => {
+    return Array.from(new Set(churches.map(c => c.resort))).filter(r => r && r !== '-').sort();
+  }, [churches]);
+
   const sortedChurches = useMemo(() => {
-    let filtered = [...churches];
+    let base = [...churches];
+    
+    // Auto-synthesize Resort entity document if missing to ensure fillable headers
+    const existingResorts = new Set(base.filter(c => c.type === 'resort').map(c => c.resort));
+    const uniqueResortNames = Array.from(new Set(base.map(c => c.resort).filter(r => r && r !== '-')));
+    
+    uniqueResortNames.forEach(resName => {
+      if (!existingResorts.has(resName)) {
+        base.push({
+          id: `virtual_resort_${resName.replace(/\s+/g, '_')}`,
+          nama: `RESORT ${resName.replace(/^resort\s+/i, '').toUpperCase()}`,
+          resort: resName,
+          wilayah: '',
+          wa: '',
+          type: 'resort',
+          order: -1000,
+          isSynthesized: true
+        });
+      }
+    });
+
+    let filtered = base;
     if (filterResort !== 'Semua Resort') {
       filtered = filtered.filter(c => c.resort === filterResort);
     }
@@ -230,13 +300,41 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
 
     return filtered.sort((a, b) => {
+      // Prioritaskan grouping resort jika sedang tidak filter resort tertentu
+      if (filterResort === 'Semua Resort' && sortType === 'order') {
+        const rComp = a.resort.localeCompare(b.resort);
+        if (rComp !== 0) return rComp;
+        if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
+      }
+      
       if (sortType === 'nama') return a.nama.localeCompare(b.nama);
       if (sortType === 'resort') return a.resort.localeCompare(b.resort);
       if (sortType === 'wilayah') return (a.wilayah || '').localeCompare(b.wilayah || '');
       if (sortType === 'order') return (a.order || 0) - (b.order || 0);
       return a.id.localeCompare(b.id);
     });
-  }, [churches, sortType, filterResort, filterWilayah]);
+  }, [churches, sortType, filterResort, filterWilayah, searchTerm]);
+
+  const displayGroupedChurches = useMemo(() => {
+    const result: any[] = [];
+    let currentResort = '';
+    
+    sortedChurches.forEach((item) => {
+      const itemResort = item.resort || '-';
+      if (itemResort !== currentResort && filterResort === 'Semua Resort') {
+        currentResort = itemResort;
+        const rIndex = uniqueResortsOrdered.indexOf(currentResort) + 1;
+        result.push({
+          id: `header-${currentResort}`,
+          type: 'group-header',
+          name: currentResort,
+          roman: rIndex > 0 ? translateToRoman(rIndex) : ''
+        });
+      }
+      result.push(item);
+    });
+    return result;
+  }, [sortedChurches, filterResort, uniqueResortsOrdered]);
 
   const uniqueResorts = useMemo(() => {
     return ['Semua Resort', ...Array.from(new Set(churches.map(c => c.resort))).sort()];
@@ -247,24 +345,34 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   }, [churches]);
   const getLaporanData = (kategori: 'laporan' | 'pelean' | 'alaman') => {
     const columns = SPREADSHEET_COLUMNS[kategori];
-    return churches.map(gereja => {
-      const pembayaran = payments.find(p => p.gerejaId === gereja.id && p.kategori === kategori && p.periode === periodeAktif);
-      
-      let isLunas = false;
-      if (pembayaran && pembayaran.details) {
-        isLunas = columns.every(col => (pembayaran.details[col] || 0) > 0);
-      }
+    let data = [...sortedChurches];
+    
+    // Persembahan II (Laporan) dan Persembahan Khusus (Pelean) tidak menampilkan Resort
+    // dan diurutkan berdasarkan wilayah terkecil ke terbesar
+    if (kategori === 'laporan' || kategori === 'pelean') {
+      data = data.filter(c => c.type !== 'resort');
+      data.sort((a,b) => getWilayahLevel(a.wilayah) - getWilayahLevel(b.wilayah));
+    }
 
-      return {
-        ...gereja,
-        status: isLunas ? 'Lunas' : 'Menunggak',
-        jumlah: pembayaran ? pembayaran.jumlah : 0,
-        tanggal: pembayaran ? pembayaran.tanggal : null,
-        details: pembayaran && pembayaran.details ? pembayaran.details : {},
-        kategori: kategori,
-        periode: periodeAktif
-      };
-    });
+    return data
+      .map(gereja => {
+        const pembayaran = payments.find(p => p.gerejaId === gereja.id && p.kategori === kategori && p.periode === periodeAktif);
+        
+        let isLunas = false;
+        if (pembayaran && pembayaran.details) {
+          isLunas = columns.every(col => (pembayaran.details[col] || 0) > 0);
+        }
+
+        return {
+          ...gereja,
+          status: isLunas ? 'Lunas' : 'Menunggak',
+          jumlah: pembayaran ? pembayaran.jumlah : 0,
+          tanggal: pembayaran ? pembayaran.tanggal : null,
+          details: pembayaran && pembayaran.details ? pembayaran.details : {},
+          kategori: kategori,
+          periode: periodeAktif
+        };
+      });
   };
 
   const dataAlaman = useMemo(() => getLaporanData('alaman'), [churches, payments, periodeAktif]);
@@ -273,7 +381,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const dataDistribusi = useMemo(() => {
     const columns = SPREADSHEET_COLUMNS.alaman;
-    return churches.map(gereja => {
+    return sortedChurches.map(gereja => {
       const dist = distributions.find(d => d.gerejaId === gereja.id && d.periode === periodeAktif);
       return {
         ...gereja,
@@ -281,7 +389,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         periode: periodeAktif
       };
     });
-  }, [churches, distributions, periodeAktif]);
+  }, [sortedChurches, distributions, periodeAktif]);
 
   const lunasChurches = useMemo(() => {
     return churches.filter(church => {
@@ -312,7 +420,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       dataset.filter(item => {
         const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
         const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-        return matchResort && matchWilayah;
+        return matchResort && matchWilayah && item.type !== 'resort';
       }).forEach(item => {
         if (item.status === 'Menunggak') {
           totalMenunggak++;
@@ -325,7 +433,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const totalDistribusiItems = dataDistribusi.filter(item => {
       const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
       const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-      return matchResort && matchWilayah;
+      return matchResort && matchWilayah && item.type !== 'resort';
     }).reduce((sum, item) => {
       const qty = Object.values(item.details).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
       return sum + qty;
@@ -337,8 +445,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const churchesWithArrears = useMemo(() => {
     const currentMonthIdx = new Date().getMonth(); // 0-11
     
-    return churches.map(church => {
-      const allPotentialArrears: Record<string, string[]> = {};
+    return churches
+      .filter(church => church.type !== 'resort')
+      .map(church => {
+        const allPotentialArrears: Record<string, string[]> = {};
       let hasPotential = false;
 
       Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
@@ -566,6 +676,43 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
+  const handleGenerateResortEntities = async () => {
+    if (currentUserProfile?.role !== 'superadmin') return;
+    
+    const uniqueResortNames = Array.from(new Set(churches.map(c => c.resort))).filter(r => r && r !== '-');
+    const existingResortEntries = churches.filter(c => c.type === 'resort');
+    
+    if (window.confirm(`Sistem akan membuat entitas pembayaran khusus untuk tiap resort (${uniqueResortNames.length} resort ditemukan). Lanjutkan?`)) {
+      try {
+        let addedCount = 0;
+        for (const resortName of uniqueResortNames) {
+          const expectedName = `Resort ${resortName}`;
+          const alreadyExists = existingResortEntries.find(r => r.nama.toLowerCase() === expectedName.toLowerCase());
+          
+          if (!alreadyExists) {
+            await addDoc(collection(db, 'churches'), {
+              nama: expectedName,
+              resort: resortName,
+              wilayah: '',
+              wa: '',
+              type: 'resort',
+              order: churches.length + addedCount + 1
+            });
+            addedCount++;
+          }
+        }
+        
+        if (addedCount > 0) {
+          alert(`${addedCount} entitas Resort berhasil ditambahkan.`);
+        } else {
+          alert("Semua Resort sudah terdaftar sebagai entitas.");
+        }
+      } catch (err: any) {
+        alert("Gagal: " + err.message);
+      }
+    }
+  };
+
   const handleDeleteChurch = async (id: string) => {
     if (!currentUserProfile) return;
     if (window.confirm("Apakah Anda yakin ingin menghapus jemaat ini? Seluruh data pembayaran jemaat ini juga akan dihapus permanen.")) {
@@ -623,14 +770,16 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
-  const handleReorderChurches = async (newOrder: Church[]) => {
+  const handleReorderChurches = async (newOrder: any[]) => {
     if (!currentUserProfile || sortType !== 'order') return;
+    
+    // Filter out headers before saving
+    const churchesOnly = newOrder.filter(item => item.type !== 'group-header');
     
     // Batch update order fields in Firestore
     const batch = writeBatch(db);
-    newOrder.forEach((church, index) => {
+    churchesOnly.forEach((church, index) => {
       const newIdx = index + 1;
-      // We only update if the order has actually changed to save quota
       if (church.order !== newIdx) {
         batch.update(doc(db, 'churches', church.id), { order: newIdx });
       }
@@ -943,9 +1092,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     } else if (activeTab === 'dashboard') {
       csvContent += "RINGKASAN DASHBOARD\n";
       csvContent += `KETERANGAN,NILAI\n`;
-      csvContent += `Total Pemasukan ${periodeAktif},Rp ${totalPemasukan}\n`;
-      csvContent += `Total Lunas,${stats.totalLunas} Jemaat\n`;
-      csvContent += `Total Menunggak,${stats.totalMenunggak} Jemaat\n`;
+      csvContent += `Total Pemasukan ${periodeAktif},Rp ${formatRupiah(totalPemasukan)}\n`;
+      csvContent += `Total Lunas,${formatRupiah(stats.totalLunas)} Jemaat\n`;
+      csvContent += `Total Menunggak,${formatRupiah(stats.totalMenunggak)} Jemaat\n`;
       csvContent += `\nDAFTAR JEMAAT LUNAS SELURUHNYA\n`;
       lunasChurches.forEach(c => csvContent += `"${c.nama}" (Resort ${c.resort})\n`);
     } else {
@@ -986,6 +1135,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     if (angka < 2000) return 'Seribu ' + terbilang(angka - 1000);
     if (angka < 1000000) return terbilang(Math.floor(angka / 1000)) + ' Ribu ' + terbilang(angka % 1000);
     if (angka < 1000000000) return terbilang(Math.floor(angka / 1000000)) + ' Juta ' + terbilang(angka % 1000000);
+    if (angka < 1000000000000) return terbilang(Math.floor(angka / 1000000000)) + ' Miliar ' + terbilang(angka % 1000000000);
     return '';
   };
 
@@ -1503,55 +1653,68 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800">
+      {/* MOBILE OVERLAY */}
+      {mobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-2xl no-print border-r border-white/5">
+      <aside className={`w-64 bg-slate-900 text-white flex flex-col fixed h-full z-40 lg:z-20 shadow-2xl no-print border-r border-white/5 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="p-8 flex flex-col border-b border-white/5">
-          <div className="flex items-center space-x-4 mb-6 group cursor-pointer">
-            <div className="bg-gradient-to-br from-gold-400 to-gold-600 p-2.5 rounded-2xl shadow-lg shadow-gold-500/20 flex items-center justify-center w-12 h-12 flex-shrink-0 group-hover:rotate-12 transition-transform">
-              {appSettings.logoUrl ? (
-                <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" />
-              ) : (
-                <ShieldCheck size={28} className="text-white" />
-              )}
-            </div>
-            <div className="overflow-hidden">
-              <h1 className="text-xl font-black leading-none tracking-tight text-white mb-1 truncate group-hover:text-gold-400 transition-colors">{appSettings.title}</h1>
-              <div className="flex items-center space-x-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${currentUserProfile ? 'bg-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.6)]' : 'bg-slate-500'}`}></div>
-                <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate">
-                  {currentUserProfile?.role === 'superadmin' ? 'Authorized Admin' : currentUserProfile ? 'Staff Access' : 'Public Mode'}
-                </p>
+          <div className="flex justify-between items-center lg:block">
+            <div className="flex items-center space-x-4 mb-0 lg:mb-6 group cursor-pointer">
+              <div className="bg-gradient-to-br from-gold-400 to-gold-600 p-2.5 rounded-2xl shadow-lg shadow-gold-500/20 flex items-center justify-center w-12 h-12 flex-shrink-0 group-hover:rotate-12 transition-transform">
+                {appSettings.logoUrl ? (
+                  <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" />
+                ) : (
+                  <ShieldCheck size={28} className="text-white" />
+                )}
+              </div>
+              <div className="overflow-hidden">
+                <h1 className="text-xl font-black leading-none tracking-tight text-white mb-1 truncate group-hover:text-gold-400 transition-colors">{appSettings.title}</h1>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${currentUserProfile ? 'bg-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.6)]' : 'bg-slate-500'}`}></div>
+                  <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate">
+                    {currentUserProfile?.role === 'superadmin' ? 'Authorized Admin' : currentUserProfile ? 'Staff Access' : 'Public Mode'}
+                  </p>
+                </div>
               </div>
             </div>
+            <button className="lg:hidden p-2 text-white/50 hover:text-white" onClick={() => setMobileSidebarOpen(false)}>
+              <X size={24} />
+            </button>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
-          <NavItem active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<LayoutDashboard size={20} />} label="Dashboard Ringkasan" />
+          <NavItem active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setMobileSidebarOpen(false); }} icon={<LayoutDashboard size={20} />} label="Dashboard Ringkasan" />
           
           <NavHeader label={appSettings.menuMasterData} />
-          <NavItem active={activeTab === 'gereja'} onClick={() => setActiveTab('gereja')} icon={<Users size={20} />} label={appSettings.menuGereja} />
-          <NavItem active={activeTab === 'periode'} onClick={() => setActiveTab('periode')} icon={<Calendar size={20} />} label={appSettings.menuPeriode} />
+          <NavItem active={activeTab === 'gereja'} onClick={() => { setActiveTab('gereja'); setMobileSidebarOpen(false); }} icon={<Users size={20} />} label={appSettings.menuGereja} />
+          <NavItem active={activeTab === 'periode'} onClick={() => { setActiveTab('periode'); setMobileSidebarOpen(false); }} icon={<Calendar size={20} />} label={appSettings.menuPeriode} />
 
           <NavHeader label={appSettings.menuPembayaran} />
-          <NavItem active={activeTab === 'laporan'} onClick={() => setActiveTab('laporan')} icon={<FileText size={20} />} label={appSettings.menuLaporan} />
-          <NavItem active={activeTab === 'pelean'} onClick={() => setActiveTab('pelean')} icon={<FileText size={20} />} label={appSettings.menuPelean} />
-          <NavItem active={activeTab === 'alaman'} onClick={() => setActiveTab('alaman')} icon={<FileText size={20} />} label={appSettings.menuAlaman} />
-          <NavItem active={activeTab === 'distribusi'} onClick={() => setActiveTab('distribusi')} icon={<Truck size={20} />} label="Distribusi Literatur" />
+          <NavItem active={activeTab === 'laporan'} onClick={() => { setActiveTab('laporan'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label={appSettings.menuLaporan} />
+          <NavItem active={activeTab === 'pelean'} onClick={() => { setActiveTab('pelean'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label={appSettings.menuPelean} />
+          <NavItem active={activeTab === 'alaman'} onClick={() => { setActiveTab('alaman'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label={appSettings.menuAlaman} />
+          <NavItem active={activeTab === 'distribusi'} onClick={() => { setActiveTab('distribusi'); setMobileSidebarOpen(false); }} icon={<Truck size={20} />} label="Distribusi Literatur" />
 
           <NavHeader label={appSettings.menuRekapJudul} />
-          <NavItem active={activeTab === 'pengiriman'} onClick={() => setActiveTab('pengiriman')} icon={<MessageCircle size={20} />} label="Pusat Terima Kasih" />
-          <NavItem active={activeTab === 'arsip'} onClick={() => setActiveTab('arsip')} icon={<Archive size={20} />} label="Arsip Tanda Terima" />
-          <NavItem active={activeTab === 'penagihan'} onClick={() => setActiveTab('penagihan')} icon={<AlertTriangle size={20} />} label="Pusat Penagihan" />
-          <NavItem active={activeTab === 'sertifikat'} onClick={() => setActiveTab('sertifikat')} icon={<Award size={20} />} label="Apresiasi Jemaat" />
-          <NavItem active={activeTab === 'download'} onClick={() => setActiveTab('download')} icon={<Download size={20} />} label={appSettings.menuDownloadMenu} />
+          <NavItem active={activeTab === 'pengiriman'} onClick={() => { setActiveTab('pengiriman'); setMobileSidebarOpen(false); }} icon={<MessageCircle size={20} />} label="Pusat Terima Kasih" />
+          <NavItem active={activeTab === 'arsip'} onClick={() => { setActiveTab('arsip'); setMobileSidebarOpen(false); }} icon={<Archive size={20} />} label="Arsip Tanda Terima" />
+          <NavItem active={activeTab === 'penagihan'} onClick={() => { setActiveTab('penagihan'); setMobileSidebarOpen(false); }} icon={<AlertTriangle size={20} />} label="Pusat Penagihan" />
+          <NavItem active={activeTab === 'sertifikat'} onClick={() => { setActiveTab('sertifikat'); setMobileSidebarOpen(false); }} icon={<Award size={20} />} label="Apresiasi Jemaat" />
+          <NavItem active={activeTab === 'download'} onClick={() => { setActiveTab('download'); setMobileSidebarOpen(false); }} icon={<Download size={20} />} label={appSettings.menuDownloadMenu} />
 
           {currentUserProfile?.role === 'superadmin' && (
             <>
               <NavHeader label="Pengaturan Sistem" />
-              <NavItem active={activeTab === 'templates'} onClick={() => setActiveTab('templates')} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
-              <NavItem active={false} onClick={() => { setFormSettings(appSettings); setShowSettingsModal(true); }} icon={<Settings size={20} className="text-yellow-500" />} label="Edit Tampilan" className="text-yellow-500" />
-              <NavItem active={activeTab === 'akun'} onClick={() => setActiveTab('akun')} icon={<UserPlus size={20} className="text-yellow-500" />} label="Manajemen Akun" className="text-yellow-500" />
+              <NavItem active={activeTab === 'templates'} onClick={() => { setActiveTab('templates'); setMobileSidebarOpen(false); }} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
+              <NavItem active={false} onClick={() => { setFormSettings(appSettings); setShowSettingsModal(true); setMobileSidebarOpen(false); }} icon={<Settings size={20} className="text-yellow-500" />} label="Edit Tampilan" className="text-yellow-500" />
+              <NavItem active={activeTab === 'akun'} onClick={() => { setActiveTab('akun'); setMobileSidebarOpen(false); }} icon={<UserPlus size={20} className="text-yellow-500" />} label="Manajemen Akun" className="text-yellow-500" />
             </>
           )}
         </nav>
@@ -1572,18 +1735,24 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 ml-64 min-h-screen flex flex-col">
-        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
-          <div className="flex items-center space-x-6">
+      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col w-full overflow-hidden">
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
+          <div className="flex items-center space-x-3 lg:space-x-6">
+            <button 
+              className="lg:hidden p-2 text-slate-800 hover:bg-slate-100 rounded-lg"
+              onClick={() => setMobileSidebarOpen(true)}
+            >
+              <Menu size={24} />
+            </button>
             <div className="flex flex-col">
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">{activeTab.toUpperCase()}</h2>
+              <h2 className="text-sm lg:text-xl font-black text-slate-800 tracking-tight truncate max-w-[150px] lg:max-w-none">{activeTab.toUpperCase()}</h2>
               <div className="flex items-center space-x-1.5 mt-0.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-gold-500 animate-pulse"></div>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Live System Online</p>
+                <div className="w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full bg-gold-500 animate-pulse"></div>
+                <p className="text-[7px] lg:text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Online</p>
               </div>
             </div>
-            <div className="h-8 w-px bg-slate-200"></div>
-            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
+            <div className="hidden lg:block h-8 w-px bg-slate-200"></div>
+            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl overflow-x-auto">
               <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('excel')} icon={<Download size={14} />} label="Excel" color="text-green-600" />
               {currentUserProfile?.role === 'superadmin' && (
                 <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('word')} icon={<FileText size={14} />} label="Word" color="text-gold-600" />
@@ -1591,13 +1760,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               <HeaderDownloadBtn onClick={() => handleDownloadCurrentMenu('pdf')} icon={<Printer size={14} />} label="PDF" color="text-red-600" />
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-              <span className="text-xs text-slate-500 font-bold mr-2">PERIODE AKTIF:</span>
+          <div className="flex items-center space-x-2 lg:space-x-4">
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 lg:px-3 py-1 lg:py-1.5">
+              <span className="hidden sm:inline text-[10px] lg:text-xs text-slate-500 font-bold mr-2 uppercase">Periode:</span>
               <select 
                 value={periodeAktif} 
                 onChange={(e) => setPeriodeAktif(e.target.value)}
-                className="bg-transparent text-sm font-bold text-gold-700 outline-none cursor-pointer"
+                className="bg-transparent text-[10px] lg:text-sm font-bold text-gold-700 outline-none cursor-pointer"
               >
                 {periods.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -1633,7 +1802,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           <div key={church.id} className="border border-green-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-green-50/10">
                             <div className="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
                               <div>
-                                <h4 className="font-bold text-slate-800">{church.nama}</h4>
+                                <h4 className="font-bold text-slate-800">
+                                  {church.type === 'resort' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">Resort</span>}
+                                  {church.nama}
+                                </h4>
                                 <p className="text-xs text-slate-500">Resort {church.resort}</p>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1763,7 +1935,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           <div key={church.id} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-slate-50">
                             <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center">
                               <div>
-                                <h4 className="font-bold text-slate-800">{church.nama}</h4>
+                                <h4 className="font-bold text-slate-800">
+                                  {church.type === 'resort' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">Resort</span>}
+                                  {church.nama}
+                                </h4>
                                 <p className="text-xs text-slate-500">Resort {church.resort}</p>
                               </div>
                               <div className="flex items-center gap-2">
@@ -2061,21 +2236,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     />
                     <StatCard 
                       title="Data Terverifikasi" 
-                      value={`${stats.totalLunas}`} 
+                      value={`${formatRupiah(stats.totalLunas)}`} 
                       icon={<CheckCircle2 size={24} />} 
                       color="gold" 
                       subtitle="LUNAS"
                     />
                      <StatCard 
                       title="Distribusi Literatur" 
-                      value={`${stats.totalDistribusiItems}`} 
+                      value={`${formatRupiah(stats.totalDistribusiItems)}`} 
                       icon={<Package size={24} />} 
                       color="gold" 
                       subtitle="TOTAL UNIT"
                     />
                     <StatCard 
                       title="Antrean Tunggakan" 
-                      value={`${stats.totalMenunggak}`} 
+                      value={`${formatRupiah(stats.totalMenunggak)}`} 
                       icon={<AlertCircle size={24} />} 
                       color="red" 
                       subtitle="ACTION REQUIRED"
@@ -2174,18 +2349,27 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         {currentUserProfile && (
                           <div className="flex gap-2">
                              {currentUserProfile.role === 'superadmin' && (
-                              <button 
-                                onClick={handlePullMasterData} 
-                                className="flex items-center space-x-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-lg shadow-slate-500/10"
-                                title="Tarik data jemaat yang sudah saya sediakan sebelumnya"
-                              >
-                                <Database size={16} /> <span>Tarik Master</span>
-                              </button>
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={handlePullMasterData} 
+                                  className="flex items-center space-x-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-lg shadow-slate-500/10"
+                                  title="Tarik data jemaat yang sudah saya sediakan sebelumnya"
+                                >
+                                  <Database size={16} /> <span>Tarik Master</span>
+                                </button>
+                                <button 
+                                  onClick={handleGenerateResortEntities} 
+                                  className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/10"
+                                  title="Membuat entitas pembayaran khusus untuk tiap resort"
+                                >
+                                  <Users size={16} /> <span>Resort Otomatis</span>
+                                </button>
+                              </div>
                             )}
                             <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10">
                               <Plus size={16} /> <span>Import</span>
                             </button>
-                            <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: churches.length + 1 }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/10">
+                            <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: churches.length + 1, type: 'jemaat' }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/10">
                               <Plus size={16} /> <span>Tambah</span>
                             </button>
                           </div>
@@ -2216,7 +2400,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </select>
                       </div>
                       <div className="flex items-center justify-center space-x-2 bg-gold-50 text-gold-700 border border-gold-200 rounded-lg px-3 py-2 text-[10px] font-bold">
-                        TOTAL: {sortedChurches.length} JEMAAT
+                        TOTAL: {formatRupiah(sortedChurches.length)} JEMAAT
                       </div>
                     </div>
 
@@ -2261,49 +2445,54 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         as="tbody" 
                         className="divide-y divide-slate-100"
                       >
-                        {sortedChurches.map((church, idx) => (
-                          <Reorder.Item 
-                            key={church.id} 
-                            value={church} 
-                            as="tr" 
-                            className="hover:bg-slate-50 transition-colors group cursor-move"
-                            dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
-                          >
-                            <td className="px-2 py-4">
-                              {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
-                                <div 
-                                  className="text-slate-300 hover:text-gold-500 transition-all ml-2"
-                                  title="Tarik untuk urutkan"
-                                >
-                                  <GripVertical size={18} />
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-slate-400 font-mono text-xs">#{church.order || church.id}</td>
-                            <td className="px-6 py-4 font-bold text-slate-800">{church.nama}</td>
-                            <td className="px-6 py-4 text-slate-600 font-medium">
-                              <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
-                            </td>
-                            <td className="px-6 py-4 text-slate-600 font-medium">
-                              <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
-                            </td>
-                            {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
-                            {currentUserProfile && (
-                              <td className="px-6 py-4 text-center">
-                                <div className="flex justify-center flex-wrap gap-1">
-                                  <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
-                                    <Edit size={16} />
-                                  </button>
-                                  {currentUserProfile.role === 'superadmin' && (
-                                    <button onClick={() => handleDeleteChurch(church.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50" title="Hapus">
-                                      <Trash2 size={16} />
-                                    </button>
-                                  )}
-                                </div>
+                        {sortedChurches.map((church, idx) => {
+                          return (
+                            <Reorder.Item 
+                              key={church.id} 
+                              value={church} 
+                              as="tr" 
+                              className="hover:bg-slate-50 transition-colors group cursor-move"
+                              dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                            >
+                              <td className="px-2 py-4">
+                                {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                  <div 
+                                    className="text-slate-300 hover:text-gold-500 transition-all ml-2"
+                                    title="Tarik untuk urutkan"
+                                  >
+                                    <GripVertical size={18} />
+                                  </div>
+                                )}
                               </td>
-                            )}
-                          </Reorder.Item>
-                        ))}
+                              <td className="px-6 py-4 text-slate-400 font-mono text-xs">#{formatRupiah(church.order || parseInt(church.id) || 0)}</td>
+                              <td className="px-6 py-4 font-bold text-slate-800">
+                                {church.type === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
+                                {church.nama}
+                              </td>
+                              <td className="px-6 py-4 text-slate-600 font-medium">
+                                <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
+                              </td>
+                              <td className="px-6 py-4 text-slate-600 font-medium">
+                                <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
+                              </td>
+                              {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
+                              {currentUserProfile && (
+                                <td className="px-6 py-4 text-center">
+                                  <div className="flex justify-center flex-wrap gap-1">
+                                    <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
+                                      <Edit size={16} />
+                                    </button>
+                                    {currentUserProfile.role === 'superadmin' && (
+                                      <button onClick={() => handleDeleteChurch(church.id)} className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50" title="Hapus">
+                                        <Trash2 size={16} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                            </Reorder.Item>
+                          );
+                        })}
                       </Reorder.Group>
                     </table>
                   </div>
@@ -2401,42 +2590,83 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       </thead>
                       <Reorder.Group 
                         axis="y" 
-                        values={dataDistribusi.filter(item => {
-                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
-                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-                          const matchSearch = !searchTerm.trim() || 
-                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
-                          return matchResort && matchWilayah && matchSearch;
-                        })} 
-                        onReorder={(newOrder) => handleReorderChurches(newOrder as any)} 
+                        values={(() => {
+                          const filtered = dataDistribusi;
+                          const result: any[] = [];
+                          let currentResort = '';
+                          filtered.forEach(item => {
+                            if (item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
+                              currentResort = item.resort;
+                              const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
+                              result.push({ id: `h-dist-${currentResort}`, type: 'group-header', name: currentResort, roman: rIdx > 0 ? translateToRoman(rIdx) : '' });
+                            }
+                            result.push(item);
+                          });
+                          return result;
+                        })()} 
+                        onReorder={handleReorderChurches} 
                         as="tbody" 
                         className="divide-y divide-slate-100"
                       >
-                        {dataDistribusi.filter(item => {
-                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
-                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-                          const matchSearch = !searchTerm.trim() || 
-                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
-                          return matchResort && matchWilayah && matchSearch;
-                        }).map((item, idx) => {
-                          const totalQty = Object.values(item.details).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
-                          return (
-                            <Reorder.Item 
-                              key={item.id} 
-                              value={item} 
-                              as="tr" 
-                              className="hover:bg-slate-50 transition-colors group"
-                              dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
-                            >
-                              {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
-                                <td className="px-1 py-3 sticky left-0 bg-white z-20 border-r border-slate-100 cursor-move">
-                                  <GripVertical size={14} className="text-slate-300" />
-                                </td>
-                              )}
-                              <td className="px-4 py-3 sticky bg-white z-10 text-center border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>{idx + 1}</td>
-                              <td className="px-4 py-3 sticky bg-white z-10 font-bold border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>{item.nama}</td>
+                        {(() => {
+                            const filtered = dataDistribusi;
+                            const result: any[] = [];
+                            let currentResort = '';
+                            dataDistribusi.forEach(item => {
+                              if (item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
+                                currentResort = item.resort;
+                                const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
+                                const roman = rIdx > 0 ? translateToRoman(rIdx) : '';
+                                if (item.type === 'resort') {
+                                  result.push({ ...item, romanPrefix: roman });
+                                } else {
+                                  // This shouldn't happen much now due to synthesis, but keep as fallback that is fillable
+                                  result.push({ 
+                                    id: `virtual_dist_h_${currentResort}`, 
+                                    type: 'resort', 
+                                    nama: `RESORT ${currentResort.toUpperCase()}`, 
+                                    resort: currentResort, 
+                                    romanPrefix: roman,
+                                    details: {},
+                                    status: ''
+                                  });
+                                  result.push(item);
+                                }
+                              } else {
+                                result.push(item);
+                              }
+                            });
+
+                            let rowCounter = 0;
+                            return result.map((item, idxx) => {
+                              if (!item.romanPrefix) rowCounter++;
+                              const totalQty = Object.values(item.details).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
+                              return (
+                                <Reorder.Item 
+                                  key={item.id} 
+                                  value={item} 
+                                  as="tr" 
+                                  className={`hover:bg-slate-50 transition-colors group ${item.romanPrefix ? 'bg-slate-50/80 font-black' : ''}`}
+                                  dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                                >
+                                  {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                    <td className="px-1 py-3 sticky left-0 bg-inherit z-20 border-r border-slate-100 cursor-move">
+                                      <GripVertical size={14} className="text-slate-300" />
+                                    </td>
+                                  )}
+                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>
+                                    {item.romanPrefix ? `${item.romanPrefix}.` : rowCounter}
+                                  </td>
+                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>
+                                    <div className="flex items-center gap-2">
+                                      <div>
+                                        {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
+                                        <span className={item.romanPrefix ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
+                                          {item.romanPrefix ? `RESORT ${item.nama.replace(/^resort\s+/i, '').toUpperCase()}` : item.nama}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
                               <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
                               {SPREADSHEET_COLUMNS.alaman.map(col => {
                                 const val = item.details[col] || 0;
@@ -2445,23 +2675,24 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     {currentUserProfile ? (
                                       <input 
                                         type="text" 
-                                        value={val === 0 ? '' : val}
+                                        value={val === 0 ? '' : formatInput(val)}
                                         onChange={(e) => handleDistributionChange(item.id, col, e.target.value)}
                                         className={`w-full py-3 px-2 text-center outline-none bg-transparent font-mono font-bold ${!val ? 'text-slate-300' : 'text-gold-700'}`}
                                         placeholder="0"
                                       />
                                     ) : (
                                       <div className={`w-full py-3 text-center font-mono ${!val ? 'text-slate-300' : 'text-gold-700 font-bold'}`}>
-                                        {val || '-'}
+                                        {formatRupiah(val)}
                                       </div>
                                     )}
                                   </td>
                                 );
                               })}
-                              <td className="px-4 py-3 text-center font-black font-mono text-slate-900 bg-slate-50 min-w-[100px]">{totalQty}</td>
-                            </Reorder.Item>
-                          );
-                        })}
+                              <td className="px-4 py-3 text-center font-black font-mono text-slate-900 bg-slate-50 min-w-[100px]">{formatRupiah(totalQty as number)}</td>
+                                </Reorder.Item>
+                              );
+                            });
+                        })()}
                       </Reorder.Group>
                     </table>
                   </div>
@@ -2518,139 +2749,189 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       </thead>
                       <Reorder.Group 
                         axis="y" 
-                        values={getLaporanData(activeTab as any).filter(item => {
-                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
-                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-                          const matchSearch = !searchTerm.trim() || 
-                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
-                          return matchResort && matchWilayah && matchSearch;
-                        })} 
+                        values={(() => {
+                          const baseData = getLaporanData(activeTab as any);
+                          const result: any[] = [];
+                          let currentResort = '';
+                          baseData.forEach(item => {
+                            if (activeTab === 'alaman' && item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
+                              currentResort = item.resort;
+                              const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
+                              result.push({ id: `h-fin-${currentResort}`, type: 'group-header', name: currentResort, roman: rIdx > 0 ? translateToRoman(rIdx) : '' });
+                            }
+                            result.push(item);
+                          });
+                          return result;
+                        })()} 
                         onReorder={(newOrder) => handleReorderChurches(newOrder as any)} 
                         as="tbody" 
                         className="divide-y divide-slate-100"
                       >
-                        {getLaporanData(activeTab as any).filter(item => {
-                          const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
-                          const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
-                          const matchSearch = !searchTerm.trim() || 
-                                           item.nama.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                           item.resort.toLowerCase().includes(searchTerm.toLowerCase());
-                          return matchResort && matchWilayah && matchSearch;
-                        }).map((item, idx) => (
-                          <Reorder.Item 
-                            key={item.id} 
-                            value={item} 
-                            as="tr" 
-                            className="hover:bg-slate-50 transition-colors group"
-                            dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
-                          >
-                            {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
-                              <td className="px-1 py-3 sticky left-0 bg-white z-20 border-r border-slate-100 cursor-move">
-                                <GripVertical size={14} className="text-slate-300" />
-                              </td>
-                            )}
-                            <td className="px-4 py-3 sticky bg-white z-10 text-center border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>{idx + 1}</td>
-                            <td className="px-4 py-3 sticky bg-white z-10 font-bold border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>{item.nama}</td>
-                            <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
-                            <td className="px-4 py-3 text-center text-[10px] text-slate-500 font-bold text-gold-600">{item.wilayah || '-'}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {item.status.toUpperCase()}
-                              </span>
-                            </td>
-                            {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => {
-                              const val = item.details[col] || 0;
-                              const isSelected = (selectedCells[item.id] || []).includes(col);
+                        {(() => {
+                            const baseData = getLaporanData(activeTab as any);
+                            const result: any[] = [];
+                            let currentResort = '';
+                            baseData.forEach(item => {
+                              if (activeTab === 'alaman' && item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
+                                currentResort = item.resort;
+                                const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
+                                const roman = rIdx > 0 ? translateToRoman(rIdx) : '';
+                                if (item.type === 'resort') {
+                                  result.push({ ...item, romanPrefix: roman });
+                                } else {
+                                  // Fallback for virtual header - make fillable
+                                  result.push({ 
+                                    id: `virtual_h_${currentResort}`, 
+                                    type: 'resort', 
+                                    nama: `RESORT ${currentResort.toUpperCase()}`, 
+                                    resort: currentResort, 
+                                    romanPrefix: roman,
+                                    details: {},
+                                    status: ''
+                                  });
+                                  result.push(item);
+                                }
+                              } else {
+                                result.push(item);
+                              }
+                            });
+
+                            let rowCounterFin = 0;
+                            return result.map((item, idx3) => {
+                              if (!item.romanPrefix) rowCounterFin++;
                               return (
-                                <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px]">
-                                  <div className="flex items-center h-full px-2">
-                                    {val > 0 && (
-                                      <div className="mr-1">
-                                        <input 
-                                          type="checkbox" 
-                                          checked={isSelected}
-                                          onChange={() => toggleCellSelection(item.id, col)}
-                                          className="w-3 h-3 cursor-pointer text-gold-600 focus:ring-gold-500 rounded"
-                                          title="Pilih untuk pesan gabungan"
-                                        />
+                                <Reorder.Item 
+                                  key={item.id} 
+                                  value={item} 
+                                  as="tr" 
+                                  className={`hover:bg-slate-50 transition-colors group ${item.romanPrefix ? 'bg-slate-50/80 font-black' : ''}`}
+                                  dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                                >
+                                  {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                    <td className="px-1 py-3 sticky left-0 bg-inherit z-20 border-r border-slate-100 cursor-move">
+                                      <GripVertical size={14} className="text-slate-300" />
+                                    </td>
+                                  )}
+                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>
+                                    {item.romanPrefix ? `${item.romanPrefix}.` : rowCounterFin}
+                                  </td>
+                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>
+                                    <div className="flex items-center gap-2">
+                                      <div>
+                                        {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
+                                        <span className={item.romanPrefix ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
+                                          {item.romanPrefix ? `RESORT ${item.nama.replace(/^resort\s+/i, '').toUpperCase()}` : item.nama}
+                                        </span>
                                       </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-[10px] text-slate-500">{item.resort}</td>
+                                  <td className="px-4 py-3 text-center text-[10px] text-slate-500 font-bold text-gold-600">{item.wilayah || '-'}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {(item.type !== 'resort') && item.status && (
+                                      <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        {item.status.toUpperCase()}
+                                      </span>
                                     )}
-                                    <div className="flex-1 relative flex items-center">
-                                      {currentUserProfile?.role === 'superadmin' ? (
-                                        <input 
-                                          type="text" 
-                                          value={val === 0 ? '' : formatInput(val)}
-                                          onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
-                                          className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? 'text-red-400 font-medium' : 'text-slate-700 font-bold'}`}
-                                          placeholder="0"
-                                        />
-                                      ) : (
-                                        <div className={`w-full py-3 text-right font-mono data-value ${!val ? 'text-red-300' : 'text-slate-700 font-bold'}`}>
-                                          {val || '-'}
+                                  </td>
+                                  {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => {
+                                    const val = item.details[col] || 0;
+                                    const isSelected = (selectedCells[item.id] || []).includes(col);
+                                    return (
+                                      <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px]">
+                                        <div className="flex items-center h-full px-2">
+                                          {val > 0 && (
+                                            <div className="mr-1">
+                                              <input 
+                                                type="checkbox" 
+                                                checked={isSelected}
+                                                onChange={() => toggleCellSelection(item.id, col)}
+                                                className="w-3 h-3 cursor-pointer text-gold-600 focus:ring-gold-500 rounded"
+                                                title="Pilih untuk pesan gabungan"
+                                              />
+                                            </div>
+                                          )}
+                                          <div className="flex-1 relative flex items-center">
+                                            {currentUserProfile ? (
+                                              <input 
+                                                type="text" 
+                                                value={val === 0 ? '' : formatInput(val)}
+                                                onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
+                                                className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-300' : 'text-red-400 font-medium') : 'text-slate-700 font-bold'}`}
+                                                placeholder="0"
+                                              />
+                                            ) : (
+                                              <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-200' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
+                                                {formatRupiah(val)}
+                                              </div>
+                                            )}
+                                            
+                                            {/* Tombol WA Khusus */}
+                                            {item.type !== 'resort' && (
+                                              <button 
+                                                onClick={() => handleKirimWASpesifik(item, col)}
+                                                className="ml-2 p-1 rounded-full text-slate-300 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                                title={val > 0 ? "Kirim WA Terima Kasih" : "Kirim WA Tagihan"}
+                                              >
+                                                <MessageCircle size={14} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {item.type !== 'resort' && (
+                                      <div className="flex flex-col items-center space-y-1">
+                                      <div className="flex justify-center space-x-1">
+                                        <button 
+                                          onClick={() => handleKirimWA(item, item.status === 'Menunggak' ? 'tagihan' : 'terimakasih')}
+                                          className="text-green-600 hover:bg-green-50 p-1 rounded-lg"
+                                          title="WA Cepat"
+                                        >
+                                          <MessageCircle size={14} />
+                                        </button>
+                                        <button 
+                                          onClick={() => { setPrintData(item); setPrintType(item.status === 'Menunggak' ? 'peringatan' : 'terimakasih'); }}
+                                          className="text-slate-600 hover:bg-slate-100 p-1 rounded-lg"
+                                          title="Cetak Surat"
+                                        >
+                                          <Printer size={14} />
+                                        </button>
+                                      </div>
+                                      {(selectedCells[item.id] || []).length > 0 && (
+                                        <div className="flex space-x-1">
+                                          <button 
+                                            onClick={() => handleKirimWABatch(item)}
+                                            className="bg-emerald-600 text-white p-1 rounded text-[9px] font-bold"
+                                            title="Kirim WA Gabungan"
+                                          >
+                                            WA Gabung
+                                          </button>
+                                          <button 
+                                            onClick={() => handlePrintBukti(item, 'penerimaan')}
+                                            className="bg-gold-600 text-white p-1 rounded text-[9px] font-bold"
+                                            title="Cetak Bukti Penerimaan"
+                                          >
+                                            Bukti
+                                          </button>
                                         </div>
                                       )}
-                                      
-                                      {/* Tombol WA Khusus */}
                                       <button 
-                                        onClick={() => handleKirimWASpesifik(item, col)}
-                                        className="ml-2 p-1 rounded-full text-slate-300 hover:text-green-600 hover:bg-green-50 transition-colors"
-                                        title={val > 0 ? "Kirim WA Terima Kasih" : "Kirim WA Tagihan"}
+                                        onClick={() => handlePrintBukti(item, 'tunggakan')}
+                                        className="text-[9px] text-red-600 font-bold hover:underline"
                                       >
-                                        <MessageCircle size={14} />
+                                        Bukti Tunggakan
                                       </button>
                                     </div>
-                                  </div>
-                                </td>
+                                    )}
+                                  </td>
+                                </Reorder.Item>
                               );
-                            })}
-                            <td className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex flex-col items-center space-y-1">
-                                <div className="flex justify-center space-x-1">
-                                  <button 
-                                    onClick={() => handleKirimWA(item, item.status === 'Menunggak' ? 'tagihan' : 'terimakasih')}
-                                    className="text-green-600 hover:bg-green-50 p-1 rounded-lg"
-                                    title="WA Cepat"
-                                  >
-                                    <MessageCircle size={14} />
-                                  </button>
-                                  <button 
-                                    onClick={() => { setPrintData(item); setPrintType(item.status === 'Menunggak' ? 'peringatan' : 'terimakasih'); }}
-                                    className="text-slate-600 hover:bg-slate-100 p-1 rounded-lg"
-                                    title="Cetak Surat"
-                                  >
-                                    <Printer size={14} />
-                                  </button>
-                                </div>
-                                {(selectedCells[item.id] || []).length > 0 && (
-                                  <div className="flex space-x-1">
-                                    <button 
-                                      onClick={() => handleKirimWABatch(item)}
-                                      className="bg-emerald-600 text-white p-1 rounded text-[9px] font-bold"
-                                      title="Kirim WA Gabungan"
-                                    >
-                                      WA Gabung
-                                    </button>
-                                    <button 
-                                      onClick={() => handlePrintBukti(item, 'penerimaan')}
-                                      className="bg-gold-600 text-white p-1 rounded text-[9px] font-bold"
-                                      title="Cetak Bukti Penerimaan"
-                                    >
-                                      Bukti
-                                    </button>
-                                  </div>
-                                )}
-                                <button 
-                                  onClick={() => handlePrintBukti(item, 'tunggakan')}
-                                  className="text-[9px] text-red-600 font-bold hover:underline"
-                                >
-                                  Bukti Tunggakan
-                                </button>
-                              </div>
-                            </td>
-                          </Reorder.Item>
-                        ))}
+                            });
+                        })()}
                       </Reorder.Group>
                     </table>
                   </div>
@@ -2954,11 +3235,22 @@ function doPost(e) {
         </div>
       </Modal>
 
-      <Modal show={showChurchModal} onClose={() => setShowChurchModal(false)} title={formChurch.id ? 'Edit Jemaat' : 'Tambah Jemaat'}>
+      <Modal show={showChurchModal} onClose={() => setShowChurchModal(false)} title={formChurch.id ? 'Edit Data' : 'Tambah Data'}>
         <div className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Jemaat</label>
-            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Nama Jemaat" />
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipe Entitas</label>
+            <select 
+              value={formChurch.type || 'jemaat'} 
+              onChange={e => setFormChurch({...formChurch, type: e.target.value as any})}
+              className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 bg-white"
+            >
+              <option value="jemaat">Jemaat (Anggota)</option>
+              <option value="resort">Pusat / Resort</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{formChurch.type === 'resort' ? 'Nama Resort' : 'Nama Jemaat'}</label>
+            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder={formChurch.type === 'resort' ? 'Contoh: RESORT MEDAN' : 'Nama Jemaat'} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -3224,7 +3516,7 @@ function Modal({ show, onClose, title, children, size = "max-w-md" }: { show: bo
             <X size={20} />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
           {children}
         </div>
       </motion.div>

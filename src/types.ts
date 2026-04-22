@@ -5,6 +5,7 @@ export interface Church {
   wilayah: string;
   wa: string;
   order?: number;
+  type?: 'jemaat' | 'resort'; // Tambahkan tipe untuk membedakan Jemaat dan Resort
 }
 
 export interface Payment {

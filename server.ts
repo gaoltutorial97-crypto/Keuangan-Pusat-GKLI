@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Firebase Config from file
-import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
+import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
 // Constants
 const SPREADSHEET_COLUMNS = {
