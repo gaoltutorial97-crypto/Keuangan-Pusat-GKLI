@@ -212,41 +212,50 @@ export default function App() {
       });
     }
 
-    // 2. Listen to Churches
+    // 2. Listen to Churches (Public read allowed in rules)
     const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), (snap) => {
       const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Church));
       if (data.length > 0) setChurches(data);
       else if (isInitialLoading) setChurches(INITIAL_CHURCHES); 
     }, (error) => console.warn("Churches access restricted:", error.message));
 
-    // 3. Listen to Payments
-    const unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
-      setPayments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
-    }, (error) => console.warn("Payments access restricted:", error.message));
+    let unsubPayments: (() => void) | undefined;
+    let unsubDistributions: (() => void) | undefined;
 
-    // 4. Listen to Distributions
-    const unsubDistributions = onSnapshot(collection(db, 'distributions'), (snap) => {
-      setDistributions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distribution)));
-    }, (error) => console.warn("Distributions access restricted:", error.message));
+    if (firebaseUser) {
+      // 3. Listen to Payments
+      unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
+        setPayments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
+      }, (error) => console.warn("Payments access restricted:", error.message));
+
+      // 4. Listen to Distributions
+      unsubDistributions = onSnapshot(collection(db, 'distributions'), (snap) => {
+        setDistributions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distribution)));
+      }, (error) => console.warn("Distributions access restricted:", error.message));
+    }
 
     return () => {
       if (unsubProfile) unsubProfile();
       unsubChurches();
-      unsubPayments();
-      unsubDistributions();
+      if (unsubPayments) unsubPayments();
+      if (unsubDistributions) unsubDistributions();
     };
   }, [firebaseUser, isInitialLoading]);
 
   // REAL-TIME FIREBASE SYNC - Admin Only
   useEffect(() => {
-    const unsubUsersList = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map(doc => ({ ...doc.data() } as User)));
-    }, (error) => {
-      console.warn("User list restricted:", error.message);
-    });
+    let unsubUsersList: (() => void) | undefined;
+    
+    if (firebaseUser) {
+      unsubUsersList = onSnapshot(collection(db, 'users'), (snap) => {
+        setUsers(snap.docs.map(doc => ({ ...doc.data() } as User)));
+      }, (error) => {
+        console.warn("User list restricted:", error.message);
+      });
+    }
 
-    return () => unsubUsersList();
-  }, []);
+    return () => unsubUsersList?.();
+  }, [firebaseUser]);
 
   // STATE CETAK & DOWNLOAD
   const [printData, setPrintData] = useState<any>(null);
@@ -2779,7 +2788,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
                   <div className="overflow-x-auto custom-scrollbar max-h-[70vh]">
                     <table className="w-full text-sm text-left border-collapse">
-                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10 border-b border-slate-700">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider sticky top-0 z-50 border-b border-slate-700">
                         <tr>
                           {canDragOrder && (
                             <th className="px-2 py-4 border-b border-slate-700 w-8"></th>
@@ -2959,13 +2968,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
                     <p className="p-4 bg-slate-50 text-[10px] text-slate-500 italic font-medium">INFO: Kolom ini untuk angka (Jumlah Barang). Pembayaran diatur di menu Literatur.</p>
                     <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
-                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-50 border-b border-slate-700">
                         <tr>
                           {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
-                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-30 w-8"></th>
+                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-[60] w-8"></th>
                           )}
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>No</th>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>Nama Jemaat</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-50 w-12 text-center" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-50 w-48" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>Nama Jemaat</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
                           {SPREADSHEET_COLUMNS.alaman.map(col => (
                             <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
@@ -3085,10 +3094,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.romanPrefix ? '' : rowCounter}
                                   </td>
-                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: canDragOrder ? '80px' : '48px' }}>
+                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.romanPrefix ? 'bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className="flex items-center gap-2">
                                       <div>
                                         {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
@@ -3161,13 +3170,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   </div>
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
                     <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
-                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-50 border-b border-slate-700">
                         <tr>
                           {canDragOrder && (
-                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-30 w-8"></th>
+                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-[60] w-8"></th>
                           )}
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center" style={{ left: canDragOrder ? '32px' : '0' }}>No</th>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48" style={{ left: canDragOrder ? '80px' : '48px' }}>Nama Jemaat</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-50 w-12 text-center" style={{ left: canDragOrder ? '32px' : '0' }}>No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-50 w-48" style={{ left: canDragOrder ? '80px' : '48px' }}>Nama Jemaat</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Wilayah</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Status</th>
@@ -3317,9 +3326,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                               
                               if (item.type === 'wilayah-header') {
                                 return (
-                                  <tr key={item.id} className="bg-slate-800 text-white font-bold border-b border-slate-700 sticky top-0 z-30">
-                                    {canDragOrder && <td className="px-1 py-4 sticky left-0 bg-inherit z-40"></td>}
-                                    <td className="px-4 py-4 sticky left-0 bg-inherit z-30 text-center" style={{ left: canDragOrder ? '32px' : '0' }}></td>
+                                  <tr key={item.id} className="bg-slate-800 text-white font-bold border-b border-slate-700 sticky top-0 z-40 shadow-sm">
+                                    {canDragOrder && <td className="px-1 py-4 sticky left-0 bg-slate-800 z-50"></td>}
+                                    <td className="px-4 py-4 sticky left-0 bg-slate-800 z-50 text-center" style={{ left: canDragOrder ? '32px' : '0' }}></td>
                                     <td colSpan={6 + SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].length} className="px-4 py-4 uppercase tracking-[0.2em] text-[10px] font-black">
                                       {item.romanPrefix ? `${item.romanPrefix}. ` : ''}{item.nama}
                                     </td>
@@ -3340,10 +3349,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.type === 'resort' ? '' : rowCounterFin}
                                   </td>
-                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: canDragOrder ? '80px' : '48px' }}>
+                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.type === 'resort' ? 'bg-indigo-50' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className="flex items-center gap-2">
                                       <div>
                                         {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}

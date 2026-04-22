@@ -18,12 +18,17 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isSignedIn() && getUserData().role == 'superadmin';
+      return isSignedIn() && (
+        getUserData().role == 'superadmin' || 
+        request.auth.token.email == 'lutheranchurch.priangaol@gmail.com'
+      );
     }
 
     function isStaff() {
-      let role = getUserData().role;
-      return isSignedIn() && (role == 'staff' || role == 'superadmin');
+      return isSignedIn() && (
+        getUserData().role == 'staff' || 
+        isSuperAdmin()
+      );
     }
 
     function isValidId(id) {
@@ -59,6 +64,11 @@ service cloud.firestore {
     }
 
     // --- Match Rules ---
+
+    // Allow connection testing
+    match /test/connection {
+      allow read: if true;
+    }
 
     // Churches
     match /churches/{churchId} {
