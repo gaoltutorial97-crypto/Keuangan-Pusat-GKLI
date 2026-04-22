@@ -30,7 +30,10 @@ import {
   Archive,
   Search,
   GripVertical,
-  Menu
+  Menu,
+  Building,
+  MapPin,
+  Home
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
@@ -218,13 +221,15 @@ export default function App() {
   const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: 1, type: 'jemaat' });
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order'>('order');
+  const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order' | 'pos_pi'>('order');
   const [filterResort, setFilterResort] = useState('Semua Resort');
   const [filterWilayah, setFilterWilayah] = useState('Semua Wilayah');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [billingSelections, setBillingSelections] = useState<Record<string, Record<string, string[]>>>({}); // { churchId: { category: [colNames] } }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
+
+  const canDragOrder = sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm;
 
   // STATE TEMPLATES
   const [templates, setTemplates] = useState(() => {
@@ -316,6 +321,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
       }
       
+      if (sortType === 'pos_pi') {
+        const isAPosPI = a.nama.toLowerCase().includes('pos pi');
+        const isBPosPI = b.nama.toLowerCase().includes('pos pi');
+        if (isAPosPI && !isBPosPI) return -1;
+        if (!isAPosPI && isBPosPI) return 1;
+        return a.nama.localeCompare(b.nama);
+      }
+      
       if (sortType === 'nama') return a.nama.localeCompare(b.nama);
       if (sortType === 'resort') return a.resort.localeCompare(b.resort);
       if (sortType === 'wilayah') return (a.wilayah || '').localeCompare(b.wilayah || '');
@@ -384,9 +397,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       });
   };
 
-  const dataAlaman = useMemo(() => getLaporanData('alaman'), [churches, payments, periodeAktif]);
-  const dataPelean = useMemo(() => getLaporanData('pelean'), [churches, payments, periodeAktif]);
-  const dataLaporanKeuangan = useMemo(() => getLaporanData('laporan'), [churches, payments, periodeAktif]);
+  const dataAlaman = useMemo(() => getLaporanData('alaman'), [sortedChurches, payments, periodeAktif]);
+  const dataPelean = useMemo(() => getLaporanData('pelean'), [sortedChurches, payments, periodeAktif]);
+  const dataLaporanKeuangan = useMemo(() => getLaporanData('laporan'), [sortedChurches, payments, periodeAktif]);
 
   const dataDistribusi = useMemo(() => {
     const columns = SPREADSHEET_COLUMNS.alaman;
@@ -790,7 +803,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   };
 
   const handleReorderChurches = async (newOrder: any[]) => {
-    if (!currentUserProfile || sortType !== 'order') return;
+    if (!currentUserProfile || !canDragOrder) return;
     
     // Filter out headers before saving
     const churchesOnly = newOrder.filter(item => item.type !== 'group-header');
@@ -2381,6 +2394,35 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       subtitle="ACTION REQUIRED"
                     />
                   </div>
+
+                  <h3 className="font-bold text-slate-800 text-lg mt-8 mb-4">Statistik Organisasi</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard 
+                      title="Jumlah Resort" 
+                      value={`${uniqueResorts.length > 1 ? uniqueResorts.length - 1 : 0}`} 
+                      icon={<Building size={20} />} 
+                      color="blue" 
+                    />
+                    <StatCard 
+                      title="Jumlah Wilayah" 
+                      value={`${uniqueWilayah.length > 1 ? uniqueWilayah.length - 1 : 0}`} 
+                      icon={<MapPin size={20} />} 
+                      color="indigo" 
+                    />
+                    <StatCard 
+                      title="Jumlah Pos PI" 
+                      value={`${churches.filter(c => c.type !== 'resort' && c.nama.toLowerCase().includes('pos pi')).length}`} 
+                      icon={<Home size={20} />} 
+                      color="emerald" 
+                    />
+                    <StatCard 
+                      title="Total Jemaat" 
+                      value={`${churches.filter(c => c.type !== 'resort').length}`} 
+                      icon={<Users size={20} />} 
+                      color="violet" 
+                      subtitle="TERMASUK POS PI"
+                    />
+                  </div>
                   
                   <div className="bg-gold-50 border border-gold-200 rounded-xl p-6 flex items-start space-x-4">
                     <div className="bg-gold-100 p-3 rounded-full">
@@ -2502,14 +2544,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                         <span className="text-[9px] font-bold text-slate-400 uppercase">Sort:</span>
                         <select value={sortType} onChange={(e) => setSortType(e.target.value as any)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
-                          <option value="order">Posisi (Manual)</option>
+                          <option value="order">Posisi</option>
                           <option value="nama">Nama (A-Z)</option>
                           <option value="resort">Resort</option>
                           <option value="wilayah">Wilayah</option>
+                          <option value="pos_pi">Pos PI</option>
                         </select>
                       </div>
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -2519,13 +2562,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </select>
                       </div>
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">Wilayah:</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Wil:</span>
                         <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
                           {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
                         </select>
                       </div>
-                      <div className="flex items-center justify-center space-x-2 bg-gold-50 text-gold-700 border border-gold-200 rounded-lg px-3 py-2 text-[10px] font-bold">
-                        TOTAL: {formatRupiah(sortedChurches.length)} JEMAAT
+                      <div className="col-span-2 md:col-span-1 flex items-center justify-center space-x-2 bg-gold-50 text-gold-700 border border-gold-200 rounded-lg px-3 py-2 text-[10px] font-bold">
+                        TOTAL: {formatRupiah(sortedChurches.length)} 
                       </div>
                     </div>
 
@@ -2548,6 +2591,34 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </button>
                       )}
                     </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-6 bg-slate-50 border-b border-slate-100">
+                    <StatCard 
+                      title="Jumlah Resort" 
+                      value={`${uniqueResorts.length > 1 ? uniqueResorts.length - 1 : 0}`} 
+                      icon={<Building size={16} />} 
+                      color="blue" 
+                    />
+                    <StatCard 
+                      title="Jumlah Wilayah" 
+                      value={`${uniqueWilayah.length > 1 ? uniqueWilayah.length - 1 : 0}`} 
+                      icon={<MapPin size={16} />} 
+                      color="indigo" 
+                    />
+                    <StatCard 
+                      title="Jumlah Pos PI" 
+                      value={`${churches.filter(c => c.type !== 'resort' && c.nama.toLowerCase().includes('pos pi')).length}`} 
+                      icon={<Home size={16} />} 
+                      color="emerald" 
+                    />
+                    <StatCard 
+                      title="Total Jemaat" 
+                      value={`${churches.filter(c => c.type !== 'resort').length}`} 
+                      icon={<Users size={16} />} 
+                      color="violet" 
+                      subtitle="TERMASUK POS PI"
+                    />
                   </div>
 
                   <div className="overflow-x-auto custom-scrollbar">
@@ -2577,10 +2648,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                               value={church} 
                               as="tr" 
                               className="hover:bg-slate-50 transition-colors group cursor-move"
-                              dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                              dragListener={canDragOrder}
                             >
                               <td className="px-2 py-4">
-                                {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                {canDragOrder && (
                                   <div 
                                     className="text-slate-300 hover:text-gold-500 transition-all ml-2"
                                     title="Tarik untuk urutkan"
@@ -2772,17 +2843,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   value={item} 
                                   as="tr" 
                                   className={`hover:bg-slate-50 transition-colors group ${item.romanPrefix ? 'bg-slate-50/80 font-black' : ''}`}
-                                  dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                                  dragListener={canDragOrder}
                                 >
-                                  {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                  {canDragOrder && (
                                     <td className="px-1 py-3 sticky left-0 bg-inherit z-20 border-r border-slate-100 cursor-move">
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>
+                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.romanPrefix ? `${item.romanPrefix}.` : rowCounter}
                                   </td>
-                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>
+                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className="flex items-center gap-2">
                                       <div>
                                         {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
@@ -2857,11 +2928,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
                       <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-10 border-b border-slate-700">
                         <tr>
-                          {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                          {canDragOrder && (
                             <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-30 w-8"></th>
                           )}
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>No</th>
-                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>Nama Jemaat</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-20 w-12 text-center" style={{ left: canDragOrder ? '32px' : '0' }}>No</th>
+                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-20 w-48" style={{ left: canDragOrder ? '80px' : '48px' }}>Nama Jemaat</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Wilayah</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Status</th>
@@ -2930,17 +3001,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   value={item} 
                                   as="tr" 
                                   className={`hover:bg-slate-50 transition-colors group ${item.romanPrefix ? 'bg-slate-50/80 font-black' : ''}`}
-                                  dragListener={sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm}
+                                  dragListener={canDragOrder}
                                 >
-                                  {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
+                                  {canDragOrder && (
                                     <td className="px-1 py-3 sticky left-0 bg-inherit z-20 border-r border-slate-100 cursor-move">
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>
+                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.romanPrefix ? `${item.romanPrefix}.` : rowCounterFin}
                                   </td>
-                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>
+                                  <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className="flex items-center gap-2">
                                       <div>
                                         {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
@@ -3657,19 +3728,27 @@ function HeaderDownloadBtn({ onClick, icon, label, color }: { onClick: () => voi
   );
 }
 
-function StatCard({ title, value, icon, color, subtitle }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' | 'gold', subtitle?: string }) {
+function StatCard({ title, value, icon, color, subtitle }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' | 'gold' | 'indigo' | 'emerald' | 'violet', subtitle?: string }) {
   const themes = {
     green: 'from-emerald-500 to-teal-600 shadow-emerald-200/50 text-emerald-600 bg-emerald-50',
     red: 'from-orange-500 to-red-600 shadow-red-200/50 text-red-600 bg-red-50',
-    blue: 'from-gold-500 to-amber-600 shadow-gold-200/50 text-gold-600 bg-gold-50',
-    gold: 'from-gold-400 to-gold-600 shadow-gold-200/50 text-gold-600 bg-gold-50'
+    blue: 'from-blue-500 to-blue-600 shadow-blue-200/50 text-blue-600 bg-blue-50',
+    gold: 'from-gold-400 to-gold-600 shadow-gold-200/50 text-gold-600 bg-gold-50',
+    indigo: 'from-indigo-500 to-indigo-600 shadow-indigo-200/50 text-indigo-600 bg-indigo-50',
+    emerald: 'from-emerald-500 to-emerald-600 shadow-emerald-200/50 text-emerald-600 bg-emerald-50',
+    violet: 'from-violet-500 to-violet-600 shadow-violet-200/50 text-violet-600 bg-violet-50'
   };
+  
+  const theme = themes[color] || themes.gold;
+  const gradient = theme.split(' shadow')[0];
+  const textColor = theme.split(' text')[1]?.split(' bg')[0] || '';
+  const bgColor = theme.split(' bg')[1] || '';
   
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
       <div className="p-6">
         <div className="flex justify-between items-start mb-4">
-          <div className={`p-3 rounded-xl ${themes[color].split(' shadow')[1].split(' bg')[1]} ${themes[color].split(' text')[1].split(' bg')[0]}`}>
+          <div className={`p-3 rounded-xl ${textColor} ${bgColor}`}>
             {icon}
           </div>
           {subtitle && (
@@ -3683,7 +3762,7 @@ function StatCard({ title, value, icon, color, subtitle }: { title: string, valu
           {value}
         </p>
       </div>
-      <div className={`h-1 bg-gradient-to-r ${themes[color].split(' shadow')[0]}`}></div>
+      <div className={`h-1 bg-gradient-to-r ${gradient}`}></div>
     </div>
   );
 }
