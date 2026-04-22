@@ -582,6 +582,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!currentUserProfile) return;
+    if (window.confirm("Apakah Anda yakin ingin menghapus data pembayaran ini secara permanen?")) {
+      try {
+        await deleteDoc(doc(db, 'payments', paymentId));
+      } catch (err: any) {
+        alert("Gagal menghapus pembayaran: " + err.message);
+      }
+    }
+  };
+
   const handleMoveChurch = async (id: string, direction: 'up' | 'down') => {
     if (!currentUserProfile) return;
     const currentIndex = sortedChurches.findIndex(c => c.id === id);
@@ -1625,8 +1636,29 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 <h4 className="font-bold text-slate-800">{church.nama}</h4>
                                 <p className="text-xs text-slate-500">Resort {church.resort}</p>
                               </div>
-                              <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                Belum Terkirim
+                              <div className="flex items-center gap-2">
+                                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                                  Belum Terkirim
+                                </div>
+                                {currentUserProfile?.role === 'superadmin' && (
+                                  <button 
+                                    onClick={async () => {
+                                      if (window.confirm(`Hapus SEMUA data setoran ${church.nama} yang belum terkirim? Data akan dihapus permanen dari sistem.`)) {
+                                        try {
+                                          for (const p of paymentsForChurch) {
+                                            await deleteDoc(doc(db, 'payments', p.id));
+                                          }
+                                        } catch (err: any) {
+                                          alert("Error: " + err.message);
+                                        }
+                                      }
+                                    }}
+                                    className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+                                    title="Hapus Semua Data Ini"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="p-4 flex flex-col md:flex-row gap-4">
@@ -1636,7 +1668,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   {paymentsForChurch.map(p => (
                                     <div key={p.id} className="text-xs border-b border-slate-100 pb-2 mb-2">
                                       <div className="flex justify-between items-center mb-1">
-                                        <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                        <div className="flex items-center space-x-2">
+                                          <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                          <button onClick={() => handleDeletePayment(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-0.5 rounded" title="Hapus Data">
+                                            <Trash2 size={12} />
+                                          </button>
+                                        </div>
                                         <span className="text-green-600 font-bold">Rp {formatRupiah(p.jumlah)}</span>
                                       </div>
                                       <div className="pl-4 space-y-1">
@@ -1729,8 +1766,29 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 <h4 className="font-bold text-slate-800">{church.nama}</h4>
                                 <p className="text-xs text-slate-500">Resort {church.resort}</p>
                               </div>
-                              <div className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1">
-                                <Archive size={10} /> Terarsip
+                              <div className="flex items-center gap-2">
+                                <div className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1">
+                                  <Archive size={10} /> Terarsip
+                                </div>
+                                {currentUserProfile?.role === 'superadmin' && (
+                                  <button 
+                                    onClick={async () => {
+                                      if (window.confirm(`Hapus SEMUA data di arsip untuk ${church.nama}? Data akan dihapus permanen dari sistem.`)) {
+                                        try {
+                                          for (const p of sentPayments) {
+                                            await deleteDoc(doc(db, 'payments', p.id));
+                                          }
+                                        } catch (err: any) {
+                                          alert("Error: " + err.message);
+                                        }
+                                      }
+                                    }}
+                                    className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+                                    title="Hapus Semua Data Arsip Ini"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="p-4 flex flex-col md:flex-row gap-4">
@@ -1740,7 +1798,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   {sentPayments.map(p => (
                                     <div key={p.id} className="text-xs border-b border-slate-50 pb-2 mb-2 last:border-0 last:mb-0 last:pb-0">
                                       <div className="flex justify-between items-center mb-1">
-                                        <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                        <div className="flex items-center space-x-2">
+                                          <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                          <button onClick={() => handleDeletePayment(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-0.5 rounded" title="Hapus Data">
+                                            <Trash2 size={12} />
+                                          </button>
+                                        </div>
                                         <span className="text-slate-500 italic text-[10px] ml-2">Dikirim: {p.receiptSentAt ? new Date(p.receiptSentAt).toLocaleDateString('id-ID') : '-'}</span>
                                         <span className="text-green-600 font-bold ml-auto">Rp {formatRupiah(p.jumlah)}</span>
                                       </div>
