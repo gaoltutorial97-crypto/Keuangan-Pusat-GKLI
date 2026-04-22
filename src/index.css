@@ -1,8 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --color-gold-50: #fdfcf0;
   --color-gold-100: #fbf7d5;
@@ -15,6 +15,26 @@
   --color-gold-800: #765613;
   --color-gold-900: #644917;
   --color-gold-950: #3a2809;
+}
+
+@utility judul-h1 {
+  @apply font-sans font-extrabold text-2xl lg:text-3xl tracking-tight text-slate-900;
+}
+
+@utility judul-h2 {
+  @apply font-sans font-bold text-xl lg:text-2xl tracking-tight text-slate-800;
+}
+
+@utility judul-h3 {
+  @apply font-sans font-bold text-lg tracking-tight text-slate-800;
+}
+
+@utility subjudul {
+  @apply font-sans font-medium text-xs lg:text-sm text-slate-500 leading-relaxed;
+}
+
+@utility angka-keuangan {
+  @apply font-mono font-semibold tabular-nums tracking-tighter;
 }
 
 @layer base {

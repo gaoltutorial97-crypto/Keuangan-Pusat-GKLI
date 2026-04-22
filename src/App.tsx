@@ -2033,10 +2033,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               <Menu size={24} />
             </button>
             <div className="flex flex-col">
-              <h2 className="text-sm lg:text-xl font-black text-slate-800 tracking-tight truncate max-w-[150px] lg:max-w-none">{activeTab.toUpperCase()}</h2>
+              <h2 className="judul-h2 uppercase !text-sm lg:!text-xl truncate max-w-[150px] lg:max-w-none">{activeTab.toUpperCase()}</h2>
               <div className="flex items-center space-x-1.5 mt-0.5">
                 <div className="w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full bg-gold-500 animate-pulse"></div>
-                <p className="text-[7px] lg:text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Online</p>
+                <p className="text-[7px] lg:text-[9px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">Online</p>
               </div>
             </div>
             <div className="hidden lg:block h-8 w-px bg-slate-200"></div>
@@ -2091,8 +2091,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex justify-between items-center mb-6">
                       <div>
-                        <h3 className="font-bold text-lg">Pusat Terima Kasih & Konfirmasi</h3>
-                        <p className="text-sm text-slate-500">Kirim ucapan terima kasih untuk setoran yang sudah masuk pada periode {periodeAktif}.</p>
+                        <h3 className="judul-h3">Pusat Terima Kasih & Konfirmasi</h3>
+                        <p className="subjudul mt-1">Kirim ucapan terima kasih untuk setoran yang sudah masuk pada periode {periodeAktif}.</p>
                       </div>
                     </div>
 
@@ -2149,7 +2149,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                             <Trash2 size={12} />
                                           </button>
                                         </div>
-                                        <span className="text-green-600 font-bold">Rp {formatRupiah(p.jumlah)}</span>
+                                        <span className="angka-keuangan text-green-600">Rp {formatRupiah(p.jumlah)}</span>
                                       </div>
                                       <div className="pl-4 space-y-1">
                                         {Object.entries(p.details || {}).map(([key, val]) => (
@@ -2189,27 +2189,27 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
                                 >
                                   <MessageCircle size={16} /> <span>Kirim & Arsipkan</span>
-                                </button>
-                                <button 
-                                  onClick={async () => {
-                                    const latest = paymentsForChurch[0];
-                                    const totalAmount = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
-                                    setPrintData({
-                                      ...church,
-                                      periode: periodeAktif,
-                                      kategori: latest.kategori,
-                                      jumlah: latest.jumlah,
-                                      total: totalAmount,
-                                      allDetails: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
-                                      updates: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {}),
-                                      paymentIds: paymentsForChurch.map(p => p.id) // Carry IDs for marking
-                                    });
-                                    setPrintType('global-receipt');
-                                  }}
-                                  className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
-                                >
-                                  <Printer size={16} /> <span>Cetak & Pindahkan</span>
-                                </button>
+                                                <button 
+                                      onClick={async () => {
+                                        const latest = paymentsForChurch[0];
+                                        const totalAmount = paymentsForChurch.reduce((sum, p) => sum + p.jumlah, 0);
+                                        setPrintData({
+                                          ...church,
+                                          periode: periodeAktif,
+                                          kategori: latest.kategori,
+                                          jumlah: latest.jumlah,
+                                          total: totalAmount,
+                                          allDetails: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
+                                          updates: paymentsForChurch.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {}),
+                                          paymentIds: paymentsForChurch.map(p => p.id) 
+                                        });
+                                        setPrintType('global-receipt');
+                                      }}
+                                      className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+                                    >
+                                      <Printer size={16} /> <span>Cetak & Pindahkan</span>
+                                    </button>
+                    </button>
                               </div>
                             </div>
                           </div>
@@ -2224,8 +2224,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex justify-between items-center mb-6">
                       <div>
-                        <h3 className="font-bold text-lg">Arsip Tanda Terima</h3>
-                        <p className="text-sm text-slate-500">Daftar ucapan terima kasih yang sudah dikirim atau dipindahkan ke arsip pada periode {periodeAktif}.</p>
+                        <h3 className="judul-h3">Arsip Tanda Terima</h3>
+                        <p className="subjudul mt-1">Daftar ucapan terima kasih yang sudah dikirim atau dipindahkan ke arsip pada periode {periodeAktif}.</p>
                       </div>
                     </div>
 
@@ -2560,7 +2560,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     />
                   </div>
 
-                  <h3 className="font-bold text-slate-800 text-lg mt-8 mb-4">Statistik Organisasi</h3>
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="judul-h2">Statistik Organisasi</h3>
+                  </div>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard 
                       title="Jumlah Resort" 
@@ -2594,10 +2596,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       <AlertTriangle className="text-gold-600" size={24} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-gold-800 mb-1">
+                      <h3 className="judul-h2 text-gold-800 mb-1">
                         {currentUserProfile ? `Akses ${currentUserProfile.role === 'superadmin' ? 'Admin' : 'Staf'} Aktif` : "Akses Terbatas (Tamu)"}
                       </h3>
-                      <p className="text-sm text-gold-700 leading-relaxed">
+                      <p className="subjudul !text-gold-700 leading-relaxed">
                         {currentUserProfile 
                           ? `Anda masuk sebagai ${currentUserProfile.role === 'superadmin' ? 'Administrator Utama' : 'Staf Pengisi Data'}. Anda dapat mengelola data keuangan dan jemaat secara real-time.`
                           : "Silakan login untuk mendapatkan akses penuh dalam mengelola data keuangan dan administrasi GKLI."}
@@ -2619,8 +2621,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           <Award size={40} className="text-white" />
                         </div>
                         <div>
-                          <h2 className="text-3xl font-black tracking-tight uppercase">Prestasi Administrasi</h2>
-                          <p className="text-slate-400 font-medium">Penghargaan untuk Jemaat dengan kedisiplinan setoran 100% pada periode {periodeAktif}</p>
+                          <h2 className="judul-h1 text-white uppercase tracking-tighter">Prestasi Administrasi</h2>
+                          <p className="text-slate-400 font-medium text-sm lg:text-base">Penghargaan untuk Jemaat dengan kedisiplinan setoran 100% pada periode {periodeAktif}</p>
                         </div>
                       </div>
                       <div className="hidden lg:block text-right">
@@ -2631,7 +2633,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="p-6 border-b border-slate-100">
-                      <h3 className="font-bold text-lg">Jemaat Berprestasi (Lunas Seluruhnya)</h3>
+                      <h3 className="judul-h3">Jemaat Berprestasi (Lunas Seluruhnya)</h3>
                     </div>
                     <div className="p-6">
                       {lunasChurches.length === 0 ? (
@@ -2968,7 +2970,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
                     <p className="p-4 bg-slate-50 text-[10px] text-slate-500 italic font-medium">INFO: Kolom ini untuk angka (Jumlah Barang). Pembayaran diatur di menu Literatur.</p>
                     <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
-                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-50 border-b border-slate-700">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-black tracking-widest sticky top-0 z-50 border-b border-slate-700">
                         <tr>
                           {sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm && (
                             <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-[60] w-8"></th>
@@ -2979,7 +2981,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           {SPREADSHEET_COLUMNS.alaman.map(col => (
                             <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
                           ))}
-                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24 bg-gold-600 text-white">TOTAL QTY</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24 bg-gold-600 text-white font-black tracking-normal">TOTAL QTY</th>
                         </tr>
                       </thead>
                       <Reorder.Group 
@@ -3111,7 +3113,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       </td>
                                     );
                                   })}
-                                  <td className={`px-4 py-3 text-center font-black font-mono text-slate-900 min-w-[100px] ${item.romanPrefix ? 'bg-indigo-50/50' : 'bg-slate-50'}`}>{formatInput(totalQty as number)}</td>
+                                  <td className={`px-4 py-3 text-center !font-black !font-mono text-slate-900 min-w-[100px] ${item.romanPrefix ? 'bg-indigo-50/50' : 'bg-slate-50'}`}>{formatInput(totalQty as number)}</td>
                                 </Reorder.Item>
                               );
                             });
@@ -3125,7 +3127,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               {(activeTab === 'laporan' || activeTab === 'pelean' || activeTab === 'alaman') && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <h3 className="font-bold text-lg">{appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
+                        <h3 className="judul-h3">{appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
                     <div className="flex gap-3">
                        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                         <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
@@ -3153,7 +3155,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   </div>
                   <div className="overflow-auto custom-scrollbar max-h-[70vh]">
                     <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
-                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold sticky top-0 z-50 border-b border-slate-700">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-black tracking-[0.2em] sticky top-0 z-50 border-b border-slate-700">
                         <tr>
                           {canDragOrder && (
                             <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-[60] w-8"></th>
@@ -3166,7 +3168,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => (
                             <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
                           ))}
-                          <th className="px-4 py-4 border-b border-slate-700 text-right bg-gold-600 text-white w-32 font-black">TOTAL (RP)</th>
+                          <th className="px-4 py-4 border-b border-slate-700 text-right bg-gold-600 text-white w-32 font-black tracking-tighter">TOTAL (RP)</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">AKSI</th>
                         </tr>
                       </thead>
@@ -4007,14 +4009,14 @@ function NavItem({ active, onClick, icon, label, className = "" }: { active: boo
       onClick={onClick} 
       className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group relative ${
         active 
-          ? 'bg-gold-500 text-white shadow-lg shadow-gold-900/40 font-semibold' 
+          ? 'bg-gold-500 text-white shadow-lg shadow-gold-900/40 font-bold' 
           : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
       } ${className}`}
     >
       <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-gold-400'} transition-colors`}>
         {icon}
       </span>
-      <span className="text-sm">{label}</span>
+      <span className="text-sm font-medium tracking-tight">{label}</span>
       {active && (
         <motion.div 
           layoutId="activeNavIndicator" 
@@ -4028,7 +4030,7 @@ function NavItem({ active, onClick, icon, label, className = "" }: { active: boo
 }
 
 function NavHeader({ label }: { label: string }) {
-  return <p className="text-[10px] text-slate-500 uppercase font-bold mt-6 mb-2 px-4 tracking-widest">{label}</p>;
+  return <p className="text-[10px] text-slate-500 uppercase font-black mt-8 mb-2 px-4 tracking-[0.15em] opacity-80">{label}</p>;
 }
 
 function HeaderDownloadBtn({ onClick, icon, label, color }: { onClick: () => void, icon: React.ReactNode, label: string, color: string }) {
@@ -4072,8 +4074,8 @@ function StatCard({ title, value, icon, color, subtitle }: { title: string, valu
             </span>
           )}
         </div>
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">{title}</p>
-        <p className="text-2xl font-mono font-bold text-slate-900 tracking-tight">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1 opacity-80">{title}</p>
+        <p className="text-2xl angka-keuangan text-slate-900">
           {value}
         </p>
       </div>
