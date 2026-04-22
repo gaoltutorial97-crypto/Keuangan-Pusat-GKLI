@@ -93,13 +93,50 @@ function romanToNum(roman: string): number {
 
 function getWilayahLevel(w: any): number {
   if (!w) return 9999;
-  const s = String(w).trim().toUpperCase();
+  let s = String(w).trim().toUpperCase();
   if (!s) return 9999;
+  
+  // Strip common prefixes
+  s = s.replace(/^WILAYAH\s+/i, '').replace(/^WIL\s*/i, '').replace(/^W\s*/i, '').trim();
+
   if (/^\d+$/.test(s)) return parseInt(s);
   if (/^[IVXLCDM]+$/.test(s)) return romanToNum(s);
-  const match = s.match(/\d+/);
-  if (match) return parseInt(match[0]);
+  
+  const digitMatch = s.match(/\d+/);
+  if (digitMatch) return parseInt(digitMatch[0]);
+
+  const romanMatch = s.match(/[IVXLCDM]+/);
+  if (romanMatch) return romanToNum(romanMatch[0]);
+
   return 9999;
+}
+
+const RESORT_PRIORITY: Record<string, number> = {
+  'Simpang Limun Medan': 1,
+  'Persiapan Pasar IV Marindal II': 2,
+  'Batu Bara': 3
+};
+
+function normalizeResortName(name: string): string {
+  if (!name) return '';
+  let n = name.trim();
+  // Strip "RESORT " prefix if someone types it in search/filter
+  n = n.replace(/^RESORT\s+/i, '');
+  
+  // Fix specific typos or variations as requested by user
+  const up = n.toUpperCase();
+  if (up === 'SIMPANG LIMUM MEDAN') return 'Simpang Limun Medan';
+  if (up === 'PASAR IV MARINDAL II' || up === 'PERSIAPAN PASAR IV MARINDAL II') return 'Persiapan Pasar IV Marindal II';
+  return n;
+}
+
+function compareResorts(a: string, b: string): number {
+  const normA = normalizeResortName(a);
+  const normB = normalizeResortName(b);
+  const pA = RESORT_PRIORITY[normA] || 999;
+  const pB = RESORT_PRIORITY[normB] || 999;
+  if (pA !== pB) return pA - pB;
+  return normA.localeCompare(normB);
 }
 
 export default function App() {
@@ -273,23 +310,35 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   }, [appSettings.theme]);
 
   const uniqueResortsOrdered = useMemo(() => {
-    return Array.from(new Set(churches.map(c => c.resort))).filter(r => r && r !== '-').sort();
+    return Array.from(new Set(churches.map(c => normalizeResortName(c.resort)))).filter(r => r && r !== '-').sort(compareResorts);
   }, [churches]);
 
   const sortedChurches = useMemo(() => {
     let base = [...churches];
     
+    // Normalize existing data for internal processing
+    base = base.map(c => ({ ...c, resort: normalizeResortName(c.resort) }));
+
     // Auto-synthesize Resort entity document if missing to ensure fillable headers
+    // After normalization, duplicates will merged naturally here
     const existingResorts = new Set(base.filter(c => c.type === 'resort').map(c => c.resort));
     const uniqueResortNames = Array.from(new Set(base.map(c => c.resort).filter(r => r && r !== '-')));
     
     uniqueResortNames.forEach(resName => {
       if (!existingResorts.has(resName)) {
+        // Find the most common wilayah for this resort from member churches
+        const members = base.filter(c => c.resort === resName && c.type !== 'resort' && c.wilayah);
+        const wilayahCounts: Record<string, number> = {};
+        members.forEach(m => {
+          wilayahCounts[m.wilayah] = (wilayahCounts[m.wilayah] || 0) + 1;
+        });
+        const bestWilayah = Object.entries(wilayahCounts).sort((a,b) => b[1] - a[1])[0]?.[0] || '';
+
         base.push({
           id: `virtual_resort_${resName.replace(/\s+/g, '_')}`,
           nama: `RESORT ${resName.replace(/^resort\s+/i, '').toUpperCase()}`,
           resort: resName,
-          wilayah: '',
+          wilayah: bestWilayah,
           wa: '',
           type: 'resort',
           order: -1000,
@@ -299,8 +348,25 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     });
 
     let filtered = base;
+    
+    // De-duplicate any resort type entries that might have been normalized into the same name
+    const finalBase: any[] = [];
+    const seenResortHeaders = new Set<string>();
+    filtered.forEach(item => {
+      if (item.type === 'resort') {
+        if (!seenResortHeaders.has(item.resort)) {
+          seenResortHeaders.add(item.resort);
+          finalBase.push(item);
+        }
+      } else {
+        finalBase.push(item);
+      }
+    });
+    filtered = finalBase;
+
     if (filterResort !== 'Semua Resort') {
-      filtered = filtered.filter(c => c.resort === filterResort);
+      const normFilter = normalizeResortName(filterResort);
+      filtered = filtered.filter(c => c.resort === normFilter);
     }
     if (filterWilayah !== 'Semua Wilayah') {
       filtered = filtered.filter(c => c.wilayah === filterWilayah);
@@ -314,11 +380,26 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
 
     return filtered.sort((a, b) => {
-      // Prioritaskan grouping resort jika sedang tidak filter resort tertentu
+      // GLOBAL PRIORITY: Jemaat vs Pos PI (Pos PI goes to the absolute bottom)
+      const isAPosPI = a.nama.toLowerCase().includes('pos pi');
+      const isBPosPI = b.nama.toLowerCase().includes('pos pi');
+      
+      // If one is Pos PI and the other isn't, non-Pos PI always comes first
+      if (isAPosPI && !isBPosPI) return 1;
+      if (!isAPosPI && isBPosPI) return -1;
+
+      // Both are same type (both Jemaat or both Pos PI), continue with normal sort
+      // Prioritaskan grouping Wilayah jika sedang tidak filter resort tertentu
       if (filterResort === 'Semua Resort' && sortType === 'order') {
-        const rComp = a.resort.localeCompare(b.resort);
+        const wA = getWilayahLevel(a.wilayah);
+        const wB = getWilayahLevel(b.wilayah);
+        if (wA !== wB) return wA - wB;
+        
+        const rComp = compareResorts(a.resort || '', b.resort || '');
         if (rComp !== 0) return rComp;
+        
         if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
+        return (a.order || 0) - (b.order || 0);
       }
       
       if (sortType === 'pos_pi') {
@@ -331,7 +412,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       
       if (sortType === 'nama') return a.nama.localeCompare(b.nama);
       if (sortType === 'resort') return a.resort.localeCompare(b.resort);
-      if (sortType === 'wilayah') return (a.wilayah || '').localeCompare(b.wilayah || '');
+      if (sortType === 'wilayah') {
+        const wA = getWilayahLevel(a.wilayah);
+        const wB = getWilayahLevel(b.wilayah);
+        if (wA !== wB) return wA - wB;
+        return a.nama.localeCompare(b.nama);
+      }
       if (sortType === 'order') return (a.order || 0) - (b.order || 0);
       return a.id.localeCompare(b.id);
     });
@@ -339,42 +425,112 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const displayGroupedChurches = useMemo(() => {
     const result: any[] = [];
-    let currentResort = '';
+    let currentWilayah = '';
+    let resortRomanCounter = 0;
+    let showingPosPIHeader = false;
     
+    // Show Wilayah headers if we are not searching AND we are in 'order' or 'wilayah' sort mode
+    const shouldShowHeaders = filterResort === 'Semua Resort' && !searchTerm && (sortType === 'order' || sortType === 'wilayah');
+
     sortedChurches.forEach((item) => {
-      const itemResort = item.resort || '-';
-      if (itemResort !== currentResort && filterResort === 'Semua Resort') {
-        currentResort = itemResort;
-        const rIndex = uniqueResortsOrdered.indexOf(currentResort) + 1;
+      const isPosPI = item.nama.toLowerCase().includes('pos pi');
+      
+      if (shouldShowHeaders && isPosPI && !showingPosPIHeader) {
+        showingPosPIHeader = true;
         result.push({
-          id: `header-${currentResort}`,
+          id: 'header-pos-pi',
           type: 'group-header',
-          name: currentResort,
-          roman: rIndex > 0 ? translateToRoman(rIndex) : ''
+          name: 'DAFTAR POS PI',
+          roman: ''
+        });
+        // Reset currentWilayah so if there's a wilayah change within Pos PI it shows up, 
+        // though typically user wants them all under one header at the end.
+        currentWilayah = 'pos-pi-section'; 
+      }
+
+      const itemWilayah = item.wilayah || 'Belum Ditentukan';
+      if (shouldShowHeaders && !isPosPI && itemWilayah !== currentWilayah) {
+        currentWilayah = itemWilayah;
+        const wLevel = getWilayahLevel(currentWilayah);
+        const roman = wLevel < 9999 ? translateToRoman(wLevel) : '?';
+        result.push({
+          id: `header-wilayah-${currentWilayah}`,
+          type: 'group-header',
+          name: currentWilayah,
+          roman: roman
         });
       }
-      result.push(item);
+      
+      if (item.type === 'resort') {
+        resortRomanCounter++;
+        result.push({
+          ...item,
+          resortRoman: translateToRoman(resortRomanCounter)
+        });
+      } else {
+        result.push(item);
+      }
     });
     return result;
-  }, [sortedChurches, filterResort, uniqueResortsOrdered]);
+  }, [sortedChurches, filterResort, searchTerm, sortType]);
 
   const uniqueResorts = useMemo(() => {
-    return ['Semua Resort', ...Array.from(new Set(churches.map(c => c.resort))).sort()];
+    const rs = Array.from(new Set(churches.map(c => normalizeResortName(c.resort)).filter(Boolean)));
+    return ['Semua Resort', ...rs.sort(compareResorts)];
   }, [churches]);
 
   const uniqueWilayah = useMemo(() => {
-    return ['Semua Wilayah', ...Array.from(new Set(churches.map(c => c.wilayah).filter(Boolean))).sort()];
+    const ws = Array.from(new Set(churches.map(c => c.wilayah).filter(Boolean)));
+    ws.sort((a, b) => getWilayahLevel(a) - getWilayahLevel(b));
+    return ['Semua Wilayah', ...ws];
   }, [churches]);
   const getLaporanData = (kategori: 'laporan' | 'pelean' | 'alaman') => {
     const columns = SPREADSHEET_COLUMNS[kategori];
-    let data = [...sortedChurches];
+    let data = [...churches]; // Use base churches to avoid global sort interference
     
-    // Persembahan II (Laporan) dan Persembahan Khusus (Pelean) tidak menampilkan Resort
-    // dan diurutkan berdasarkan wilayah terkecil ke terbesar
+    // Apply filters matching the global ones
+    if (filterResort !== 'Semua Resort') {
+      data = data.filter(c => c.resort === filterResort);
+    }
+    if (filterWilayah !== 'Semua Wilayah') {
+      data = data.filter(c => c.wilayah === filterWilayah);
+    }
+    if (searchTerm.trim()) {
+      const lower = searchTerm.toLowerCase();
+      data = data.filter(c => 
+        c.nama.toLowerCase().includes(lower) || 
+        c.resort.toLowerCase().includes(lower)
+      );
+    }
+
+    // Persembahan II (Laporan) dan Persembahan Khusus (Pelean) tidak menampilkan Resort entity row
     if (kategori === 'laporan' || kategori === 'pelean') {
       data = data.filter(c => c.type !== 'resort');
-      data.sort((a,b) => getWilayahLevel(a.wilayah) - getWilayahLevel(b.wilayah));
     }
+
+    // ALWAYS sort by Wilayah -> Resort -> Name for reporting consistency
+    data.sort((a,b) => {
+      // GLOBAL PRIORITY: Jemaat vs Pos PI (Pos PI goes to the absolute bottom)
+      const isAPosPI = a.nama.toLowerCase().includes('pos pi');
+      const isBPosPI = b.nama.toLowerCase().includes('pos pi');
+      
+      if (isAPosPI && !isBPosPI) return 1;
+      if (!isAPosPI && isBPosPI) return -1;
+      
+      const wA = getWilayahLevel(a.wilayah);
+      const wB = getWilayahLevel(b.wilayah);
+      if (wA !== wB) return wA - wB;
+      
+      const resA = a.resort || '';
+      const resB = b.resort || '';
+      const rComp = compareResorts(resA, resB);
+      if (rComp !== 0) return rComp;
+      
+      // If one is a 'resort' type entry and other is church, resort goes first
+      if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
+
+      return a.nama.localeCompare(b.nama);
+    });
 
     return data
       .map(gereja => {
@@ -2621,12 +2777,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     />
                   </div>
 
-                  <div className="overflow-x-auto custom-scrollbar">
+                  <div className="overflow-x-auto custom-scrollbar max-h-[70vh]">
                     <table className="w-full text-sm text-left border-collapse">
-                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider border-b border-slate-700">
+                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10 border-b border-slate-700">
                         <tr>
-                          <th className="px-2 py-4 border-b border-slate-700 w-8"></th>
-                          <th className="px-6 py-4 border-b border-slate-700">Posisi</th>
+                          {canDragOrder && (
+                            <th className="px-2 py-4 border-b border-slate-700 w-8"></th>
+                          )}
+                          <th className="px-6 py-4 border-b border-slate-700 w-16 text-center">No</th>
                           <th className="px-6 py-4 border-b border-slate-700">Nama Jemaat</th>
                           <th className="px-6 py-4 border-b border-slate-700">Resort</th>
                           <th className="px-6 py-4 border-b border-slate-700">Wilayah</th>
@@ -2636,59 +2794,90 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       </thead>
                       <Reorder.Group 
                         axis="y" 
-                        values={sortedChurches} 
+                        values={displayGroupedChurches} 
                         onReorder={handleReorderChurches} 
                         as="tbody" 
                         className="divide-y divide-slate-100"
                       >
-                        {sortedChurches.map((church, idx) => {
-                          return (
-                            <Reorder.Item 
-                              key={church.id} 
-                              value={church} 
-                              as="tr" 
-                              className="hover:bg-slate-50 transition-colors group cursor-move"
-                              dragListener={canDragOrder}
-                            >
-                              <td className="px-2 py-4">
+                        {(() => {
+                          let rowCounterGereja = 0;
+                          return displayGroupedChurches.map((item, idx) => {
+                            if (item.type === 'group-header') {
+                              return (
+                                <tr key={item.id} className="bg-slate-800 text-white font-bold border-b border-slate-700 sticky top-[48px] z-10 shadow-sm">
+                                  {canDragOrder && <td className="px-2 py-3"></td>}
+                                  <td className="px-6 py-2.5 text-center text-[10px] font-mono text-slate-400"></td>
+                                  <td colSpan={5} className="px-6 py-2.5 uppercase tracking-[0.2em] text-[10px] font-black">
+                                    {item.roman ? `${item.roman}. ` : ''}{item.name.toUpperCase()}
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            const church = item as Church & { resortRoman?: string };
+                            
+                            // If it's a Resort entry, treat it as a sub-header instead of a numbered row
+                            if (church.type === 'resort') {
+                              return (
+                                <tr key={church.id} className="bg-slate-100 font-bold border-b border-slate-200">
+                                  {canDragOrder && <td className="px-2 py-3"></td>}
+                                  <td className="px-6 py-2 text-center"></td>
+                                  <td colSpan={5} className="px-6 py-2 text-[11px] font-black text-slate-700 uppercase tracking-wider">
+                                    {church.resortRoman}. {church.nama}
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            rowCounterGereja++;
+                            return (
+                              <Reorder.Item 
+                                key={church.id} 
+                                value={church} 
+                                as="tr" 
+                                className="hover:bg-slate-50 transition-colors group cursor-move"
+                                dragListener={canDragOrder}
+                              >
                                 {canDragOrder && (
-                                  <div 
-                                    className="text-slate-300 hover:text-gold-500 transition-all ml-2"
-                                    title="Tarik untuk urutkan"
-                                  >
-                                    <GripVertical size={18} />
-                                  </div>
+                                  <td className="px-2 py-4">
+                                    <div 
+                                      className="text-slate-300 hover:text-gold-500 transition-all ml-2"
+                                      title="Tarik untuk urutkan"
+                                    >
+                                      <GripVertical size={18} />
+                                    </div>
+                                  </td>
                                 )}
-                              </td>
-                              <td className="px-6 py-4 text-slate-400 font-mono text-xs">#{formatRupiah(church.order || parseInt(church.id) || 0)}</td>
-                              <td className="px-6 py-4 font-bold text-slate-800">
-                                {church.type === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
-                                {church.nama}
-                              </td>
-                              <td className="px-6 py-4 text-slate-600 font-medium">
-                                <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
-                              </td>
-                              <td className="px-6 py-4 text-slate-600 font-medium">
-                                <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
-                              </td>
-                              {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
-                              {currentUserProfile && (
-                                <td className="px-6 py-4 text-center">
-                                  <div className="flex justify-center flex-wrap gap-1">
-                                    <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
-                                      <Edit size={16} />
-                                    </button>
-                                    {currentUserProfile.role === 'superadmin' && (
-                                      <button onClick={() => handleDeleteChurch(church.id)} className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50" title="Hapus">
-                                        <Trash2 size={16} />
-                                      </button>
-                                    )}
-                                  </div>
+                                <td className="px-6 py-4 text-slate-400 font-mono text-xs text-center">{rowCounterGereja}</td>
+                                <td className="px-6 py-4 font-bold text-slate-800">
+                                  {church.type === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
+                                  {church.nama}
                                 </td>
-                              )}
-                            </Reorder.Item>
-                          );
-                        })}
+                                <td className="px-6 py-4 text-slate-600 font-medium">
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
+                                </td>
+                                <td className="px-6 py-4 text-slate-600 font-medium">
+                                  <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
+                                </td>
+                                {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
+                                {currentUserProfile && (
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex justify-center flex-wrap gap-1">
+                                      <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
+                                        <Edit size={16} />
+                                      </button>
+                                      {currentUserProfile.role === 'superadmin' && (
+                                        <button onClick={() => handleDeleteChurch(church.id)} className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50" title="Hapus">
+                                          <Trash2 size={16} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                )}
+                              </Reorder.Item>
+                            );
+                          });
+                        })()}
                       </Reorder.Group>
                     </table>
                   </div>
@@ -2789,12 +2978,31 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         values={(() => {
                           const filtered = dataDistribusi;
                           const result: any[] = [];
+                          let currentWilayah = '';
                           let currentResort = '';
+                          let resRomanCount = 0;
+                          let showingPosPIHeader = false;
                           filtered.forEach(item => {
+                            const isPosPI = item.nama.toLowerCase().includes('pos pi');
+                            if (isPosPI && !searchTerm) {
+                              if (!showingPosPIHeader) {
+                                showingPosPIHeader = true;
+                                result.push({ id: 'h-dist-pospi', type: 'group-header', name: 'DAFTAR POS PI', roman: '' });
+                              }
+                              result.push(item);
+                              return;
+                            }
+
+                            if (item.wilayah !== currentWilayah && filterResort === 'Semua Resort' && !searchTerm) {
+                              currentWilayah = item.wilayah || 'Belum Ditentukan';
+                              currentResort = ''; // Reset resort header tracking for new wilayah
+                            }
+
                             if (item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
                               currentResort = item.resort;
-                              const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
-                              result.push({ id: `h-dist-${currentResort}`, type: 'group-header', name: currentResort, roman: rIdx > 0 ? translateToRoman(rIdx) : '' });
+                              resRomanCount++;
+                              const roman = translateToRoman(resRomanCount);
+                              result.push({ id: `h-dist-${currentWilayah}-${currentResort}`, type: 'group-header', name: currentResort, roman: roman });
                             }
                             result.push(item);
                           });
@@ -2805,22 +3013,47 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         className="divide-y divide-slate-100"
                       >
                         {(() => {
-                            const filtered = dataDistribusi;
                             const result: any[] = [];
+                            let currentWilayah = '';
                             let currentResort = '';
+                            let resRomanCount = 0;
+                            let showingPosPIHeader = false;
+                            
                             dataDistribusi.forEach(item => {
+                              const isPosPI = item.nama.toLowerCase().includes('pos pi');
+                              if (!searchTerm && isPosPI) {
+                                if (!showingPosPIHeader) {
+                                  showingPosPIHeader = true;
+                                  result.push({ 
+                                    id: 'v-dist-pospi-header', 
+                                    type: 'resort', 
+                                    nama: 'DAFTAR POS PI', 
+                                    resort: 'POS PI', 
+                                    romanPrefix: '', 
+                                    details: {}, 
+                                    status: '' 
+                                  });
+                                }
+                                result.push(item);
+                                return;
+                              }
+
+                              if (item.wilayah !== currentWilayah && filterResort === 'Semua Resort' && !searchTerm) {
+                                currentWilayah = item.wilayah || 'Belum Ditentukan';
+                                currentResort = '';
+                              }
+
                               if (item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
                                 currentResort = item.resort;
-                                const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
-                                const roman = rIdx > 0 ? translateToRoman(rIdx) : '';
+                                resRomanCount++;
+                                const roman = translateToRoman(resRomanCount);
                                 if (item.type === 'resort') {
-                                  result.push({ ...item, romanPrefix: roman });
+                                  result.push({ ...item, romanPrefix: roman, id: `dist-h-${currentWilayah}-${currentResort}` });
                                 } else {
-                                  // This shouldn't happen much now due to synthesis, but keep as fallback that is fillable
                                   result.push({ 
-                                    id: `virtual_dist_h_${currentResort}`, 
+                                    id: `virtual_dist_h_${currentWilayah}_${currentResort}`, 
                                     type: 'resort', 
-                                    nama: `RESORT ${currentResort.toUpperCase()}`, 
+                                    nama: currentResort.toUpperCase(), 
                                     resort: currentResort, 
                                     romanPrefix: roman,
                                     details: {},
@@ -2835,7 +3068,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
                             let rowCounter = 0;
                             return result.map((item, idxx) => {
-                              if (!item.romanPrefix) rowCounter++;
+                              if (!item.romanPrefix) {
+                                rowCounter++;
+                              }
                               const totalQty = Object.values(item.details).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
                               return (
                                 <Reorder.Item 
@@ -2851,14 +3086,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     </td>
                                   )}
                                   <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
-                                    {item.romanPrefix ? `${item.romanPrefix}.` : rowCounter}
+                                    {item.romanPrefix ? '' : rowCounter}
                                   </td>
                                   <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className="flex items-center gap-2">
                                       <div>
                                         {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
                                         <span className={item.romanPrefix ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
-                                          {item.romanPrefix ? `RESORT ${item.nama.replace(/^resort\s+/i, '').toUpperCase()}` : item.nama}
+                                          {item.romanPrefix ? `${item.romanPrefix}. ${item.nama.toUpperCase()}` : item.nama}
                                         </span>
                                       </div>
                                     </div>
@@ -2948,12 +3183,59 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         values={(() => {
                           const baseData = getLaporanData(activeTab as any);
                           const result: any[] = [];
+                          let currentWilayah = '';
                           let currentResort = '';
+                          let resRomanCount = 0;
+                          let showingPosPIHeader = false;
+                          
                           baseData.forEach(item => {
-                            if (activeTab === 'alaman' && item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
-                              currentResort = item.resort;
-                              const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
-                              result.push({ id: `h-fin-${currentResort}`, type: 'group-header', name: currentResort, roman: rIdx > 0 ? translateToRoman(rIdx) : '' });
+                            const isPosPI = item.nama.toLowerCase().includes('pos pi');
+                            
+                            // Pos PI Header Logic (Suppress others)
+                            if (isPosPI && !searchTerm) {
+                              if (!showingPosPIHeader) {
+                                showingPosPIHeader = true;
+                                result.push({ 
+                                  id: `h-pos-pi-${activeTab}`, 
+                                  type: 'group-header', 
+                                  name: 'DAFTAR POS PI', 
+                                  roman: '' 
+                                });
+                              }
+                              result.push(item);
+                              return;
+                            }
+
+                            // Wilayah Header (Only for Laporan/Pelean)
+                            if ((activeTab === 'laporan' || activeTab === 'pelean') && !searchTerm) {
+                              const itemWilayah = item.wilayah || 'Belum Ditentukan';
+                              if (itemWilayah !== currentWilayah) {
+                                currentWilayah = itemWilayah;
+                                const wLevel = getWilayahLevel(currentWilayah);
+                                const roman = wLevel < 9999 ? translateToRoman(wLevel) : '';
+                                result.push({ 
+                                  id: `h-wilayah-${activeTab}-${currentWilayah}`, 
+                                  type: 'group-header', 
+                                  name: isPosPI ? 'POS PI' : currentWilayah, 
+                                  roman: roman 
+                                });
+                                currentResort = ''; // Reset resort when wilayah changes to ensure header shows up
+                              }
+                            }
+
+                            // Resort Header
+                            if (filterResort === 'Semua Resort' && !searchTerm) {
+                              if (item.resort !== currentResort) {
+                                currentResort = item.resort;
+                                resRomanCount++;
+                                const roman = translateToRoman(resRomanCount);
+                                result.push({ 
+                                  id: `h-resort-${activeTab}-${currentWilayah}-${currentResort}`, 
+                                  type: 'group-header', 
+                                  name: currentResort, 
+                                  roman: roman 
+                                });
+                              }
                             }
                             result.push(item);
                           });
@@ -2966,41 +3248,91 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         {(() => {
                             const baseData = getLaporanData(activeTab as any);
                             const result: any[] = [];
+                            let currentWilayah = '';
                             let currentResort = '';
+                            let resRomanCount = 0;
+                            let showingPosPIHeader = false;
+                            
                             baseData.forEach(item => {
-                              if (activeTab === 'alaman' && item.resort !== currentResort && filterResort === 'Semua Resort' && !searchTerm) {
-                                currentResort = item.resort;
-                                const rIdx = uniqueResortsOrdered.indexOf(currentResort) + 1;
-                                const roman = rIdx > 0 ? translateToRoman(rIdx) : '';
-                                if (item.type === 'resort') {
-                                  result.push({ ...item, romanPrefix: roman });
-                                } else {
-                                  // Fallback for virtual header - make fillable
+                              const isPosPI = item.nama.toLowerCase().includes('pos pi');
+                              
+                              if (!searchTerm) {
+                                // Pos PI header row
+                                if (isPosPI) {
+                                  if (!showingPosPIHeader) {
+                                    showingPosPIHeader = true;
+                                    result.push({ 
+                                      id: `v-h-pos-pi-${activeTab}`, 
+                                      type: 'wilayah-header', 
+                                      nama: 'DAFTAR POS PI',
+                                      romanPrefix: ''
+                                    });
+                                  }
+                                  result.push(item);
+                                  return;
+                                }
+
+                                // Wilayah header row
+                                if (activeTab === 'laporan' || activeTab === 'pelean') {
+                                  const itemWilayah = item.wilayah || 'Belum Ditentukan';
+                                  if (itemWilayah !== currentWilayah) {
+                                    currentWilayah = itemWilayah;
+                                    const wLevel = getWilayahLevel(currentWilayah);
+                                    const roman = (wLevel < 9999 && wLevel > 0) ? translateToRoman(wLevel) : '';
+                                    result.push({ 
+                                      id: `v-h-wilayah-${activeTab}-${currentWilayah}`, 
+                                      type: 'wilayah-header', // We'll treat this as a row
+                                      nama: isPosPI ? 'DAFTAR POS PI' : currentWilayah.toUpperCase(),
+                                      romanPrefix: roman
+                                    });
+                                    currentResort = ''; // Reset resort when wilayah changes
+                                  }
+                                }
+
+                                // Resort header row
+                                if (filterResort === 'Semua Resort' && item.resort !== currentResort) {
+                                  currentResort = item.resort;
+                                  resRomanCount++;
+                                  const roman = translateToRoman(resRomanCount);
                                   result.push({ 
-                                    id: `virtual_h_${currentResort}`, 
+                                    id: `v-h-resort-${activeTab}-${currentWilayah}-${currentResort}`, 
                                     type: 'resort', 
-                                    nama: `RESORT ${currentResort.toUpperCase()}`, 
+                                    nama: currentResort.toUpperCase(), 
                                     resort: currentResort, 
                                     romanPrefix: roman,
                                     details: {},
                                     status: ''
                                   });
-                                  result.push(item);
                                 }
-                              } else {
-                                result.push(item);
                               }
+                              result.push(item);
                             });
 
                             let rowCounterFin = 0;
                             return result.map((item, idx3) => {
-                              if (!item.romanPrefix) rowCounterFin++;
+                              const isHeader = item.type === 'resort' || item.type === 'wilayah-header';
+                              if (!isHeader) {
+                                rowCounterFin++;
+                              }
+                              
+                              if (item.type === 'wilayah-header') {
+                                return (
+                                  <tr key={item.id} className="bg-slate-800 text-white font-bold border-b border-slate-700 sticky top-0 z-30">
+                                    {canDragOrder && <td className="px-1 py-4 sticky left-0 bg-inherit z-40"></td>}
+                                    <td className="px-4 py-4 sticky left-0 bg-inherit z-30 text-center" style={{ left: canDragOrder ? '32px' : '0' }}></td>
+                                    <td colSpan={6 + SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].length} className="px-4 py-4 uppercase tracking-[0.2em] text-[10px] font-black">
+                                      {item.romanPrefix ? `${item.romanPrefix}. ` : ''}{item.nama}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
                               return (
                                 <Reorder.Item 
                                   key={item.id} 
                                   value={item} 
                                   as="tr" 
-                                  className={`hover:bg-slate-50 transition-colors group ${item.romanPrefix ? 'bg-slate-50/80 font-black' : ''}`}
+                                  className={`hover:bg-slate-50 transition-colors group ${item.type === 'resort' ? 'bg-slate-50/90 font-black border-b border-slate-200' : ''}`}
                                   dragListener={canDragOrder}
                                 >
                                   {canDragOrder && (
@@ -3008,15 +3340,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
-                                    {item.romanPrefix ? `${item.romanPrefix}.` : rowCounterFin}
+                                  <td className={`px-4 py-3 sticky bg-inherit z-10 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs' : ''}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                    {item.type === 'resort' ? '' : rowCounterFin}
                                   </td>
                                   <td className="px-4 py-3 sticky bg-inherit z-10 border-r border-slate-100" style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className="flex items-center gap-2">
                                       <div>
                                         {item.type === 'resort' && !item.romanPrefix && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded mr-1 align-middle uppercase tracking-tighter">RESORT</span>}
-                                        <span className={item.romanPrefix ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
-                                          {item.romanPrefix ? `RESORT ${item.nama.replace(/^resort\s+/i, '').toUpperCase()}` : item.nama}
+                                        <span className={item.type === 'resort' ? 'uppercase tracking-widest text-[10px] font-black' : ''}>
+                                          {item.type === 'resort' ? `${item.romanPrefix}. ${item.nama.toUpperCase()}` : item.nama}
                                         </span>
                                       </div>
                                     </div>
