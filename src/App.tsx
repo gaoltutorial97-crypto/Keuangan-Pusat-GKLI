@@ -512,8 +512,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       );
     }
 
-    // Persembahan II (Laporan) dan Persembahan Khusus (Pelean) tidak menampilkan Resort entity row
-    if (kategori === 'laporan' || kategori === 'pelean') {
+    // Persembahan II (Laporan) tidak menampilkan Resort entity row
+    if (kategori === 'laporan') {
       data = data.filter(c => c.type !== 'resort');
     }
 
@@ -633,21 +633,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const currentMonthIdx = new Date().getMonth(); // 0-11
     
     return churches
-      .filter(church => church.type !== 'resort')
       .map(church => {
         const allPotentialArrears: Record<string, string[]> = {};
-      let hasPotential = false;
+        let hasPotential = false;
 
-      Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
-        const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
-        const unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
-        if (unpaid.length > 0) {
-          allPotentialArrears[cat] = unpaid;
-          hasPotential = true;
-        }
-      });
+        Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
+          // Resort entities only follow Pelean (Special Offerings) and Alaman (Literature)
+          if (church.type === 'resort' && cat === 'laporan') return;
 
-      if (!hasPotential) return null;
+          const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
+          const unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+          if (unpaid.length > 0) {
+            allPotentialArrears[cat] = unpaid;
+            hasPotential = true;
+          }
+        });
+
+        if (!hasPotential) return null;
 
       // Smart Defaults for first time view of this church
       if (!billingSelections[church.id]) {
@@ -2179,7 +2181,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     });
                                     
                                     const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas persembahan/setoran periode ${periodeAktif}.\n\nRincian yang diterima:${rincian}\n\n*TOTAL: Rp ${formatRupiah(totalJumlah)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama. Anda juga dapat meminta cetak PDF resmi dari bukti ini kepada kami.`;
-                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                    
+                                    if (church.wa) {
+                                      window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                    } else {
+                                      alert(`Nomor WhatsApp untuk jemaat ${church.nama} belum tersedia.`);
+                                    }
                                     
                                     if (window.confirm("Apakah Anda ingin memindahkan data ini ke arsip?")) {
                                       await handleMarkPaymentsAsSent(pendingPayments.map(p => p.id));
@@ -2302,7 +2309,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       });
                                     });
                                     const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), berikut kami kirimkan ulang rincian tanda terima periode ${periodeAktif}.\n\nRincian:${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nTerima kasih, Tuhan memberkati.`;
-                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                    if (church.wa) {
+                                      window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                    } else {
+                                      alert(`Nomor WhatsApp untuk jemaat ${church.nama} belum tersedia.`);
+                                    }
                                   }}
                                   className="flex items-center justify-center space-x-2 bg-slate-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors"
                                 >
@@ -2476,7 +2487,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   disabled={!church.hasActive}
                                   onClick={() => {
                                     const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan periode ${periodeAktif} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.`;
-                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                    if (church.wa) {
+                                      window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                    } else {
+                                      alert(`Nomor WhatsApp untuk jemaat ${church.nama} belum tersedia.`);
+                                    }
                                   }}
                                   className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-lg ${
                                     church.hasActive 

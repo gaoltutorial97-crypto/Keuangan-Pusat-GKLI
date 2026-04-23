@@ -8,8 +8,9 @@ export const SPREADSHEET_COLUMNS = {
 
 export const CATEGORY_LABELS: Record<string, string> = {
   laporan: 'Persembahan II',
-  pelean: 'Persembahan Khusus (Namarboho)',
-  alaman: 'Literatur'
+  pelean: 'Persembahan Khusus',
+  alaman: 'Literatur',
+  khusus: 'Persembahan Khusus'
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -20,7 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   menuPeriode: 'Periode Tahunan',
   menuPembayaran: 'Pembayaran & Tagihan',
   menuLaporan: 'Persembahan II',
-  menuPelean: 'Persembahan Khusus (Namarboho)',
+  menuPelean: 'Persembahan Khusus',
   menuAlaman: 'Literatur',
   menuRekapJudul: 'Laporan & Rekap',
   menuRekapMenu: 'Cetak Rekapitulasi',
