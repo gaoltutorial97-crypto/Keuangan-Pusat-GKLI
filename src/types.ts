@@ -47,6 +47,8 @@ export interface AppSettings {
   watzapApiKey?: string;
   watzapSender?: string;
   theme?: 'default' | 'ocean' | 'nature' | 'monochrome';
+  periodeList?: string[];
+  periodeAktif?: string;
 }
 
 export interface Distribution {

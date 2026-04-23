@@ -271,7 +271,16 @@ export default function App() {
   // REAL-TIME FIREBASE SYNC - Auth & Settings
   useEffect(() => {
     const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (docSnap) => {
-      if (docSnap.exists()) setAppSettings(docSnap.data() as AppSettings);
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppSettings;
+        setAppSettings(data);
+        if (data.periodeList && data.periodeList.length > 0) {
+          setPeriods(data.periodeList);
+        }
+        if (data.periodeAktif) {
+          setPeriodeAktif(data.periodeAktif);
+        }
+      }
     });
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -670,7 +679,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         let combinedDetails: Record<string, number> = {};
         pembayaranList.forEach(p => {
           if (p.details) {
-            combinedDetails = { ...combinedDetails, ...p.details };
+            Object.entries(p.details).forEach(([k, v]) => {
+              combinedDetails[k] = (combinedDetails[k] || 0) + (v as number || 0);
+            });
           }
         });
 
@@ -1621,11 +1632,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     document.body.removeChild(link);
   };
 
-  const handleAddPeriod = () => {
+  const handleAddPeriod = async () => {
     if (!currentUserProfile) return alert('Silakan login untuk menambah periode.');
     if (newPeriod.trim() !== '' && !periods.includes(newPeriod.trim())) {
-      setPeriods([...periods, newPeriod.trim()]);
+      const updatedPeriods = [...periods, newPeriod.trim()];
+      setPeriods(updatedPeriods);
       setNewPeriod('');
+      
+      const updatedSettings = { ...appSettings, periodeList: updatedPeriods };
+      await setDoc(doc(db, 'settings', 'config'), updatedSettings);
     }
   };
 
@@ -2320,7 +2335,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               <span className="hidden sm:inline text-[10px] lg:text-xs text-slate-500 font-bold mr-2 uppercase">Periode:</span>
               <select 
                 value={periodeAktif} 
-                onChange={(e) => setPeriodeAktif(e.target.value)}
+                onChange={async (e) => {
+                  const val = e.target.value;
+                  setPeriodeAktif(val);
+                  if (currentUserProfile?.role === 'superadmin') {
+                    const updatedSettings = { ...appSettings, periodeAktif: val };
+                    setAppSettings(updatedSettings);
+                    await setDoc(doc(db, 'settings', 'config'), updatedSettings);
+                  }
+                }}
                 className="bg-transparent text-[10px] lg:text-sm font-bold text-gold-700 outline-none cursor-pointer"
               >
                 {periods.map(p => <option key={p} value={p}>{p}</option>)}

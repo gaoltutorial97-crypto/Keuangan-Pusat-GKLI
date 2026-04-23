@@ -34,7 +34,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   menuRekapMenu: 'Cetak Rekapitulasi',
   menuDownloadMenu: 'Download Excel/Word/PDF',
   googleSheetUrl: '',
-  theme: 'default'
+  theme: 'default',
+  periodeList: ['Tahun 2021', 'Tahun 2022', 'Tahun 2023', 'Tahun 2024', 'Tahun 2025', 'Tahun 2026'],
+  periodeAktif: 'Tahun 2026'
 };
 
 const knownChurches: any[] = [

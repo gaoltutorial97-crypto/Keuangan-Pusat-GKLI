@@ -118,7 +118,7 @@ export default function PublicForm() {
     if (!selectedResortKey) return [];
     return Object.values(churchGroups)
       .filter((g: ChurchGroup) => g.resortKey === selectedResortKey)
-      .sort((a, b) => {
+      .sort((a: ChurchGroup, b: ChurchGroup) => {
         const nameA = a.master.nama.toLowerCase();
         const nameB = b.master.nama.toLowerCase();
         const isAPosPI = nameA.includes('pos pi');
@@ -136,7 +136,15 @@ export default function PublicForm() {
   // Real-time Sync
   useEffect(() => {
     const unsubSettings = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
-      if (snap.exists()) setAppSettings(snap.data() as AppSettings);
+      if (snap.exists()) {
+         const data = snap.data() as AppSettings;
+         setAppSettings(data);
+         if (data.periodeAktif && !periode) {
+            setPeriode(data.periodeAktif);
+         } else if (data.periodeAktif && periode === 'Tahun 2026') {
+            setPeriode(data.periodeAktif);
+         }
+      }
     });
 
     const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), (snap) => {
@@ -179,11 +187,18 @@ export default function PublicForm() {
     const group = churchGroups[selectedChurchIdentity];
     if (!group) return disabled;
 
-    // Filter payments for ANY alias ID of this jemaat
-    const churchPayments = payments.filter(p => 
-      group.aliases.includes(p.gerejaId) && 
+    const churchPayments = payments.filter(p => {
+      // Match by categorized ID (aliases)
+      if (group.aliases.includes(p.gerejaId)) return true;
+      
+      // Fallback: Check if the payment's gerejaId belongs to a church with the same identity
+      const pChurch = allChurches.find(c => c.id === p.gerejaId);
+      if (pChurch && getChurchIdentityKey(pChurch) === selectedChurchIdentity) return true;
+      
+      return false;
+    }).filter(p => 
       normalizePeriode(p.periode) === normalizePeriode(periode) && 
-      p.kategori === kategori
+      (p.kategori || '').toLowerCase() === kategori.toLowerCase()
     );
     
     churchPayments.forEach(p => {
@@ -195,7 +210,7 @@ export default function PublicForm() {
   }, [payments, selectedChurchIdentity, periode, kategori, churchGroups]);
 
   const visibleColumns = useMemo(() => {
-    // Show ALL columns but we will disable inputs for paid ones
+    // Show all columns so users can see which ones are already paid (Lunas)
     return SPREADSHEET_COLUMNS[kategori];
   }, [kategori]);
 
@@ -394,8 +409,13 @@ export default function PublicForm() {
         
         <header className="mb-10 flex flex-col items-center">
           <img src={appSettings.logoUrl || "https://upload.wikimedia.org/wikipedia/commons/0/05/Logo_GKLI.png"} className="h-20 w-auto mb-4" alt="Logo" />
-          <h1 className="text-2xl font-black tracking-tight text-center uppercase">{appSettings.title}</h1>
-          <p className="text-slate-500 text-sm font-bold tracking-widest uppercase">Portal Penyetoran Jemaat</p>
+          <h1 className="text-2xl font-black tracking-tight text-center uppercase">{appSettings.title || "Donasi GKLI"}</h1>
+          <div className="flex items-center gap-2 mt-1">
+             <div className={`w-2 h-2 rounded-full ${isPaymentsLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+             <p className="text-slate-500 text-[10px] font-bold tracking-widest uppercase">
+               {isPaymentsLoaded ? 'Data Terkoneksi (Real-time)' : 'Menghubungkan...'}
+             </p>
+          </div>
         </header>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-[32px] shadow-2xl border border-slate-200 p-6 md:p-10 space-y-8">
@@ -456,9 +476,9 @@ export default function PublicForm() {
                   onChange={(e) => { setPeriode(e.target.value); setDetails({}); }}
                   className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
-                  <option value="Tahun 2024">2024</option>
-                  <option value="Tahun 2025">2025</option>
-                  <option value="Tahun 2026">2026</option>
+                  {(appSettings.periodeList || ['Tahun 2024', 'Tahun 2025', 'Tahun 2026']).map(p => (
+                    <option key={p} value={p}>{p.replace(/Tahun\s+/i, '')}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -492,10 +512,16 @@ export default function PublicForm() {
                             <input 
                               type="text" 
                               placeholder={isPaid ? "TERBAYAR" : "0"}
-                              disabled={isPaid || isLocked}
+                              disabled={isPaid}
                               value={isPaid ? '' : (details[col] === undefined ? '' : formatRupiah(details[col]))}
                               onChange={(e) => handleDetailChange(col, e.target.value)}
-                              className={`w-full h-10 border rounded-lg px-8 text-right font-mono font-bold text-xs outline-none transition-all ${isPaid ? 'bg-emerald-100/30 border-emerald-100 text-emerald-600 cursor-not-allowed placeholder:text-emerald-400' : (isLocked ? 'bg-slate-100 border-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-900 focus:ring-2 focus:ring-emerald-500/20')}`}
+                              onClick={() => {
+                                if (isLocked) {
+                                  // Call handle detail change with current value to trigger the alert
+                                  handleDetailChange(col, details[col] === undefined ? '' : String(details[col]));
+                                }
+                              }}
+                              className={`w-full h-10 border rounded-lg px-8 text-right font-mono font-bold text-xs outline-none transition-all ${isPaid ? 'bg-emerald-100/30 border-emerald-100 text-emerald-600 cursor-not-allowed placeholder:text-emerald-400' : (isLocked ? 'bg-slate-100 border-slate-300 text-slate-500 cursor-pointer placeholder:text-slate-400' : 'bg-white border-slate-200 text-slate-900 focus:ring-2 focus:ring-emerald-500/20')}`}
                             />
                          </div>
                       </div>
