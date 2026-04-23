@@ -2099,109 +2099,119 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     </div>
 
                     <div className="grid grid-cols-1 gap-6">
-                      {payments.filter(p => p.periode === periodeAktif && p.jumlah > 0 && !p.receiptSent)
-                        .sort((a, b) => {
-                          const churchA = churches.find(c => c.id === a.gerejaId);
-                          const churchB = churches.find(c => c.id === b.gerejaId);
-                          return (churchA?.nama || '').localeCompare(churchB?.nama || '');
-                        })
-                        .map(p => {
-                          const church = churches.find(c => c.id === p.gerejaId);
-                          if (!church) return null;
+                      {[...churches]
+                        .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
+                        .map(church => {
+                        const pendingPayments = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && !p.receiptSent);
+                        if (pendingPayments.length === 0) return null;
 
-                          return (
-                            <div key={p.id} className="border border-green-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-green-50/10">
-                              <div className="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
-                                <div>
-                                  <h4 className="font-bold text-slate-800">
-                                    {church.nama}
-                                  </h4>
-                                  <p className="text-[10px] text-slate-500">Resort {church.resort} • {p.id.slice(-6).toUpperCase()}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                    Siap Kirim
-                                  </div>
-                                  {currentUserProfile?.role === 'superadmin' && (
-                                    <button 
-                                      onClick={async () => {
-                                        if (window.confirm(`Hapus data setoran ini?`)) {
-                                          try {
-                                            await deleteDoc(doc(db, 'payments', p.id));
-                                          } catch (err: any) {
-                                            alert("Error: " + err.message);
-                                          }
-                                        }
-                                      }}
-                                      className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
-                                      title="Hapus Data Ini"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  )}
-                                </div>
+                        const totalJumlah = pendingPayments.reduce((sum, p) => sum + p.jumlah, 0);
+
+                        return (
+                          <div key={church.id} className="border border-green-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-green-50/10">
+                            <div className="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
+                              <div>
+                                <h4 className="font-bold text-slate-800">
+                                  {church.type === 'resort' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">Resort</span>}
+                                  {church.nama}
+                                </h4>
+                                <p className="text-[10px] text-slate-500">Resort {church.resort}</p>
                               </div>
-                              <div className="p-4 flex flex-col md:flex-row gap-4">
-                                <div className="flex-1 bg-white p-3 rounded-lg border border-green-50">
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-slate-700 text-sm">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
-                                    <span className="angka-keuangan text-green-600 text-sm">Rp {formatRupiah(p.jumlah)}</span>
-                                  </div>
-                                  <div className="pl-4 space-y-1 mt-2">
-                                    {Object.entries(p.details || {}).map(([key, val]) => (
-                                      (val as number) > 0 && (
-                                        <div key={key} className="flex justify-between text-slate-500 text-xs">
-                                          <span>- {getFormattedPaymentName(p.kategori, key)}</span>
-                                          <span>Rp {formatRupiah(val as number)}</span>
-                                        </div>
-                                      )
-                                    ))}
-                                  </div>
+                              <div className="flex items-center gap-2">
+                                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                                  Siap Kirim
                                 </div>
-                                <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
+                                {currentUserProfile?.role === 'superadmin' && (
                                   <button 
                                     onClick={async () => {
-                                      let rincian = `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
+                                      if (window.confirm(`Hapus SEMUA data setoran ini untuk ${church.nama}? Data akan terhapus dari log terima kasih.`)) {
+                                        try {
+                                          for (const p of pendingPayments) {
+                                            await deleteDoc(doc(db, 'payments', p.id));
+                                          }
+                                        } catch (err: any) {
+                                          alert("Error: " + err.message);
+                                        }
+                                      }
+                                    }}
+                                    className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+                                    title="Hapus Data Ini"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="p-4 flex flex-col md:flex-row gap-4">
+                              <div className="flex-1 bg-white p-3 rounded-lg border border-green-50">
+                                <div className="space-y-4">
+                                  {pendingPayments.map(p => (
+                                    <div key={p.id}>
+                                      <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-slate-700 text-sm">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+                                        <span className="angka-keuangan text-green-600 text-sm">Rp {formatRupiah(p.jumlah)}</span>
+                                      </div>
+                                      <div className="pl-4 space-y-1 mt-2">
+                                        {Object.entries(p.details || {}).map(([key, val]) => (
+                                          (val as number) > 0 && (
+                                            <div key={key} className="flex justify-between text-slate-500 text-xs">
+                                              <span>- {getFormattedPaymentName(p.kategori, key)}</span>
+                                              <span>Rp {formatRupiah(val as number)}</span>
+                                            </div>
+                                          )
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
+                                <button 
+                                  onClick={async () => {
+                                    let rincian = '';
+                                    pendingPayments.forEach(p => {
+                                      rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
                                       Object.entries(p.details || {}).forEach(([key, val]) => {
                                         if ((val as number) > 0) {
                                           rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
                                         }
                                       });
-                                      
-                                      const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas persembahan/setoran periode ${periodeAktif}.\n\nRincian yang diterima:${rincian}\n\n*TOTAL: Rp ${formatRupiah(p.jumlah)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama. Anda juga dapat meminta cetak PDF resmi dari bukti ini kepada kami.`;
-                                      window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
-                                      
-                                      if (window.confirm("Apakah Anda ingin memindahkan data ini ke arsip?")) {
-                                        await handleMarkPaymentsAsSent([p.id]);
-                                      }
-                                    }}
-                                    className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
-                                  >
-                                    <MessageCircle size={16} /> <span>Kirim & Arsipkan</span>
-                                  </button>
-                                  <button 
-                                    onClick={async () => {
-                                      setPrintData({
-                                        ...church,
-                                        periode: periodeAktif,
-                                        kategori: p.kategori,
-                                        jumlah: p.jumlah,
-                                        total: p.jumlah,
-                                        allDetails: { [p.kategori]: p.details },
-                                        updates: { [p.kategori]: Object.keys(p.details) },
-                                        paymentIds: [p.id] 
-                                      });
-                                      setPrintType('global-receipt');
-                                    }}
-                                    className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
-                                  >
-                                    <Printer size={16} /> <span>Cetak & Pindahkan</span>
-                                  </button>
-                                </div>
+                                    });
+                                    
+                                    const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas persembahan/setoran periode ${periodeAktif}.\n\nRincian yang diterima:${rincian}\n\n*TOTAL: Rp ${formatRupiah(totalJumlah)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama. Anda juga dapat meminta cetak PDF resmi dari bukti ini kepada kami.`;
+                                    window.open(`https://wa.me/${church.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                                    
+                                    if (window.confirm("Apakah Anda ingin memindahkan data ini ke arsip?")) {
+                                      await handleMarkPaymentsAsSent(pendingPayments.map(p => p.id));
+                                    }
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+                                >
+                                  <MessageCircle size={16} /> <span>Kirim & Arsipkan</span>
+                                </button>
+                                <button 
+                                  onClick={async () => {
+                                    setPrintData({
+                                      ...church,
+                                      periode: periodeAktif,
+                                      kategori: "Gabungan",
+                                      jumlah: totalJumlah,
+                                      total: totalJumlah,
+                                      allDetails: pendingPayments.reduce((acc, p) => ({ ...acc, [p.kategori]: p.details }), {}),
+                                      updates: pendingPayments.reduce((acc, p) => ({ ...acc, [p.kategori]: Object.keys(p.details) }), {}),
+                                      paymentIds: pendingPayments.map(p => p.id) 
+                                    });
+                                    setPrintType('global-receipt');
+                                  }}
+                                  className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+                                >
+                                  <Printer size={16} /> <span>Cetak & Pindahkan</span>
+                                </button>
                               </div>
                             </div>
-                          );
-                        })}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -2217,7 +2227,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     </div>
 
                     <div className="grid grid-cols-1 gap-6">
-                      {churches.map(church => {
+                      {[...churches]
+                        .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
+                        .map(church => {
                         const sentPayments = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && p.receiptSent);
                         if (sentPayments.length === 0) return null;
 
