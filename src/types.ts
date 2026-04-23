@@ -8,8 +8,6 @@ export interface Church {
   type?: 'jemaat' | 'resort'; // Tambahkan tipe untuk membedakan Jemaat dan Resort
   isSynthesized?: boolean;
   isVirtual?: boolean;
-  resortKey?: string;
-  churchKey?: string;
 }
 
 export interface Payment {
@@ -62,16 +60,3 @@ export interface Distribution {
 }
 
 export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat' | 'arsip';
-
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: 'create' | 'update' | 'delete' | 'list' | 'get' | 'write';
-  path: string | null;
-  authInfo: {
-    userId: string;
-    email: string;
-    emailVerified: boolean;
-    isAnonymous: boolean;
-    providerInfo: { providerId: string; displayName: string; email: string; }[];
-  }
-}

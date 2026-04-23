@@ -34,8 +34,7 @@ import {
   Building,
   MapPin,
   Home,
-  BookOpen,
-  RefreshCw
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
@@ -43,14 +42,7 @@ import { Church, Payment, User, AppSettings, TabType, Distribution } from './typ
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
 import { auth, db } from './firebase';
 import PublicForm from './PublicForm';
-import { 
-  normalizeResortName, 
-  normalizeChurchName, 
-  getChurchIdentityKey, 
-  normalizePeriode,
-  handleFirestoreError,
-  cleanResortName
-} from './utils';
+import { normalizeResortName, normalizeChurchName, getChurchIdentityKey, normalizePeriode } from './utils';
 import { 
   collection, 
   doc, 
@@ -61,8 +53,7 @@ import {
   query, 
   orderBy,
   updateDoc,
-  writeBatch,
-  serverTimestamp
+  writeBatch
 } from 'firebase/firestore';
 import { 
   signInWithEmailAndPassword, 
@@ -149,19 +140,13 @@ function translateToRoman(num: number): string {
 }
 
 function romanToNum(roman: string): number {
-  if (!roman) return 0;
   const lookup: { [key: string]: number } = {
     I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000
   };
   let num = 0;
   for (let i = 0; i < roman.length; i++) {
-    const char = roman[i].toUpperCase();
-    const current = lookup[char];
-    if (current === undefined) continue; // Safety guard
-
-    const nextChar = roman[i+1]?.toUpperCase();
-    const next = nextChar ? lookup[nextChar] : 0;
-    
+    const current = lookup[roman[i].toUpperCase()];
+    const next = lookup[roman[i+1]?.toUpperCase()];
     if (next && current < next) {
       num -= current;
     } else {
@@ -192,9 +177,9 @@ function getWilayahLevel(w: any): number {
 }
 
 const RESORT_PRIORITY: Record<string, number> = {
-  'SIMPANG_LIMUN_MEDAN': 1,
-  'MARINDAL': 2,
-  'BATU_BARA': 3
+  'Simpang Limun Medan': 1,
+  'Persiapan Pasar IV Marindal II': 2,
+  'Batu Bara': 3
 };
 
 function compareResorts(a: string, b: string): number {
@@ -206,67 +191,7 @@ function compareResorts(a: string, b: string): number {
   return normA.localeCompare(normB);
 }
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: any;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState;
-  public props: ErrorBoundaryProps;
-
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("Critical Runtime Error:", error, errorInfo);
-  }
-
-  render() {
-    const { hasError, error } = this.state;
-    if (hasError) {
-      return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
-          <div className="max-w-md w-full bg-white p-12 rounded-[40px] shadow-2xl border border-red-100">
-            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-8">
-               <AlertCircle size={40} />
-            </div>
-            <h1 className="text-2xl font-black uppercase tracking-tight mb-4">Sistem Terhenti</h1>
-            <p className="text-sm text-slate-500 mb-10 leading-relaxed font-medium capitalize">Terjadi kesalahan teknis mendadak. Tenang, data Anda di database pusat tetap aman.</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full h-16 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20"
-            >
-              Segarkan Halaman
-            </button>
-            <p className="mt-6 text-[10px] text-slate-300 font-mono uppercase tracking-widest">Error: {error?.message || 'Unknown code execution failure'}</p>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 export default function App() {
-  return (
-    <ErrorBoundary>
-      <MainApp />
-    </ErrorBoundary>
-  );
-}
-
-function MainApp() {
   const urlParams = new URLSearchParams(window.location.search);
   const isPublicForm = urlParams.get('form') === 'setor' || urlParams.get('f') === 's';
 
@@ -520,33 +445,24 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   }, [appSettings.theme]);
 
   const uniqueResortsOrdered = useMemo(() => {
-    return Array.from(new Set(churches.map(c => normalizeResortName(c.resort)))).filter((r): r is string => !!r && r !== '-').sort((a,b) => compareResorts(a, b));
+    return Array.from(new Set(churches.map(c => normalizeResortName(c.resort)))).filter(r => r && r !== '-').sort(compareResorts);
   }, [churches]);
 
   const sortedChurches = useMemo(() => {
     let base = [...churches];
     
-    // Normalize existing data for internal processing while PRESERVING display fields
-    base = base.map(c => ({ 
-      ...c, 
-      resortKey: normalizeResortName(c.resort),
-      churchKey: normalizeChurchName(c.nama),
-      resort: cleanResortName(c.resort) // Ensure display resort is neat
-    }));
+    // Normalize existing data for internal processing
+    base = base.map(c => ({ ...c, resort: normalizeResortName(c.resort) }));
 
     // Auto-synthesize Resort entity document if missing to ensure fillable headers
-    const existingResorts = new Set(base.filter(c => c.type === 'resort').map(c => c.resortKey));
-    const uniqueResortKeys = Array.from(new Set(base.map(c => c.resortKey).filter(r => r && r !== '-')));
+    // After normalization, duplicates will merged naturally here
+    const existingResorts = new Set(base.filter(c => c.type === 'resort').map(c => c.resort));
+    const uniqueResortNames = Array.from(new Set(base.map(c => c.resort).filter(r => r && r !== '-')));
     
-    uniqueResortKeys.forEach(rKey => {
-      if (!rKey) return;
-      if (!existingResorts.has(rKey)) {
-        // Find original name for better display title
-        const originalObj = churches.find(c => normalizeResortName(c.resort) === rKey);
-        const displayLabel = originalObj ? cleanResortName(originalObj.resort) : rKey;
-
-        // Find most common wilayah for this resort
-        const members = base.filter(c => c.resortKey === rKey && c.type !== 'resort' && c.wilayah);
+    uniqueResortNames.forEach(resName => {
+      if (!existingResorts.has(resName)) {
+        // Find the most common wilayah for this resort from member churches
+        const members = base.filter(c => c.resort === resName && c.type !== 'resort' && c.wilayah);
         const wilayahCounts: Record<string, number> = {};
         members.forEach(m => {
           wilayahCounts[m.wilayah] = (wilayahCounts[m.wilayah] || 0) + 1;
@@ -554,10 +470,9 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         const bestWilayah = Object.entries(wilayahCounts).sort((a,b) => b[1] - a[1])[0]?.[0] || '';
 
         base.push({
-          id: `virtual_resort_${rKey}`,
-          nama: `RESORT ${displayLabel.toUpperCase()}`,
-          resort: displayLabel,
-          resortKey: rKey,
+          id: `virtual_resort_${resName.replace(/\s+/g, '_')}`,
+          nama: `RESORT ${resName.replace(/^resort\s+/i, '').toUpperCase()}`,
+          resort: resName,
           wilayah: bestWilayah,
           wa: '',
           type: 'resort',
@@ -569,14 +484,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     let filtered = base;
     
-    // De-duplicate any resort type entries that might have been normalized into the same key
+    // De-duplicate any resort type entries that might have been normalized into the same name
     const finalBase: any[] = [];
-    const seenResortKeys = new Set<string>();
+    const seenResortHeaders = new Set<string>();
     filtered.forEach(item => {
       if (item.type === 'resort') {
-        const rKey = item.resortKey || normalizeResortName(item.resort);
-        if (!seenResortKeys.has(rKey)) {
-          seenResortKeys.add(rKey);
+        if (!seenResortHeaders.has(item.resort)) {
+          seenResortHeaders.add(item.resort);
           finalBase.push(item);
         }
       } else {
@@ -587,7 +501,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     if (filterResort !== 'Semua Resort') {
       const normFilter = normalizeResortName(filterResort);
-      filtered = filtered.filter(c => c.resortKey === normFilter);
+      filtered = filtered.filter(c => c.resort === normFilter);
     }
     if (filterWilayah !== 'Semua Wilayah') {
       filtered = filtered.filter(c => c.wilayah === filterWilayah);
@@ -601,35 +515,48 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
 
     return filtered.sort((a, b) => {
-      // 1. Sort by Resort Key Priority / Name
-      const resA = a.resortKey || normalizeResortName(a.resort);
-      const resB = b.resortKey || normalizeResortName(b.resort);
-      const resortComp = compareResorts(resA, resB);
-      if (resortComp !== 0) return resortComp;
-
-      // 2. Resort Header first
-      if (a.type === 'resort' && b.type !== 'resort') return -1;
-      if (a.type !== 'resort' && b.type === 'resort') return 1;
-
-      // 3. Sort by Wilayah
-      const wilA = getWilayahLevel(a.wilayah);
-      const wilB = getWilayahLevel(b.wilayah);
-      if (wilA !== wilB) return wilA - wilB;
-
-      // 4. Force specific resort orders if any
-      const orderA = a.order || 0;
-      const orderB = b.order || 0;
-      if (orderA !== orderB) return orderA - orderB;
-
-      // 5. Pos PI logic
+      // GLOBAL PRIORITY: Jemaat vs Pos PI (Pos PI goes to the absolute bottom)
       const isAPosPI = a.nama.toLowerCase().includes('pos pi');
       const isBPosPI = b.nama.toLowerCase().includes('pos pi');
+      
+      // If one is Pos PI and the other isn't, non-Pos PI always comes first
       if (isAPosPI && !isBPosPI) return 1;
       if (!isAPosPI && isBPosPI) return -1;
 
-      return a.nama.localeCompare(b.nama);
+      // Both are same type (both Jemaat or both Pos PI), continue with normal sort
+      // Prioritaskan grouping Wilayah jika sedang tidak filter resort tertentu
+      if (filterResort === 'Semua Resort' && sortType === 'order') {
+        const wA = getWilayahLevel(a.wilayah);
+        const wB = getWilayahLevel(b.wilayah);
+        if (wA !== wB) return wA - wB;
+        
+        const rComp = compareResorts(a.resort || '', b.resort || '');
+        if (rComp !== 0) return rComp;
+        
+        if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
+        return (a.order || 0) - (b.order || 0);
+      }
+      
+      if (sortType === 'pos_pi') {
+        const isAPosPI = a.nama.toLowerCase().includes('pos pi');
+        const isBPosPI = b.nama.toLowerCase().includes('pos pi');
+        if (isAPosPI && !isBPosPI) return -1;
+        if (!isAPosPI && isBPosPI) return 1;
+        return a.nama.localeCompare(b.nama);
+      }
+      
+      if (sortType === 'nama') return a.nama.localeCompare(b.nama);
+      if (sortType === 'resort') return a.resort.localeCompare(b.resort);
+      if (sortType === 'wilayah') {
+        const wA = getWilayahLevel(a.wilayah);
+        const wB = getWilayahLevel(b.wilayah);
+        if (wA !== wB) return wA - wB;
+        return a.nama.localeCompare(b.nama);
+      }
+      if (sortType === 'order') return (a.order || 0) - (b.order || 0);
+      return a.id.localeCompare(b.id);
     });
-  }, [churches, filterResort, filterWilayah, searchTerm]);
+  }, [churches, sortType, filterResort, filterWilayah, searchTerm]);
 
   const displayGroupedChurches = useMemo(() => {
     const result: any[] = [];
@@ -683,9 +610,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   }, [sortedChurches, filterResort, searchTerm, sortType]);
 
   const uniqueResorts = useMemo(() => {
-    const rs = Array.from(new Set(churches.map(c => normalizeResortName(c.resort)).filter(Boolean))) as string[];
-    // We keep them as keys, but we should handle labels in the UI
-    return ['Semua Resort', ...rs.sort((a,b) => compareResorts(a, b))];
+    const rs = Array.from(new Set(churches.map(c => normalizeResortName(c.resort)).filter(Boolean)));
+    return ['Semua Resort', ...rs.sort(compareResorts)];
   }, [churches]);
 
   const uniqueWilayah = useMemo(() => {
@@ -699,8 +625,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     
     // Apply filters matching the global ones
     if (filterResort !== 'Semua Resort') {
-      const normFilter = normalizeResortName(filterResort);
-      data = data.filter(c => normalizeResortName(c.resort) === normFilter);
+      data = data.filter(c => c.resort === filterResort);
     }
     if (filterWilayah !== 'Semua Wilayah') {
       data = data.filter(c => c.wilayah === filterWilayah);
@@ -744,31 +669,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     return data
       .map(gereja => {
-        const targetIdentityKey = getChurchIdentityKey(gereja);
-        
-        // Find all payments that belong to this identity, regardless of which ID/alias was used
-        const pembayaranList = payments.filter(p => {
-          // 1. Check if category and period match (Case-insensitive)
-          if ((p.kategori || '').toLowerCase() !== kategori.toLowerCase()) return false;
-          if (normalizePeriode(p.periode) !== normalizePeriode(periodeAktif)) return false;
-
-          // 2. Check identity match
-          const pChurch = allChurches.find(c => c.id === p.gerejaId);
-          if (pChurch) {
-            return getChurchIdentityKey(pChurch) === targetIdentityKey;
-          }
-          
-          return (churchAliasesMap[gereja.id] || [gereja.id]).includes(p.gerejaId);
-        });
+        const aliases = churchAliasesMap[gereja.id] || [gereja.id];
+        const pembayaranList = payments.filter(p => 
+          aliases.includes(p.gerejaId) && 
+          p.kategori === kategori && 
+          normalizePeriode(p.periode) === normalizePeriode(periodeAktif)
+        );
         
         let combinedDetails: Record<string, number> = {};
         pembayaranList.forEach(p => {
           if (p.details) {
-            Object.entries(p.details).forEach(([k, v]) => {
-              // Standardize key finding (Case-insensitive)
-              const colKey = columns.find(col => col.toLowerCase() === k.toLowerCase()) || k;
-              combinedDetails[colKey] = (combinedDetails[colKey] || 0) + (v as number || 0);
-            });
+            combinedDetails = { ...combinedDetails, ...p.details };
           }
         });
 
@@ -1069,7 +980,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const aliases = churchAliasesMap[gerejaId] || [gerejaId];
     const pembayaranList = payments.filter(p => 
       aliases.includes(p.gerejaId) && 
-      (p.kategori || '').toLowerCase() === kategori.toLowerCase() && 
+      p.kategori === kategori && 
       normalizePeriode(p.periode) === normalizePeriode(periodeAktif)
     );
     
@@ -1107,33 +1018,29 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     // Find if there is an unarchived 'pending' document we can write to
     const targetPayment = pembayaranList.find(p => !p.receiptSent);
 
-    try {
-      if (targetPayment) {
-        // Use the neededUnarchivedPart for the pending receipt
-        const updatedDetails = { ...targetPayment.details, [field]: neededUnarchivedPart };
-        const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: any) => sum + ((val as number) || 0), 0);
-        await updateDoc(doc(db, 'payments', targetPayment.id), {
-          details: updatedDetails,
-          jumlah: updatedJumlah,
-          tanggal: new Date().toISOString().split('T')[0]
-        });
-      } else {
-        if (neededUnarchivedPart === 0) return; // Don't create new doc for 0
-        
-        await addDoc(collection(db, 'payments'), {
-          gerejaId, 
-          kategori, 
-          periode: periodeAktif,
-          details: { [field]: neededUnarchivedPart },
-          jumlah: neededUnarchivedPart,
-          tanggal: new Date().toISOString().split('T')[0],
-          receiptSent: false,
-          createdAt: serverTimestamp()
-        });
-      }
-    } catch (err: any) {
-      const errorInfo = handleFirestoreError(err, 'write', `payments/${targetPayment?.id || 'new'}`, auth);
-      alert(`Gagal menyimpan: ${errorInfo.error}`);
+    if (targetPayment) {
+      // Use the neededUnarchivedPart for the pending receipt
+      const updatedDetails = { ...targetPayment.details, [field]: neededUnarchivedPart };
+      const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: any) => sum + ((val as number) || 0), 0);
+      await updateDoc(doc(db, 'payments', targetPayment.id), {
+        details: updatedDetails,
+        jumlah: updatedJumlah,
+        tanggal: new Date().toISOString().split('T')[0]
+      });
+    } else {
+      if (neededUnarchivedPart === 0) return; // Don't create new doc for 0
+      
+      // Create a brand new document using addDoc instead of deterministic ID
+      // This allows multiple documents (archived vs unarchived) per church/category/period
+      await addDoc(collection(db, 'payments'), {
+        gerejaId, 
+        kategori, 
+        periode: periodeAktif,
+        details: { [field]: neededUnarchivedPart },
+        jumlah: neededUnarchivedPart,
+        tanggal: new Date().toISOString().split('T')[0],
+        receiptSent: false
+      });
     }
   };
 
@@ -2295,27 +2202,6 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     );
   }
 
-  if (isInitialLoading && !currentUserProfile) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-6">
-        <div className="max-w-sm w-full text-center space-y-8">
-          <motion.div 
-            animate={{ scale: [1, 1.05, 1], rotate: [0, 5, -5, 0] }}
-            transition={{ repeat: Infinity, duration: 4 }}
-            className="w-24 h-24 bg-slate-50 text-slate-400 rounded-3xl flex items-center justify-center mx-auto shadow-inner"
-          >
-             <ShieldCheck size={48} className="opacity-20" />
-          </motion.div>
-          <div className="space-y-4">
-             <div className="h-4 w-48 bg-slate-100 rounded-full mx-auto" />
-             <div className="h-3 w-32 bg-slate-50 rounded-full mx-auto" />
-          </div>
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 animate-pulse">Menghubungkan ke pusat...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800">
       {/* MOBILE OVERLAY */}
@@ -2414,17 +2300,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             <div className="flex flex-col">
               <h2 className="judul-h2 uppercase !text-sm lg:!text-xl truncate max-w-[150px] lg:max-w-none">{activeTab.toUpperCase()}</h2>
               <div className="flex items-center space-x-1.5 mt-0.5">
-                <div className={`w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full ${payments.length > 0 ? 'bg-gold-500 animate-pulse' : 'bg-slate-300'}`}></div>
-                <p className="text-[7px] lg:text-[9px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-                  Online: {payments.length} Data
-                </p>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="p-1 hover:bg-slate-100 rounded-full transition-colors ml-1"
-                  title="Segarkan Sinkronisasi Data"
-                >
-                  <RefreshCw size={10} className="text-slate-400 hover:text-gold-500" />
-                </button>
+                <div className="w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full bg-gold-500 animate-pulse"></div>
+                <p className="text-[7px] lg:text-[9px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">Online</p>
               </div>
             </div>
             <div className="hidden lg:block h-8 w-px bg-slate-200"></div>
@@ -2955,11 +2832,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
                         <span className="text-[9px] font-bold text-gold-600 uppercase">Resort</span>
                         <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
-                          {uniqueResorts.map(r => (
-                            <option key={r} value={r}>
-                              {r === 'Semua Resort' ? r : cleanResortName(r)}
-                            </option>
-                          ))}
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                       </div>
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
@@ -3172,11 +3045,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                         <span className="text-[9px] font-bold text-slate-400 uppercase">Resort:</span>
                         <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
-                          {uniqueResorts.map(r => (
-                            <option key={r} value={r}>
-                              {r === 'Semua Resort' ? r : cleanResortName(r)}
-                            </option>
-                          ))}
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                       </div>
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -3397,11 +3266,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                         <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
                         <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
-                          {uniqueResorts.map(r => (
-                            <option key={r} value={r}>
-                              {r === 'Semua Resort' ? r : cleanResortName(r)}
-                            </option>
-                          ))}
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                       </div>
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
@@ -3588,11 +3453,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                         <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
                         <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
-                          {uniqueResorts.map(r => (
-                            <option key={r} value={r}>
-                              {r === 'Semua Resort' ? r : cleanResortName(r)}
-                            </option>
-                          ))}
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                       </div>
                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
@@ -4469,20 +4330,20 @@ function NavItem({ active, onClick, icon, label, className = "" }: { active: boo
   return (
     <button 
       onClick={onClick} 
-      className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl transition-all duration-200 group relative ${
+      className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group relative ${
         active 
-          ? 'bg-slate-800 text-gold-400 font-bold border border-white/5 shadow-inner' 
-          : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'
+          ? 'bg-gold-500 text-white shadow-lg shadow-gold-900/40 font-bold' 
+          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
       } ${className}`}
     >
-      <span className={`${active ? 'text-gold-400' : 'text-slate-500 group-hover:text-slate-300'} transition-colors`}>
+      <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-gold-400'} transition-colors`}>
         {icon}
       </span>
-      <span className="text-[11px] font-black uppercase tracking-[0.1em]">{label}</span>
+      <span className="text-sm font-medium tracking-tight">{label}</span>
       {active && (
         <motion.div 
           layoutId="activeNavIndicator" 
-          className="absolute left-1 w-1 h-3 bg-gold-500 rounded-full" 
+          className="absolute left-0 w-1 h-6 bg-white rounded-r-full" 
           initial={false}
         />
       )}
