@@ -1114,10 +1114,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const handleMarkPaymentsAsSent = async (paymentIds: string[]) => {
     try {
+      const maxNomorSurat = payments.reduce((max, p) => Math.max(max, p.nomorSurat || 1956), 1956);
+      const nextNomorSurat = maxNomorSurat + 1;
+
       for (const id of paymentIds) {
         await updateDoc(doc(db, 'payments', id), { 
           receiptSent: true,
-          receiptSentAt: new Date().toISOString()
+          receiptSentAt: new Date().toISOString(),
+          nomorSurat: nextNomorSurat
         });
       }
     } catch (err: any) {
@@ -1563,16 +1567,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const today = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
 
   const getNomorSurat = (item: any) => {
-    // Find index in sorted payments
-    const sorted = [...payments].sort((a, b) => {
-      const ta = (a as any).createdAt?.seconds || 0;
-      const tb = (b as any).createdAt?.seconds || 0;
-      return ta - tb;
-    });
-    const index = sorted.findIndex(p => p.id === item.id);
     const base = 1956;
-    const currentNum = index >= 0 ? base + index : base;
-    return currentNum.toLocaleString('id-ID');
+    const maxNomorSurat = payments.reduce((max, p) => Math.max(max, p.nomorSurat || base), base);
+    
+    // For pending/preview letters, show what the NEXT number will be
+    if (printType === 'penerimaan' || printType === 'tunggakan') return (maxNomorSurat + 1).toLocaleString('id-ID');
+
+    // For archived letters, show the highest number among the grouped archived payments for that church & period
+    if (item && item.id) {
+      const churchArchivedPayments = payments.filter(p => p.gerejaId === item.id && p.periode === (item.periode || periodeAktif) && p.receiptSent && p.nomorSurat);
+      if (churchArchivedPayments.length > 0) {
+        const highestChurchNomor = churchArchivedPayments.reduce((max, p) => Math.max(max, p.nomorSurat!), base);
+        return highestChurchNomor.toLocaleString('id-ID');
+      }
+    }
+
+    // Default fallback
+    return (maxNomorSurat + 1).toLocaleString('id-ID');
   };
 
   const getFormattedPaymentName = (cat: string, field: string) => {
