@@ -1840,8 +1840,25 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         {printType === 'global-receipt' ? (
                           (() => {
                             let count = 0;
-                            return Object.entries(printData.updates || {}).flatMap(([cat, fields]: [any, any]) => (
-                              fields.map((f: string) => {
+                            const sortedEntries = Object.entries(printData.updates || {}).sort(([catA], [catB]) => {
+                              const order: Record<string, number> = { 'laporan': 1, 'pelean': 2, 'alaman': 3 };
+                              return (order[catA] || 9) - (order[catB] || 9);
+                            });
+
+                            const monthOrder: Record<string, number> = {
+                              'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'Mei': 5, 'Jun': 6,
+                              'Jul': 7, 'Agu': 8, 'Agt': 8, 'Sep': 9, 'Okt': 10, 'Nov': 11, 'Des': 12
+                            };
+
+                            return sortedEntries.flatMap(([cat, fields]: [any, any]) => {
+                              const sortedFields = [...fields].sort((a: string, b: string) => {
+                                if (cat === 'laporan') {
+                                  return (monthOrder[a] || 0) - (monthOrder[b] || 0);
+                                }
+                                return a.localeCompare(b);
+                              });
+                              
+                              return sortedFields.map((f: string) => {
                                 const val = printData.allDetails?.[cat]?.[f] || 0;
                                 if (val <= 0) return null;
                                 count++;
@@ -1853,8 +1870,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     <td className="w-32 text-right text-[15px] font-sans">{formatRupiah(val)},-</td>
                                   </tr>
                                 );
-                              })
-                            ));
+                              });
+                            });
                           })()
                         ) : (
                           (printData.items || []).map((col: string, idx: number) => {
