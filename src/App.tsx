@@ -59,6 +59,68 @@ import {
   createUserWithEmailAndPassword
 } from 'firebase/auth';
 
+const TableCellInput = ({ 
+  initialVal, 
+  itemType, 
+  onSave, 
+  formatFn,
+  align = 'right',
+  customClasses = ''
+}: {
+  initialVal: number;
+  itemType: string;
+  onSave: (val: string) => void;
+  formatFn: (val: number) => string;
+  align?: 'right' | 'center' | 'left';
+  customClasses?: string;
+}) => {
+  const [localVal, setLocalVal] = useState(initialVal === 0 ? '' : formatFn(initialVal));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(initialVal === 0 ? '' : formatFn(initialVal));
+    }
+  }, [initialVal, isFocused, formatFn]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^0-9]/g, '');
+    if (raw === '') {
+      setLocalVal('');
+    } else {
+      setLocalVal(formatFn(parseInt(raw)));
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    onSave(localVal);
+  };
+
+  const isZero = !localVal || localVal === '0';
+
+  let defaultColorClasses = isZero 
+    ? (itemType === 'resort' ? 'text-slate-400 font-bold' : 'text-red-400 font-medium') 
+    : (itemType === 'resort' ? 'text-indigo-700 font-bold' : 'text-slate-700 font-bold');
+
+  return (
+    <input 
+      type="text" 
+      value={localVal}
+      onChange={handleChange}
+      onFocus={() => setIsFocused(true)}
+      onBlur={handleBlur}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        }
+      }}
+      className={`w-full py-3 outline-none bg-transparent font-mono data-value text-${align} ${customClasses || defaultColorClasses}`}
+      placeholder="0"
+    />
+  );
+};
+
 function translateToRoman(num: number): string {
   if (num <= 0) return num.toString();
   const lookup: { [key: string]: number } = {
@@ -274,7 +336,6 @@ export default function App() {
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [billingSelections, setBillingSelections] = useState<Record<string, Record<string, string[]>>>({}); // { churchId: { category: [colNames] } }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
-  const [cellTypingState, setCellTypingState] = useState<Record<string, string>>({}); // { gerejaId_kategori_col: "typed string" }
 
   const canDragOrder = sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm;
 
@@ -3189,12 +3250,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     return (
                                       <td key={col} className={`p-0 border-r border-slate-100 relative z-10 hover:z-20 ${item.romanPrefix ? 'bg-indigo-50/30' : ''}`}>
                                         {currentUserProfile ? (
-                                          <input 
-                                            type="text" 
-                                            value={val === 0 ? '' : formatInput(val)}
-                                            onChange={(e) => handleDistributionChange(item.id, col, e.target.value)}
-                                            className={`w-full py-3 px-2 text-center outline-none bg-transparent font-mono font-bold transition-all focus:bg-indigo-50/50 cursor-text ${!val ? (item.romanPrefix ? 'text-slate-400' : 'text-slate-300') : 'text-gold-700'}`}
-                                            placeholder="0"
+                                          <TableCellInput
+                                            initialVal={val}
+                                            itemType={item.romanPrefix ? 'resort' : ''}
+                                            onSave={(newVal) => handleDistributionChange(item.id, col, newVal)}
+                                            formatFn={formatInput}
+                                            align="center"
+                                            customClasses={`px-2 font-bold transition-all focus:bg-indigo-50/50 cursor-text ${!val ? (item.romanPrefix ? 'text-slate-400' : 'text-slate-300') : 'text-gold-700'}`}
                                           />
                                         ) : (
                                           <div className={`w-full py-3 text-center font-mono ${!val ? 'text-slate-300' : 'text-gold-700 font-bold'}`}>
@@ -3460,31 +3522,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                           )}
                                           <div className="flex-1 relative flex items-center">
                                             {currentUserProfile ? (
-                                              <input 
-                                                type="text" 
-                                                value={cellTypingState[`${item.id}_${activeTab}_${col}`] !== undefined ? cellTypingState[`${item.id}_${activeTab}_${col}`] : (val === 0 ? '' : formatInput(val))}
-                                                onChange={(e) => {
-                                                  const newStr = e.target.value;
-                                                  setCellTypingState(prev => ({...prev, [`${item.id}_${activeTab}_${col}`]: newStr}));
-                                                }}
-                                                onBlur={(e) => {
-                                                  const typedVal = cellTypingState[`${item.id}_${activeTab}_${col}`];
-                                                  if (typedVal !== undefined) {
-                                                    handleCellChange(item.id, activeTab as any, col, typedVal);
-                                                    setCellTypingState(prev => { 
-                                                      const newState = {...prev}; 
-                                                      delete newState[`${item.id}_${activeTab}_${col}`]; 
-                                                      return newState; 
-                                                    });
-                                                  }
-                                                }}
-                                                onKeyDown={(e) => {
-                                                  if (e.key === 'Enter') {
-                                                    e.currentTarget.blur();
-                                                  }
-                                                }}
-                                                className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-400 font-bold' : 'text-red-400 font-medium') : (item.type === 'resort' ? 'text-indigo-700 font-bold' : 'text-slate-700 font-bold')}`}
-                                                placeholder="0"
+                                              <TableCellInput
+                                                initialVal={val}
+                                                itemType={item.type}
+                                                onSave={(newVal) => handleCellChange(item.id, activeTab as any, col, newVal)}
+                                                formatFn={activeTab === 'alaman' ? (v) => formatInput(v) : (v) => formatRupiah(v)}
                                               />
                                             ) : (
                                               <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-300' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
