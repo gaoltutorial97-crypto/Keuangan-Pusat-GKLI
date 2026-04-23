@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { collection, onSnapshot, doc, serverTimestamp, addDoc, query, orderBy } from 'firebase/firestore';
 import { Church, Payment, AppSettings } from './types';
 import { DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
-import { normalizeResortName, getChurchIdentityKey, normalizePeriode } from './utils';
+import { 
+  normalizeResortName, 
+  getChurchIdentityKey, 
+  normalizePeriode, 
+  formatRupiah, 
+  handleFirestoreError,
+  cleanResortName
+} from './utils';
 import { toJpeg } from 'html-to-image';
 import { 
   CheckCircle2, 
@@ -15,15 +22,12 @@ import {
   CreditCard,
   FileCheck2,
   History,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const today = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-
-const formatRupiah = (angka: number) => {
-  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(angka);
-};
 
 const compressImage = (file: File, maxWidth = 800): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -68,6 +72,7 @@ export default function PublicForm() {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -107,7 +112,7 @@ export default function PublicForm() {
     Object.values(churchGroups).forEach((g: ChurchGroup) => {
       if (g.resortKey && g.resortKey !== '-') {
         if (!rSet.has(g.resortKey)) {
-          rSet.set(g.resortKey, normalizeResortName(g.master.resort));
+          rSet.set(g.resortKey, cleanResortName(g.master.resort));
         }
       }
     });
@@ -202,9 +207,15 @@ export default function PublicForm() {
     );
     
     churchPayments.forEach(p => {
-      Object.entries(p.details || {}).forEach(([key, val]) => {
-        if ((val as number) > 0) disabled[key] = true;
-      });
+      if (p.details) {
+        Object.entries(p.details).forEach(([key, val]) => {
+          // Case-insensitive matching for month keys (e.g., 'Jan' vs 'JAN')
+          const monthKey = visibleColumns.find(col => col.toLowerCase() === key.toLowerCase());
+          if (monthKey && (val as number) > 0) {
+            disabled[monthKey] = true;
+          }
+        });
+      }
     });
     return disabled;
   }, [payments, selectedChurchIdentity, periode, kategori, churchGroups]);
@@ -253,18 +264,23 @@ export default function PublicForm() {
     setDetails(prev => ({ ...prev, [colName]: numValue }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedChurchIdentity) return alert('Silakan pilih nama jemaat Bapak/Ibu.');
+    if (!periode) return alert('Silakan pilih tahun/periode setoran.');
     if (totalSumbangan <= 0) return alert('Silakan isi nominal setoran.');
+    setShowConfirm(true);
+  };
 
+  const processSubmission = async () => {
     setIsSubmitting(true);
+    setShowConfirm(false);
     setSubmitError(null);
     try {
       const group = churchGroups[selectedChurchIdentity];
       const church = group.master;
       const paymentData = {
-        gerejaId: church.id, // Use master ID for submission
+        gerejaId: church.id,
         periode: periode,
         kategori: kategori,
         details: details,
@@ -276,13 +292,14 @@ export default function PublicForm() {
         buktiTransferBase64: buktiImage
       };
 
-      await addDoc(collection(db, 'payments'), paymentData);
-      setSuccessData({ church, paymentData });
+      console.log("Submitting payment to center...", { churchId: church.id, periode, total: totalSumbangan });
+      const docRef = await addDoc(collection(db, 'payments'), paymentData);
+      setSuccessData({ id: docRef.id, church, paymentData });
     } catch (err: any) {
-      console.error("Firestore submission error:", err);
-      let errorMsg = 'Gagal menyimpan data ke database. Silakan coba lagi.';
+      const errorInfo = handleFirestoreError(err, 'create', 'payments', auth);
+      let errorMsg = `Gagal menyimpan (Error: ${errorInfo.error}). Silakan hubungi admin.`;
       if (err.message?.includes('permission-denied')) {
-        errorMsg = 'Akses ditolak oleh pusat. Silakan hubungi admin kasir.';
+        errorMsg = 'Akses ditolak oleh pusat. Sesi Anda mungkin tidak valid.';
       }
       setSubmitError(errorMsg);
     } finally {
@@ -325,9 +342,13 @@ export default function PublicForm() {
   if (isSyncing && !successData) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-500 font-medium animate-pulse">Menghubungkan ke database pusat...</p>
+        <div className="max-w-md w-full space-y-4">
+          <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200 flex flex-col items-center">
+            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+            <div className="h-4 w-3/4 bg-slate-100 rounded-full animate-pulse mb-3"></div>
+            <div className="h-3 w-1/2 bg-slate-50 rounded-full animate-pulse"></div>
+            <p className="mt-8 text-slate-400 font-bold text-[10px] uppercase tracking-widest text-center">Menghubungkan ke pusat data GKLI...</p>
+          </div>
         </div>
       </div>
     );
@@ -385,7 +406,7 @@ export default function PublicForm() {
                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 italic">SUCCESSFULLY SUBMITTED</span>
                 </div>
                 <p className="text-[9px] text-slate-400 font-mono italic">
-                  ID: {Date.now()} | Terdaftar di Sistem Pusat GKLI
+                  ID: {successData?.id || Date.now()} | Terdaftar di Sistem Pusat GKLI
                 </p>
             </div>
           </motion.div>
@@ -410,11 +431,23 @@ export default function PublicForm() {
         <header className="mb-10 flex flex-col items-center">
           <img src={appSettings.logoUrl || "https://upload.wikimedia.org/wikipedia/commons/0/05/Logo_GKLI.png"} className="h-20 w-auto mb-4" alt="Logo" />
           <h1 className="text-2xl font-black tracking-tight text-center uppercase">{appSettings.title || "Donasi GKLI"}</h1>
-          <div className="flex items-center gap-2 mt-1">
-             <div className={`w-2 h-2 rounded-full ${isPaymentsLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
-             <p className="text-slate-500 text-[10px] font-bold tracking-widest uppercase">
-               {isPaymentsLoaded ? 'Data Terkoneksi (Real-time)' : 'Menghubungkan...'}
-             </p>
+          <div className="flex flex-col items-center gap-2 mt-1">
+             <div className="flex items-center gap-3">
+               <div className={`w-2 h-2 rounded-full ${isPaymentsLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+               <p className="text-slate-500 text-[10px] font-bold tracking-widest uppercase">
+                 {isPaymentsLoaded ? `Terhubung (${payments.length} Data)` : 'Menghubungkan...'}
+               </p>
+               {isPaymentsLoaded && (
+                 <button 
+                   type="button"
+                   onClick={() => window.location.reload()}
+                   className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-emerald-600"
+                   title="Segarkan Sinkronisasi"
+                 >
+                   <RefreshCw size={12} className={isSubmitting ? 'animate-spin' : ''} />
+                 </button>
+               )}
+             </div>
           </div>
         </header>
 
@@ -591,7 +624,64 @@ export default function PublicForm() {
              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-[0.3em]">Build Verified Security - GKLI System</p>
           </footer>
         </form>
-      </div>
+
+      {/* MODAL KONFIRMASI (ANTI ERROR) */}
+      <AnimatePresence>
+        {showConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowConfirm(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm relative overflow-hidden flex flex-col"
+            >
+              <div className="p-8 text-center border-b border-slate-100">
+                <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                   <ShieldCheck size={32} />
+                </div>
+                <h3 className="text-xl font-black uppercase tracking-tight mb-2">Konfirmasi Sinkron</h3>
+                <p className="text-sm text-slate-500 font-medium leading-relaxed italic">Mohon periksa kembali nominal berikut sebelum dikirim ke database pusat.</p>
+              </div>
+              
+              <div className="p-8 bg-slate-50 space-y-4">
+                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                   <span>Unit Jemaat</span>
+                   <span className="text-slate-900 truncate max-w-[200px]">{churchGroups[selectedChurchIdentity]?.master.nama}</span>
+                </div>
+                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                   <span>Periode</span>
+                   <span className="text-slate-900">{periode}</span>
+                </div>
+                <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+                   <span className="text-[11px] font-black uppercase tracking-widest text-slate-900">Total Setoran</span>
+                   <span className="font-mono text-xl font-black text-emerald-600">Rp {formatRupiah(totalSumbangan)}</span>
+                </div>
+              </div>
+
+              <div className="p-6 grid grid-cols-2 gap-3">
+                 <button 
+                  onClick={() => setShowConfirm(false)}
+                  className="h-14 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-colors hover:bg-slate-100"
+                 >
+                   Batal
+                 </button>
+                 <button 
+                  onClick={processSubmission}
+                  className="h-14 rounded-2xl bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95"
+                 >
+                   Ya, Kirim
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
-  );
+  </div>
+);
 }
