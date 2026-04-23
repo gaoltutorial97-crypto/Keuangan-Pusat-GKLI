@@ -2,17 +2,15 @@ import { Church } from './types';
 
 export function normalizeResortName(name: string): string {
   if (!name) return '';
-  let n = name.trim();
-  // Strip "RESORT " prefix case-insensitive
-  n = n.replace(/^RESORT\s+/i, '');
+  let n = name.trim().toUpperCase();
+  // Strip "RESORT " prefix
+  n = n.replace(/^RESORT\s+/, '');
   
-  // Specific fixes based on user feedback
-  const up = n.toUpperCase();
-  if (up === 'SIMPANG LIMUM MEDAN') return 'Simpang Limun Medan';
-  if (up === 'PASAR IV MARINDAL II' || up === 'PERSIAPAN PASAR IV MARINDAL II') return 'Persiapan Pasar IV Marindal II';
+  // Specific fixes
+  if (n === 'SIMPANG LIMUM MEDAN') return 'SIMPANG LIMUN MEDAN';
+  if (n === 'PASAR IV MARINDAL II' || n === 'PERSIAPAN PASAR IV MARINDAL II') return 'PERSIAPAN PASAR IV MARINDAL II';
   
-  // Consistent Title Case for others
-  return n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  return n;
 }
 
 export function normalizeChurchName(name: string): string {

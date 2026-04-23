@@ -118,7 +118,17 @@ export default function PublicForm() {
     if (!selectedResortKey) return [];
     return Object.values(churchGroups)
       .filter((g: ChurchGroup) => g.resortKey === selectedResortKey)
-      .sort((a, b) => (a as ChurchGroup).master.nama.localeCompare((b as ChurchGroup).master.nama));
+      .sort((a, b) => {
+        const nameA = a.master.nama.toLowerCase();
+        const nameB = b.master.nama.toLowerCase();
+        const isAPosPI = nameA.includes('pos pi');
+        const isBPosPI = nameB.includes('pos pi');
+        
+        if (isAPosPI && !isBPosPI) return 1;
+        if (!isAPosPI && isBPosPI) return -1;
+        
+        return nameA.localeCompare(nameB);
+      });
   }, [selectedResortKey, churchGroups]);
 
   const [isPaymentsLoaded, setIsPaymentsLoaded] = useState(false);

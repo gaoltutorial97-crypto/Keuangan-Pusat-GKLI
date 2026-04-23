@@ -42,7 +42,7 @@ import { Church, Payment, User, AppSettings, TabType, Distribution } from './typ
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
 import { auth, db } from './firebase';
 import PublicForm from './PublicForm';
-import { normalizeResortName, normalizeChurchName, getChurchIdentityKey } from './utils';
+import { normalizeResortName, normalizeChurchName, getChurchIdentityKey, normalizePeriode } from './utils';
 import { 
   collection, 
   doc, 
@@ -224,6 +224,7 @@ export default function App() {
   const [formSettings, setFormSettings] = useState(DEFAULT_SETTINGS);
 
   // STATE DATA GEREJA & PEMBAYARAN
+  const [allChurches, setAllChurches] = useState<Church[]>([]);
   const [churches, setChurches] = useState<Church[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [distributions, setDistributions] = useState<Distribution[]>([]);
@@ -232,6 +233,40 @@ export default function App() {
   const [periods, setPeriods] = useState(['Tahun 2021', 'Tahun 2022', 'Tahun 2023', 'Tahun 2024', 'Tahun 2025', 'Tahun 2026']);
   const [periodeAktif, setPeriodeAktif] = useState('Tahun 2026');
   const [newPeriod, setNewPeriod] = useState('');
+
+  // Mapping church identity keys to all their database IDs (aliases)
+  const churchAliasesMap = useMemo(() => {
+    const idToPrefId: Record<string, string> = {};
+    const prefIdToAliases: Record<string, string[]> = {};
+
+    // 1. Determine preferred ID for each identity key
+    allChurches.forEach(c => {
+      const key = getChurchIdentityKey(c);
+      const hasGKLI = c.nama.toUpperCase().startsWith('GKLI');
+      const existingId = idToPrefId[key];
+      
+      if (!existingId) {
+        idToPrefId[key] = c.id;
+      } else {
+        const existingObj = allChurches.find(x => x.id === existingId);
+        if (existingObj && hasGKLI && !existingObj.nama.toUpperCase().startsWith('GKLI')) {
+          idToPrefId[key] = c.id;
+        }
+      }
+    });
+
+    // 2. Map every church to its preferred ID's alias list
+    allChurches.forEach(c => {
+      const key = getChurchIdentityKey(c);
+      const prefId = idToPrefId[key];
+      if (prefId) {
+        if (!prefIdToAliases[prefId]) prefIdToAliases[prefId] = [];
+        prefIdToAliases[prefId].push(c.id);
+      }
+    });
+
+    return prefIdToAliases;
+  }, [allChurches]);
 
   // REAL-TIME FIREBASE SYNC - Auth & Settings
   useEffect(() => {
@@ -274,6 +309,7 @@ export default function App() {
     // 2. Listen to Churches (Public read allowed in rules)
     const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), (snap) => {
       const allData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Church));
+      setAllChurches(allData);
       
       // Deduplicate: prefer "GKLI " prefixed names if double exists
       const filteredMap = new Map<string, Church>();
@@ -624,7 +660,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     return data
       .map(gereja => {
-        const pembayaranList = payments.filter(p => p.gerejaId === gereja.id && p.kategori === kategori && p.periode === periodeAktif);
+        const aliases = churchAliasesMap[gereja.id] || [gereja.id];
+        const pembayaranList = payments.filter(p => 
+          aliases.includes(p.gerejaId) && 
+          p.kategori === kategori && 
+          normalizePeriode(p.periode) === normalizePeriode(periodeAktif)
+        );
         
         let combinedDetails: Record<string, number> = {};
         pembayaranList.forEach(p => {
@@ -666,21 +707,24 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       });
   };
 
-  const dataAlaman = useMemo(() => getLaporanData('alaman'), [sortedChurches, payments, periodeAktif]);
-  const dataPelean = useMemo(() => getLaporanData('pelean'), [sortedChurches, payments, periodeAktif]);
-  const dataLaporanKeuangan = useMemo(() => getLaporanData('laporan'), [sortedChurches, payments, periodeAktif]);
+  const dataAlaman = useMemo(() => getLaporanData('alaman'), [sortedChurches, payments, periodeAktif, churchAliasesMap]);
+  const dataPelean = useMemo(() => getLaporanData('pelean'), [sortedChurches, payments, periodeAktif, churchAliasesMap]);
+  const dataLaporanKeuangan = useMemo(() => getLaporanData('laporan'), [sortedChurches, payments, periodeAktif, churchAliasesMap]);
 
   const dataDistribusi = useMemo(() => {
-    const columns = SPREADSHEET_COLUMNS.alaman;
     return sortedChurches.map(gereja => {
-      const dist = distributions.find(d => d.gerejaId === gereja.id && d.periode === periodeAktif);
+      const aliases = churchAliasesMap[gereja.id] || [gereja.id];
+      const dist = distributions.find(d => 
+        aliases.includes(d.gerejaId) && 
+        normalizePeriode(d.periode) === normalizePeriode(periodeAktif)
+      );
       return {
         ...gereja,
         details: dist ? dist.details : {},
         periode: periodeAktif
       };
     });
-  }, [sortedChurches, distributions, periodeAktif]);
+  }, [sortedChurches, distributions, periodeAktif, churchAliasesMap]);
 
   const lunasChurches = useMemo(() => {
     return churches.filter(church => {
@@ -694,31 +738,31 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const totalPemasukan = useMemo(() => {
     return payments
       .filter(p => {
-        const church = churches.find(c => c.id === p.gerejaId);
+        const church = allChurches.find(c => c.id === p.gerejaId);
         if (!church) return false;
         const matchResort = filterResort === 'Semua Resort' || church.resort === filterResort;
         const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
-        return p.periode === periodeAktif && p.jumlah > 0 && matchResort && matchWilayah;
+        return normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && matchResort && matchWilayah;
       })
       .reduce((sum, item) => sum + item.jumlah, 0);
-  }, [payments, churches, periodeAktif, filterResort, filterWilayah]);
+  }, [payments, allChurches, periodeAktif, filterResort, filterWilayah]);
 
   const { pemasukanLaporan, pemasukanPelean, pemasukanAlaman } = useMemo(() => {
     let lap = 0, pel = 0, al = 0;
     payments.forEach(p => {
-      const church = churches.find(c => c.id === p.gerejaId);
+      const church = allChurches.find(c => c.id === p.gerejaId);
       if (!church) return;
       const matchResort = filterResort === 'Semua Resort' || church.resort === filterResort;
       const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
       
-      if (p.periode === periodeAktif && p.jumlah > 0 && matchResort && matchWilayah) {
+      if (normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && matchResort && matchWilayah) {
         if (p.kategori === 'laporan') lap += p.jumlah;
         else if (p.kategori === 'pelean') pel += p.jumlah;
         else if (p.kategori === 'alaman') al += p.jumlah;
       }
     });
     return { pemasukanLaporan: lap, pemasukanPelean: pel, pemasukanAlaman: al };
-  }, [payments, churches, periodeAktif, filterResort, filterWilayah]);
+  }, [payments, allChurches, periodeAktif, filterResort, filterWilayah]);
   
   const stats = useMemo(() => {
     let totalMenunggak = 0;
@@ -765,7 +809,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           // Resort entities only follow Pelean (Special Offerings) and Alaman (Literature)
           if (church.type === 'resort' && cat === 'laporan') return;
 
-          const pembayaranList = payments.filter(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
+          const aliases = churchAliasesMap[church.id] || [church.id];
+          const pembayaranList = payments.filter(p => 
+            aliases.includes(p.gerejaId) && 
+            p.kategori === cat && 
+            normalizePeriode(p.periode) === normalizePeriode(periodeAktif)
+          );
           let combinedDetails: Record<string, number> = {};
           pembayaranList.forEach(p => {
              if (p.details) combinedDetails = { ...combinedDetails, ...p.details };
@@ -815,7 +864,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       activeArrears: Record<string, string[]>,
       hasActive: boolean 
     }) => c !== null);
-  }, [churches, payments, periodeAktif, billingSelections]);
+  }, [churches, payments, periodeAktif, billingSelections, churchAliasesMap]);
 
   // ==========================================
   // FUNGSI AKSI & TOMBOL
@@ -919,7 +968,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     let rawNum = parseInt(value.replace(/[^0-9]/g, ''));
     if (isNaN(rawNum)) rawNum = 0;
 
-    const pembayaranList = payments.filter(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
+    const aliases = churchAliasesMap[gerejaId] || [gerejaId];
+    const pembayaranList = payments.filter(p => 
+      aliases.includes(p.gerejaId) && 
+      p.kategori === kategori && 
+      normalizePeriode(p.periode) === normalizePeriode(periodeAktif)
+    );
     
     // Sum of all archived payments for this exact cell
     const sumArchived = pembayaranList.filter(p => p.receiptSent).reduce((sum, p) => sum + (p.details?.[field] || 0), 0);
@@ -987,7 +1041,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     let numValue = parseInt(value.replace(/[^0-9]/g, ''));
     if (isNaN(numValue)) numValue = 0;
 
-    const existingDist = distributions.find(d => d.gerejaId === gerejaId && d.periode === periodeAktif);
+    const aliases = churchAliasesMap[gerejaId] || [gerejaId];
+    const existingDist = distributions.find(d => 
+      aliases.includes(d.gerejaId) && 
+      normalizePeriode(d.periode) === normalizePeriode(periodeAktif)
+    );
     
     if (existingDist) {
       const updatedDetails = { ...existingDist.details, [field]: numValue };
@@ -1611,7 +1669,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     // For archived letters, show the highest number among the grouped archived payments for that church & period
     if (item && item.id) {
-      const churchArchivedPayments = payments.filter(p => p.gerejaId === item.id && p.periode === (item.periode || periodeAktif) && p.receiptSent && p.nomorSurat);
+      const aliases = churchAliasesMap[item.id] || [item.id];
+      const churchArchivedPayments = payments.filter(p => 
+        aliases.includes(p.gerejaId) && 
+        normalizePeriode(p.periode) === normalizePeriode(item.periode || periodeAktif) && 
+        p.receiptSent && p.nomorSurat
+      );
       if (churchArchivedPayments.length > 0) {
         const highestChurchNomor = churchArchivedPayments.reduce((max, p) => Math.max(max, p.nomorSurat!), base);
         return highestChurchNomor.toLocaleString('id-ID');
@@ -2289,7 +2352,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       {[...churches]
                         .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
                         .map(church => {
-                        const pendingPayments = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && !p.receiptSent);
+                        const aliases = churchAliasesMap[church.id] || [church.id];
+                        const pendingPayments = payments.filter(p => aliases.includes(p.gerejaId) && normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && !p.receiptSent);
                         if (pendingPayments.length === 0) return null;
 
                         const totalJumlah = pendingPayments.reduce((sum, p) => sum + p.jumlah, 0);
@@ -2438,7 +2502,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       {[...churches]
                         .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
                         .map(church => {
-                        const sentPayments = payments.filter(p => p.gerejaId === church.id && p.periode === periodeAktif && p.jumlah > 0 && p.receiptSent);
+                        const aliases = churchAliasesMap[church.id] || [church.id];
+                        const sentPayments = payments.filter(p => aliases.includes(p.gerejaId) && normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && p.receiptSent);
                         if (sentPayments.length === 0) return null;
 
                         return (
