@@ -274,6 +274,7 @@ export default function App() {
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [billingSelections, setBillingSelections] = useState<Record<string, Record<string, string[]>>>({}); // { churchId: { category: [colNames] } }
   const [sessionUpdatedCells, setSessionUpdatedCells] = useState<Record<string, Record<string, string[]>>>({}); // { gerejaId: { kategori: [colName1, colName2] } }
+  const [cellTypingState, setCellTypingState] = useState<Record<string, string>>({}); // { gerejaId_kategori_col: "typed string" }
 
   const canDragOrder = sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm;
 
@@ -818,24 +819,25 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const handleCellChange = async (gerejaId: string, kategori: 'laporan' | 'pelean' | 'alaman', field: string, value: string) => {
     if (!currentUserProfile) return; 
 
-    let numValue = parseInt(value.replace(/[^0-9]/g, ''));
-    if (isNaN(numValue)) numValue = 0;
+    let rawNum = parseInt(value.replace(/[^0-9]/g, ''));
+    if (isNaN(rawNum)) rawNum = 0;
 
     const pembayaranList = payments.filter(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
     
-    // Check if user is trying to modify an already archived cell
-    const isFieldArchived = pembayaranList.some(p => p.receiptSent && p.details && (p.details[field] || 0) > 0);
-    const archivedValue = pembayaranList.find(p => p.receiptSent && p.details && (p.details[field] || 0) > 0)?.details[field] || 0;
+    // Sum of all archived payments for this exact cell
+    const sumArchived = pembayaranList.filter(p => p.receiptSent).reduce((sum, p) => sum + (p.details?.[field] || 0), 0);
     
-    if (isFieldArchived && numValue !== archivedValue) {
-      alert("Catatan untuk kolom ini sudah diarsipkan dan tidak dapat diubah (Hanya data baru/kosong yang dapat diisi).");
+    // Calculate what the unarchived portion needs to be to match the total the user typed
+    const neededUnarchivedPart = rawNum - sumArchived;
+
+    // Reject if they try to reduce total below what's permanently archived
+    if (neededUnarchivedPart < 0) {
+      alert(`Mohon Maaf, Anda tidak bisa mengetik total yang lebih kecil dari arsip permanen (Rp ${formatRupiah(sumArchived)}). Apabila ingin membatalkan arsip, silakan hubungi superadmin.`);
       return;
     }
 
-    // Ignore event if value is exactly what's archived (no-op)
-    if (isFieldArchived && numValue === archivedValue) {
-       return;
-    }
+    // Ignore event if value is exactly what's archived and there's no pending payment to update (no-op)
+    // BUT if there IS a pending payment with a value, and they type exactly sumArchived, it means they erased the pending payment! So we must let it proceed (neededUnarchivedPart = 0)
     
     // Track session updates
     setSessionUpdatedCells(sess => {
@@ -857,7 +859,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const targetPayment = pembayaranList.find(p => !p.receiptSent);
 
     if (targetPayment) {
-      const updatedDetails = { ...targetPayment.details, [field]: numValue };
+      // Use the neededUnarchivedPart for the pending receipt
+      const updatedDetails = { ...targetPayment.details, [field]: neededUnarchivedPart };
       const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: any) => sum + ((val as number) || 0), 0);
       await updateDoc(doc(db, 'payments', targetPayment.id), {
         details: updatedDetails,
@@ -865,14 +868,16 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         tanggal: new Date().toISOString().split('T')[0]
       });
     } else {
+      if (neededUnarchivedPart === 0) return; // Don't create new doc for 0
+      
       // Create a brand new document using addDoc instead of deterministic ID
       // This allows multiple documents (archived vs unarchived) per church/category/period
       await addDoc(collection(db, 'payments'), {
         gerejaId, 
         kategori, 
         periode: periodeAktif,
-        details: { [field]: numValue },
-        jumlah: numValue,
+        details: { [field]: neededUnarchivedPart },
+        jumlah: neededUnarchivedPart,
         tanggal: new Date().toISOString().split('T')[0],
         receiptSent: false
       });
@@ -3457,8 +3462,27 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                             {currentUserProfile ? (
                                               <input 
                                                 type="text" 
-                                                value={val === 0 ? '' : formatInput(val)}
-                                                onChange={(e) => handleCellChange(item.id, activeTab as any, col, e.target.value)}
+                                                value={cellTypingState[`${item.id}_${activeTab}_${col}`] !== undefined ? cellTypingState[`${item.id}_${activeTab}_${col}`] : (val === 0 ? '' : formatInput(val))}
+                                                onChange={(e) => {
+                                                  const newStr = e.target.value;
+                                                  setCellTypingState(prev => ({...prev, [`${item.id}_${activeTab}_${col}`]: newStr}));
+                                                }}
+                                                onBlur={(e) => {
+                                                  const typedVal = cellTypingState[`${item.id}_${activeTab}_${col}`];
+                                                  if (typedVal !== undefined) {
+                                                    handleCellChange(item.id, activeTab as any, col, typedVal);
+                                                    setCellTypingState(prev => { 
+                                                      const newState = {...prev}; 
+                                                      delete newState[`${item.id}_${activeTab}_${col}`]; 
+                                                      return newState; 
+                                                    });
+                                                  }
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter') {
+                                                    e.currentTarget.blur();
+                                                  }
+                                                }}
                                                 className={`w-full py-3 text-right outline-none bg-transparent font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-400 font-bold' : 'text-red-400 font-medium') : (item.type === 'resort' ? 'text-indigo-700 font-bold' : 'text-slate-700 font-bold')}`}
                                                 placeholder="0"
                                               />
