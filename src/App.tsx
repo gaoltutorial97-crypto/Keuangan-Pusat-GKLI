@@ -33,7 +33,8 @@ import {
   Menu,
   Building,
   MapPin,
-  Home
+  Home,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
@@ -682,6 +683,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         return p.periode === periodeAktif && p.jumlah > 0 && matchResort && matchWilayah;
       })
       .reduce((sum, item) => sum + item.jumlah, 0);
+  }, [payments, churches, periodeAktif, filterResort, filterWilayah]);
+
+  const { pemasukanLaporan, pemasukanPelean, pemasukanAlaman } = useMemo(() => {
+    let lap = 0, pel = 0, al = 0;
+    payments.forEach(p => {
+      const church = churches.find(c => c.id === p.gerejaId);
+      if (!church) return;
+      const matchResort = filterResort === 'Semua Resort' || church.resort === filterResort;
+      const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
+      
+      if (p.periode === periodeAktif && p.jumlah > 0 && matchResort && matchWilayah) {
+        if (p.kategori === 'laporan') lap += p.jumlah;
+        else if (p.kategori === 'pelean') pel += p.jumlah;
+        else if (p.kategori === 'alaman') al += p.jumlah;
+      }
+    });
+    return { pemasukanLaporan: lap, pemasukanPelean: pel, pemasukanAlaman: al };
   }, [payments, churches, periodeAktif, filterResort, filterWilayah]);
   
   const stats = useMemo(() => {
@@ -2701,6 +2719,30 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       subtitle={periodeAktif}
                     />
                     <StatCard 
+                      title="Laporan (Persembahan II)" 
+                      value={`Rp ${formatRupiah(pemasukanLaporan)}`} 
+                      icon={<FileText size={24} />} 
+                      color="emerald" 
+                      subtitle="PEMASUKAN LAPORAN"
+                    />
+                     <StatCard 
+                      title="Pelean (Persembahan Khusus)" 
+                      value={`Rp ${formatRupiah(pemasukanPelean)}`} 
+                      icon={<Award size={24} />} 
+                      color="blue" 
+                      subtitle="PEMASUKAN KHUSUS"
+                    />
+                    <StatCard 
+                      title="Alaman (Literatur)" 
+                      value={`Rp ${formatRupiah(pemasukanAlaman)}`} 
+                      icon={<BookOpen size={24} />} 
+                      color="indigo" 
+                      subtitle="PEMASUKAN LITERATUR"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <StatCard 
                       title="Data Terverifikasi" 
                       value={`${formatRupiah(stats.totalLunas)}`} 
                       icon={<CheckCircle2 size={24} />} 
@@ -2723,36 +2765,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     />
                   </div>
 
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="judul-h2">Statistik Organisasi</h3>
-                  </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard 
-                      title="Jumlah Resort" 
-                      value={`${uniqueResorts.length > 1 ? uniqueResorts.length - 1 : 0}`} 
-                      icon={<Building size={20} />} 
-                      color="blue" 
-                    />
-                    <StatCard 
-                      title="Jumlah Wilayah" 
-                      value={`${uniqueWilayah.length > 1 ? uniqueWilayah.length - 1 : 0}`} 
-                      icon={<MapPin size={20} />} 
-                      color="indigo" 
-                    />
-                    <StatCard 
-                      title="Jumlah Pos PI" 
-                      value={`${churches.filter(c => c.type !== 'resort' && c.nama.toLowerCase().includes('pos pi')).length}`} 
-                      icon={<Home size={20} />} 
-                      color="emerald" 
-                    />
-                    <StatCard 
-                      title="Total Jemaat" 
-                      value={`${churches.filter(c => c.type !== 'resort').length}`} 
-                      icon={<Users size={20} />} 
-                      color="violet" 
-                      subtitle="TERMASUK POS PI"
-                    />
-                  </div>
+
                   
                   <div className="bg-gold-50 border border-gold-200 rounded-xl p-6 flex items-start space-x-4">
                     <div className="bg-gold-100 p-3 rounded-full">
