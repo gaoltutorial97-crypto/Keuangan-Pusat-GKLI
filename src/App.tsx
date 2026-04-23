@@ -40,7 +40,9 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react'
 import { toJpeg } from 'html-to-image';
 import { Church, Payment, User, AppSettings, TabType, Distribution } from './types';
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
-import { db, auth } from './firebase';
+import { auth, db } from './firebase';
+import PublicForm from './PublicForm';
+import { normalizeResortName, normalizeChurchName, getChurchIdentityKey } from './utils';
 import { 
   collection, 
   doc, 
@@ -180,19 +182,6 @@ const RESORT_PRIORITY: Record<string, number> = {
   'Batu Bara': 3
 };
 
-function normalizeResortName(name: string): string {
-  if (!name) return '';
-  let n = name.trim();
-  // Strip "RESORT " prefix if someone types it in search/filter
-  n = n.replace(/^RESORT\s+/i, '');
-  
-  // Fix specific typos or variations as requested by user
-  const up = n.toUpperCase();
-  if (up === 'SIMPANG LIMUM MEDAN') return 'Simpang Limun Medan';
-  if (up === 'PASAR IV MARINDAL II' || up === 'PERSIAPAN PASAR IV MARINDAL II') return 'Persiapan Pasar IV Marindal II';
-  return n;
-}
-
 function compareResorts(a: string, b: string): number {
   const normA = normalizeResortName(a);
   const normB = normalizeResortName(b);
@@ -203,6 +192,13 @@ function compareResorts(a: string, b: string): number {
 }
 
 export default function App() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isPublicForm = urlParams.get('form') === 'setor' || urlParams.get('f') === 's';
+
+  if (isPublicForm) {
+    return <PublicForm />;
+  }
+
   const printRef = useRef<HTMLDivElement>(null);
   // STATE NAVIGASI
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -277,7 +273,29 @@ export default function App() {
 
     // 2. Listen to Churches (Public read allowed in rules)
     const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), (snap) => {
-      const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Church));
+      const allData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Church));
+      
+      // Deduplicate: prefer "GKLI " prefixed names if double exists
+      const filteredMap = new Map<string, Church>();
+      allData.forEach(c => {
+        const key = getChurchIdentityKey(c);
+        const hasGKLI = c.nama.toUpperCase().startsWith('GKLI');
+        const existing = filteredMap.get(key);
+        if (!existing || (hasGKLI && !existing.nama.toUpperCase().startsWith('GKLI'))) {
+          filteredMap.set(key, c);
+        }
+      });
+
+      const data = Array.from(filteredMap.values());
+      const resortHeaders: Church[] = [];
+      
+      // Also ensure resort headers are generated correctly
+      const uniqueResortsMap = new Map<string, string>(); // normKey -> originalName
+      data.forEach(c => {
+        const normR = normalizeResortName(c.resort);
+        if (normR && normR !== '-') uniqueResortsMap.set(normR, c.resort);
+      });
+
       if (data.length > 0) setChurches(data);
       else if (isInitialLoading) setChurches(INITIAL_CHURCHES); 
     }, (error) => console.warn("Churches access restricted:", error.message));
@@ -2330,6 +2348,22 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                           )
                                         ))}
                                       </div>
+                                      {(p.buktiTransfer || p.buktiTransferBase64) && (
+                                        <div className="mt-3 ml-4 p-2 bg-slate-50 border border-slate-200 rounded text-[10px]">
+                                          {p.buktiTransfer && <p className="text-slate-600 font-medium whitespace-pre-wrap"><span className="font-bold">Catatan:</span> {p.buktiTransfer}</p>}
+                                          {p.buktiTransferBase64 && (
+                                            <button 
+                                              onClick={() => {
+                                                const w = window.open("");
+                                                w?.document.write(`<html><body style="margin:0;display:flex;justify-content:center;background:#000;"><img src="${p.buktiTransferBase64}" style="max-height:100vh;max-width:100vw;object-fit:contain;"/></body></html>`);
+                                              }}
+                                              className="mt-2 text-indigo-600 font-bold underline hover:text-indigo-800"
+                                            >
+                                              Lihat Lampiran Gambar Transfer
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -2454,6 +2488,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                           <button onClick={() => handleDeletePayment(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-0.5 rounded" title="Hapus Data">
                                             <Trash2 size={12} />
                                           </button>
+                                          {p.buktiTransferBase64 && (
+                                            <button 
+                                              onClick={() => {
+                                                const w = window.open("");
+                                                w?.document.write(`<html><body style="margin:0;display:flex;justify-content:center;background:#000;"><img src="${p.buktiTransferBase64}" style="max-height:100vh;max-width:100vw;object-fit:contain;"/></body></html>`);
+                                              }}
+                                              className="text-indigo-500 hover:text-indigo-700 font-bold ml-2 underline text-[9px]"
+                                            >
+                                              Lihat Lampiran
+                                            </button>
+                                          )}
                                         </div>
                                         <span className="text-slate-500 italic text-[10px] ml-2">Dikirim: {p.receiptSentAt ? new Date(p.receiptSentAt).toLocaleDateString('id-ID') : '-'}</span>
                                         <span className="text-green-600 font-bold ml-auto">Rp {formatRupiah(p.jumlah)}</span>
@@ -2695,20 +2740,33 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               )}
               {activeTab === 'dashboard' && (
                 <div className="space-y-8">
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center no-print">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-200 pr-4">Filter Dashboard:</span>
-                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                      <span className="text-[9px] font-bold text-gold-600 uppercase">Resort</span>
-                      <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
-                        {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center no-print">
+                    <div className="flex flex-wrap gap-4 items-center">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-200 pr-4">Filter Dashboard:</span>
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                        <span className="text-[9px] font-bold text-gold-600 uppercase">Resort</span>
+                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                        <span className="text-[9px] font-bold text-gold-600 uppercase">Wilayah</span>
+                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+                          {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                      <span className="text-[9px] font-bold text-gold-600 uppercase">Wilayah</span>
-                      <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
-                        {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
-                      </select>
-                    </div>
+                    <button 
+                      onClick={() => {
+                        const baseUrl = window.location.origin + window.location.pathname;
+                        const url = `${baseUrl}?f=s`;
+                        navigator.clipboard.writeText(url);
+                        alert(`Link Formulir Jemaat disalin ke clipboard:\n\n${url}\n\nKirimkan link ini ke jemaat untuk melakukan penyetoran langsung.`);
+                      }}
+                      className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold text-xs hover:bg-indigo-100 transition-colors border border-indigo-200"
+                    >
+                      <Share2 size={14} /> Salin Link Form Jemaat
+                    </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard 

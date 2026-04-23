@@ -1,4 +1,5 @@
 import { Church, AppSettings } from './types';
+import { FileText, Award, BookOpen } from 'lucide-react';
 
 export const SPREADSHEET_COLUMNS = {
   laporan: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
@@ -11,6 +12,12 @@ export const CATEGORY_LABELS: Record<string, string> = {
   pelean: 'Persembahan Khusus',
   alaman: 'Literatur',
   khusus: 'Persembahan Khusus'
+};
+
+export const CATEGORY_ICONS = {
+  laporan: FileText,
+  pelean: Award,
+  alaman: BookOpen
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {

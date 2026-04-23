@@ -20,6 +20,8 @@ export interface Payment {
   tanggal: string;
   receiptSent?: boolean;
   receiptSentAt?: string;
+  buktiTransfer?: string;
+  buktiTransferBase64?: string;
 }
 
 export interface User {
