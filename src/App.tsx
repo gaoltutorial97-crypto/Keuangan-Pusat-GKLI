@@ -543,19 +543,42 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     return data
       .map(gereja => {
-        const pembayaran = payments.find(p => p.gerejaId === gereja.id && p.kategori === kategori && p.periode === periodeAktif);
+        const pembayaranList = payments.filter(p => p.gerejaId === gereja.id && p.kategori === kategori && p.periode === periodeAktif);
         
-        let isLunas = false;
-        if (pembayaran && pembayaran.details) {
-          isLunas = columns.every(col => (pembayaran.details[col] || 0) > 0);
+        let combinedDetails: Record<string, number> = {};
+        pembayaranList.forEach(p => {
+          if (p.details) {
+            combinedDetails = { ...combinedDetails, ...p.details };
+          }
+        });
+
+        let status = 'Menunggak';
+        const filledColumnsCount = columns.filter(col => (combinedDetails[col] || 0) > 0).length;
+        
+        if (filledColumnsCount === columns.length) {
+          status = 'Lunas';
+        } else if (filledColumnsCount > 0) {
+          status = 'Proses';
+        }
+
+        const combinedJumlah = Object.values(combinedDetails).reduce((sum, val) => sum + ((val as number) || 0), 0) as number;
+        
+        // Find latest date from all fragments
+        let latestDate = null;
+        if (pembayaranList.length > 0) {
+          latestDate = pembayaranList.reduce((latest, current) => {
+            if (!latest) return current.tanggal;
+            if (!current.tanggal) return latest;
+            return new Date(current.tanggal) > new Date(latest) ? current.tanggal : latest;
+          }, null as string | null);
         }
 
         return {
           ...gereja,
-          status: isLunas ? 'Lunas' : 'Menunggak',
-          jumlah: pembayaran ? pembayaran.jumlah : 0,
-          tanggal: pembayaran ? pembayaran.tanggal : null,
-          details: pembayaran && pembayaran.details ? pembayaran.details : {},
+          status: status,
+          jumlah: combinedJumlah,
+          tanggal: latestDate,
+          details: combinedDetails,
           kategori: kategori,
           periode: periodeAktif
         };
@@ -602,6 +625,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const stats = useMemo(() => {
     let totalMenunggak = 0;
     let totalLunas = 0;
+    let totalProses = 0;
 
     [dataAlaman, dataPelean, dataLaporanKeuangan].forEach((dataset) => {
       dataset.filter(item => {
@@ -611,8 +635,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       }).forEach(item => {
         if (item.status === 'Menunggak') {
           totalMenunggak++;
-        } else {
+        } else if (item.status === 'Lunas') {
           totalLunas++;
+        } else {
+          totalProses++;
         }
       });
     });
@@ -626,7 +652,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       return sum + qty;
     }, 0);
 
-    return { totalMenunggak, totalLunas, totalDistribusiItems };
+    return { totalMenunggak, totalLunas, totalProses, totalDistribusiItems };
   }, [dataAlaman, dataPelean, dataLaporanKeuangan, dataDistribusi, filterResort, filterWilayah]);
 
   const churchesWithArrears = useMemo(() => {
@@ -641,8 +667,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           // Resort entities only follow Pelean (Special Offerings) and Alaman (Literature)
           if (church.type === 'resort' && cat === 'laporan') return;
 
-          const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
-          const unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+          const pembayaranList = payments.filter(p => p.gerejaId === church.id && p.kategori === cat && p.periode === periodeAktif);
+          let combinedDetails: Record<string, number> = {};
+          pembayaranList.forEach(p => {
+             if (p.details) combinedDetails = { ...combinedDetails, ...p.details };
+          });
+
+          const unpaid = cols.filter(col => !combinedDetails[col] || combinedDetails[col] === 0);
           if (unpaid.length > 0) {
             allPotentialArrears[cat] = unpaid;
             hasPotential = true;
@@ -790,7 +821,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     let numValue = parseInt(value.replace(/[^0-9]/g, ''));
     if (isNaN(numValue)) numValue = 0;
 
-    const existingPayment = payments.find(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
+    const pembayaranList = payments.filter(p => p.gerejaId === gerejaId && p.kategori === kategori && p.periode === periodeAktif);
+    
+    // Check if user is trying to modify an already archived cell
+    const isFieldArchived = pembayaranList.some(p => p.receiptSent && p.details && (p.details[field] || 0) > 0);
+    const archivedValue = pembayaranList.find(p => p.receiptSent && p.details && (p.details[field] || 0) > 0)?.details[field] || 0;
+    
+    if (isFieldArchived && numValue !== archivedValue) {
+      alert("Catatan untuk kolom ini sudah diarsipkan dan tidak dapat diubah (Hanya data baru/kosong yang dapat diisi).");
+      return;
+    }
+
+    // Ignore event if value is exactly what's archived (no-op)
+    if (isFieldArchived && numValue === archivedValue) {
+       return;
+    }
     
     // Track session updates
     setSessionUpdatedCells(sess => {
@@ -808,24 +853,28 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       return sess;
     });
 
-    if (existingPayment) {
-      const updatedDetails = { ...existingPayment.details, [field]: numValue };
-      const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: number) => sum + (val || 0), 0);
-      await updateDoc(doc(db, 'payments', existingPayment.id), {
+    // Find if there is an unarchived 'pending' document we can write to
+    const targetPayment = pembayaranList.find(p => !p.receiptSent);
+
+    if (targetPayment) {
+      const updatedDetails = { ...targetPayment.details, [field]: numValue };
+      const updatedJumlah = Object.values(updatedDetails).reduce((sum: number, val: any) => sum + ((val as number) || 0), 0);
+      await updateDoc(doc(db, 'payments', targetPayment.id), {
         details: updatedDetails,
         jumlah: updatedJumlah,
         tanggal: new Date().toISOString().split('T')[0]
       });
     } else {
-      // Deterministic ID to prevent race conditions during fast typing
-      const stableId = `${gerejaId}_${kategori}_${periodeAktif.replace(/\s+/g, '_')}`;
-      await setDoc(doc(db, 'payments', stableId), {
+      // Create a brand new document using addDoc instead of deterministic ID
+      // This allows multiple documents (archived vs unarchived) per church/category/period
+      await addDoc(collection(db, 'payments'), {
         gerejaId, 
         kategori, 
         periode: periodeAktif,
         details: { [field]: numValue },
         jumlah: numValue,
-        tanggal: new Date().toISOString().split('T')[0]
+        tanggal: new Date().toISOString().split('T')[0],
+        receiptSent: false
       });
     }
   };
@@ -930,6 +979,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const handleDeletePayment = async (paymentId: string) => {
     if (!currentUserProfile) return;
+    const payment = payments.find(p => p.id === paymentId);
+    if (payment?.receiptSent) {
+      alert("Tidak dapat menghapus data yang sudah diarsipkan. Silakan buat entri baru untuk data terbaru.");
+      return;
+    }
+
     if (window.confirm("Apakah Anda yakin ingin menghapus data pembayaran ini secara permanen?")) {
       try {
         await deleteDoc(doc(db, 'payments', paymentId));
@@ -1963,13 +2018,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       {/* MOBILE OVERLAY */}
       {mobileSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-30 lg:hidden"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] lg:hidden"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
 
       {/* SIDEBAR */}
-      <aside className={`w-64 bg-slate-900 text-white flex flex-col fixed h-full z-40 lg:z-20 shadow-2xl no-print border-r border-white/5 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`w-64 bg-slate-900 text-white flex flex-col fixed h-full z-[100] shadow-2xl no-print border-r border-white/5 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="p-6 flex flex-col border-b border-white/5 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex justify-between items-center lg:block">
             <div className="flex items-center space-x-4 mb-0 lg:mb-2 group cursor-pointer">
@@ -3376,7 +3431,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-gold-700 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.wilayah || '-'}</td>
                                   <td className={`px-4 py-3 text-center ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`}>
                                     {item.type !== 'resort' && item.status && (
-                                      <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                      <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : item.status === 'Proses' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                                         {item.status.toUpperCase()}
                                       </span>
                                     )}
