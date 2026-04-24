@@ -41,7 +41,6 @@ import { toJpeg } from 'html-to-image';
 import { Church, Payment, User, AppSettings, TabType, Distribution } from './types';
 import { INITIAL_CHURCHES, DEFAULT_SETTINGS, SPREADSHEET_COLUMNS, CATEGORY_LABELS } from './constants';
 import { auth, db } from './firebase';
-import PublicForm from './PublicForm';
 import { normalizeResortName, normalizeChurchName, getChurchIdentityKey, normalizePeriode } from './utils';
 import { 
   collection, 
@@ -192,13 +191,6 @@ function compareResorts(a: string, b: string): number {
 }
 
 export default function App() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const isPublicForm = urlParams.get('form') === 'setor' || urlParams.get('f') === 's';
-
-  if (isPublicForm) {
-    return <PublicForm />;
-  }
-
   const printRef = useRef<HTMLDivElement>(null);
   // STATE NAVIGASI
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -1963,82 +1955,55 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             </button>
             <button 
               onClick={async (e) => {
+                if (!printData?.wa) return alert("Nomor WA tidak tersedia pada data gereja ini.");
+                
                 const btn = e.currentTarget;
                 btn.disabled = true;
                 const originalText = btn.innerHTML;
                 btn.innerHTML = 'Memproses...';
 
                 try {
-                  const el = document.getElementById('printable-page');
-                  if (el) {
-                    const dataUrl = await toJpeg(el, { 
-                      quality: 1, 
-                      backgroundColor: '#ffffff',
-                      pixelRatio: 2,
-                      width: el.scrollWidth,
-                      height: el.scrollHeight,
-                      style: {
-                        transform: 'scale(1)',
-                        transformOrigin: 'top left',
-                        margin: '0',
-                        padding: '1.5cm 2cm 1.5cm 2cm',
-                      }
-                    });
-                    const link = document.createElement('a');
-                    link.download = `GKLI_${printData?.nama || 'Surat'}.jpg`;
-                    link.href = dataUrl;
-                    link.click();
-                    
-                    let rincianItems = '';
-                    if (printType === 'global-receipt') {
-                      Object.entries(printData.updates || {}).forEach(([cat, fields]: [any, any]) => {
-                        sortPaymentDetailsEntries(cat, fields.map((f: string) => [f, null])).forEach(([f]) => {
-                          const val = printData.allDetails?.[cat]?.[f];
-                          if (val > 0) {
-                            rincianItems += `\n- ${getFormattedPaymentName(cat, f)} : Rp ${formatRupiah(val)}`;
-                          }
-                        });
-                      });
-                    } else if (printData.items) {
-                      sortPaymentDetailsEntries(printData.kategori, printData.items.map((col: string) => [col, null])).forEach(([col]) => {
-                        const val = printData.details?.[col] || 0;
+                  let rincianItems = '';
+                  
+                  if (printType === 'global-receipt') {
+                    Object.entries(printData.updates || {}).forEach(([cat, fields]: [any, any]) => {
+                      const catName = cat === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                      cat === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
+                                      (appSettings.menuAlaman || 'Literatur');
+                      rincianItems += `\n*${catName}*`;
+                      sortPaymentDetailsEntries(cat, fields.map((f: string) => [f, null])).forEach(([f]) => {
+                        const val = printData.allDetails?.[cat]?.[f];
                         if (val > 0) {
-                          rincianItems += `\n- ${getFormattedPaymentName(printData.kategori, col)} : Rp ${formatRupiah(val)}`;
+                          rincianItems += `\n- ${getFormattedPaymentName(cat, f)} : Rp ${formatRupiah(val)}`;
                         }
                       });
-                    }
-
-                    const waMessage = `Shalom Majelis Jemaat *${printData?.nama}* (Resort ${printData?.resort}).\n\nKantor Pusat GKLI mengucapkan *TERIMA KASIH* karena telah menyetorkan persembahan ke Kantor Pusat untuk periode ${printData?.periode || periodeAktif}.\n\nBerikut ini adalah keterangan pengantar penerimaan dan itemnya:${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nTerima kasih atas pelayanannya. Tuhan Yesus memberkati.\n\n_Catatan: Gambar surat resmi telah terunduh, dan tersalin (copy). Silakan langsung "Paste/Tempel" (Ctrl+V) di kolom chat gambar ini!_`;
-                    
-                    if (navigator.share) {
-                      try {
-                        const blob = await (await fetch(dataUrl)).blob();
-                        const file = new File([blob], `GKLI_${printData?.nama || 'Surat'}.jpg`, { type: 'image/jpeg' });
-                        await navigator.share({
-                          title: 'Surat Tanda Terima',
-                          text: waMessage,
-                          files: [file]
-                        });
-                        return;
-                      } catch (err) {
-                        console.warn('Share API blocked or failed, falling back to wa.me', err);
+                    });
+                  } else if (printData.items) {
+                    const catName = printData.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                    printData.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
+                                    (appSettings.menuAlaman || 'Literatur');
+                    rincianItems += `\n*${catName}*`;
+                    sortPaymentDetailsEntries(printData.kategori, printData.items.map((col: string) => [col, null])).forEach(([col]) => {
+                      const val = printData.details?.[col] || 0;
+                      if (val > 0) {
+                        rincianItems += `\n- ${getFormattedPaymentName(printData.kategori, col)} : Rp ${formatRupiah(val)}`;
                       }
-                    }
-                    
-                    try {
-                      const res = await fetch(dataUrl);
-                      const blob = await res.blob();
-                      if (navigator.clipboard && window.ClipboardItem) {
-                        await navigator.clipboard.write([
-                          new ClipboardItem({ [blob.type]: blob })
-                        ]);
-                        alert('Gambar ucapan terima kasih telah COPY ke clipboard! Saat WhatsApp terbuka, silakan "Paste" (Ctrl+V) di kolom chat untuk melampirkannya.');
-                      }
-                    } catch (e) {
-                      console.log('Clipboard copy failed:', e);
-                    }
+                    });
+                  }
 
-                    window.open(`https://wa.me/${printData.wa}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                  let waMessage = '';
+                  if (printType === 'global-arrears' || printType === 'tunggakan') {
+                    waMessage = `Shalom Majelis Jemaat *${printData?.nama}*.\n\nKantor Pusat GKLI ingin mengingatkan terkait tunggakan administrasi:\n\n${rincianItems}\n\nMohon kesediaannya untuk menyelesaikannya. Terima kasih, Tuhan memberkati.\n\nBendum GKLI`;
+                  } else {
+                    waMessage = `Ucapan Terimakasih telah menyetorkan dan dilengkapi Rincian:${rincianItems}\n\nTotal: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}\n\nTerima kasih, Tuhan Yesus memberkati.\n\nBendum GKLI`;
+                  }
+
+                  window.open(`https://wa.me/${printData.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                  
+                  if (printType === 'global-receipt' && printData.paymentIds && printData.paymentIds.length > 0) {
+                    if (window.confirm("Apakah Anda ingin memindahkan data pembayaran ini ke arsip sekarang?")) {
+                      await handleMarkPaymentsAsSent(printData.paymentIds);
+                    }
                   }
                 } catch (err) {
                   console.error(err);
@@ -2581,7 +2546,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   onClick={async () => {
                                     let rincian = '';
                                     pendingPayments.forEach(p => {
-                                      rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
+                                      const catName = p.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                                      p.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
+                                                      (appSettings.menuAlaman || 'Literatur');
+                                      rincian += `\n*${catName}*`;
                                       sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
                                         if ((val as number) > 0) {
                                           rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
@@ -2589,7 +2557,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       });
                                     });
                                     
-                                    const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), kami dari Kantor Pusat GKLI mengucapkan **terima kasih banyak** atas persembahan/setoran periode ${periodeAktif}.\n\nRincian yang diterima:${rincian}\n\n*TOTAL: Rp ${formatRupiah(totalJumlah)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita bersama. Anda juga dapat meminta cetak PDF resmi dari bukti ini kepada kami.`;
+                                    const text = `Ucapan Terimakasih telah menyetorkan dan dilengkapi Rincian:${rincian}\n\nTotal: Rp ${formatRupiah(totalJumlah)}\n\nTerima kasih, Tuhan Yesus memberkati.\n\nBendum GKLI`;
                                     
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
@@ -2722,14 +2690,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     const total = sentPayments.reduce((sum, p) => sum + p.jumlah, 0);
                                     let rincian = "";
                                     sentPayments.forEach(p => {
-                                      rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
+                                      const catName = p.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                                      p.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
+                                                      (appSettings.menuAlaman || 'Literatur');
+                                      rincian += `\n*${catName}*`;
                                       sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
                                         if ((val as number) > 0) {
                                           rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
                                         }
                                       });
                                     });
-                                    const text = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}* (Resort ${church.resort}), berikut kami kirimkan ulang rincian tanda terima periode ${periodeAktif}.\n\nRincian:${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nTerima kasih, Tuhan memberkati.`;
+                                    const text = `Ucapan Terimakasih telah menyetorkan dan dilengkapi Rincian:${rincian}\n\nTotal: Rp ${formatRupiah(total)}\n\nTerima kasih, Tuhan Yesus memberkati.\n\nBendum GKLI`;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                     } else {
