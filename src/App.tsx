@@ -4706,6 +4706,18 @@ function doPost(e) {
                        2. Lalu klik tautan <b>"Buka ..."</b> (atau "Go to ... (unsafe)") yang muncul di bagian paling bawah.
                      </p>
                    </div>
+                   <div className="border-t border-amber-800/50 pt-3">
+                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error: "Google Drive API has not been used..."</p>
+                     <p className="text-xs text-amber-200">
+                       Error ini terjadi karena API Google Drive/Sheets belum aktif di project Google Cloud Anda.
+                       <br/>
+                       <b>Cara mengaktifkannya:</b><br/>
+                       1. Buka <b>Google Cloud Console</b>.<br/>
+                       2. Cari <b>"Google Drive API"</b> di kotak pencarian paling atas, klik, lalu pilih <b>"Enable" (Aktifkan)</b>.<br/>
+                       3. Cari juga <b>"Google Sheets API"</b>, klik, dan pilih <b>"Enable" (Aktifkan)</b>.<br/>
+                       4. Tunggu sekitar 1-2 menit agar sistem Google memperbarui data, lalu coba klik <b>"Sync ke Drive"</b> lagi di aplikasi ini.
+                     </p>
+                   </div>
                  </div>
                  <p className="text-xs text-amber-500 font-bold italic mb-3">
                    * Anda tidak perlu memasang Apps script lagi.
