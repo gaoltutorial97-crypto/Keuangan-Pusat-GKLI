@@ -1967,35 +1967,43 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   
                   if (printType === 'global-receipt') {
                     Object.entries(printData.updates || {}).forEach(([cat, fields]: [any, any]) => {
-                      const catName = cat === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                      const catName = (cat === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
                                       cat === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
-                                      (appSettings.menuAlaman || 'Literatur');
-                      rincianItems += `\n*${catName}*`;
-                      sortPaymentDetailsEntries(cat, fields.map((f: string) => [f, null])).forEach(([f]) => {
-                        const val = printData.allDetails?.[cat]?.[f];
-                        if (val > 0) {
-                          rincianItems += `\n- ${getFormattedPaymentName(cat, f)} : Rp ${formatRupiah(val)}`;
-                        }
-                      });
-                    });
-                  } else if (printData.items) {
-                    const catName = printData.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
-                                    printData.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
-                                    (appSettings.menuAlaman || 'Literatur');
-                    rincianItems += `\n*${catName}*`;
-                    sortPaymentDetailsEntries(printData.kategori, printData.items.map((col: string) => [col, null])).forEach(([col]) => {
-                      const val = printData.details?.[col] || 0;
-                      if (val > 0) {
-                        rincianItems += `\n- ${getFormattedPaymentName(printData.kategori, col)} : Rp ${formatRupiah(val)}`;
+                                      (appSettings.menuAlaman || 'Literatur')).toUpperCase();
+                      const catSum = fields.reduce((sum: number, f: string) => sum + (printData.allDetails?.[cat]?.[f] || 0), 0);
+                      if (catSum > 0) {
+                        rincianItems += `\n${catName} (Rp ${formatRupiah(catSum)}):`;
+                        sortPaymentDetailsEntries(cat, fields.map((f: string) => [f, null])).forEach(([f]) => {
+                          const val = printData.allDetails?.[cat]?.[f];
+                          if (val > 0) {
+                            rincianItems += `\n* ${getFormattedPaymentName(cat, f)} : Rp ${formatRupiah(val)}`;
+                          }
+                        });
                       }
                     });
+                  } else if (printData.items) {
+                    const catName = (printData.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                    printData.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
+                                    (appSettings.menuAlaman || 'Literatur')).toUpperCase();
+                    let catSum = 0;
+                    printData.items.forEach((col: string) => catSum += (printData.details?.[col] || 0));
+                    if (catSum > 0) {
+                      rincianItems += `\n${catName} (Rp ${formatRupiah(catSum)}):`;
+                      sortPaymentDetailsEntries(printData.kategori, printData.items.map((col: string) => [col, null])).forEach(([col]) => {
+                        const val = printData.details?.[col] || 0;
+                        if (val > 0) {
+                          rincianItems += `\n* ${getFormattedPaymentName(printData.kategori, col)} : Rp ${formatRupiah(val)}`;
+                        }
+                      });
+                    }
                   }
 
                   let waMessage = '';
+                  const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
                   if (printType === 'global-arrears' || printType === 'tunggakan') {
-                    waMessage = `Shalom Majelis Jemaat *${printData?.nama}*.\n\nKantor Pusat GKLI ingin mengingatkan terkait tunggakan administrasi:\n\n${rincianItems}\n\nMohon kesediaannya untuk menyelesaikannya. Terima kasih, Tuhan memberkati.\n\nBendum GKLI`;
+                    waMessage = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${printData?.nama} Resort ${printData?.resort}, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan yang belum kami terima (Tunggakan):\n${rincianItems}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
                   } else {
-                    waMessage = `Ucapan Terimakasih telah menyetorkan dan dilengkapi Rincian:${rincianItems}\n\nTotal: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}\n\nTerima kasih, Tuhan Yesus memberkati.\n\nBendum GKLI`;
+                    waMessage = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${printData?.nama} Resort ${printData?.resort}, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincianItems}\n\nTOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
                   }
 
                   window.open(`https://wa.me/${printData.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(waMessage)}`, '_blank');
@@ -2546,18 +2554,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   onClick={async () => {
                                     let rincian = '';
                                     pendingPayments.forEach(p => {
-                                      const catName = p.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                      const catName = (p.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
                                                       p.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
-                                                      (appSettings.menuAlaman || 'Literatur');
-                                      rincian += `\n*${catName}*`;
-                                      sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
-                                        if ((val as number) > 0) {
-                                          rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
-                                        }
-                                      });
+                                                      (appSettings.menuAlaman || 'Literatur')).toUpperCase();
+                                      let catSum = 0;
+                                      Object.values(p.details || {}).forEach(val => catSum += ((val as number) || 0));
+                                      if (catSum > 0) {
+                                        rincian += `\n${catName} (Rp ${formatRupiah(catSum)}):`;
+                                        sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
+                                          if ((val as number) > 0) {
+                                            rincian += `\n* ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
+                                          }
+                                        });
+                                      }
                                     });
                                     
-                                    const text = `Ucapan Terimakasih telah menyetorkan dan dilengkapi Rincian:${rincian}\n\nTotal: Rp ${formatRupiah(totalJumlah)}\n\nTerima kasih, Tuhan Yesus memberkati.\n\nBendum GKLI`;
+                                    const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+                                    const text = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${church.nama} Resort ${church.resort}, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\nTOTAL: Rp ${formatRupiah(totalJumlah)}\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
                                     
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
@@ -2690,17 +2703,23 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     const total = sentPayments.reduce((sum, p) => sum + p.jumlah, 0);
                                     let rincian = "";
                                     sentPayments.forEach(p => {
-                                      const catName = p.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                      const catName = (p.kategori === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
                                                       p.kategori === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
-                                                      (appSettings.menuAlaman || 'Literatur');
-                                      rincian += `\n*${catName}*`;
-                                      sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
-                                        if ((val as number) > 0) {
-                                          rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
-                                        }
-                                      });
+                                                      (appSettings.menuAlaman || 'Literatur')).toUpperCase();
+                                      let catSum = 0;
+                                      Object.values(p.details || {}).forEach(val => catSum += ((val as number) || 0));
+                                      if (catSum > 0) {
+                                        rincian += `\n${catName} (Rp ${formatRupiah(catSum)}):`;
+                                        sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
+                                          if ((val as number) > 0) {
+                                            rincian += `\n* ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
+                                          }
+                                        });
+                                      }
                                     });
-                                    const text = `Ucapan Terimakasih telah menyetorkan dan dilengkapi Rincian:${rincian}\n\nTotal: Rp ${formatRupiah(total)}\n\nTerima kasih, Tuhan Yesus memberkati.\n\nBendum GKLI`;
+                                    
+                                    const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+                                    const text = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${church.nama} Resort ${church.resort}, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\nTOTAL: Rp ${formatRupiah(total)}\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                     } else {
