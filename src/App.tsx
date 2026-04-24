@@ -447,25 +447,98 @@ export default function App() {
          finalSheetData.sheets?.forEach((s: any) => {
            const title = s.properties.title;
            const sid = s.properties.sheetId;
+           
            if (title === pLaporanTitle || title === pKhususTitle || title === literaturTitle) {
+             
+             // Hapus banding (warna selang-seling) lama jika ada
+             if (s.bandedRanges) {
+               s.bandedRanges.forEach((br: any) => {
+                 formatRequests.push({ deleteBanding: { bandedRangeId: br.bandedRangeId } });
+               });
+             }
+
+             let colsCount = 19;
+             if (title === pLaporanTitle) colsCount = 19;
+             if (title === pKhususTitle) colsCount = 12;
+             if (title === literaturTitle) colsCount = 16;
+
+             // 1. Baris Pertama dibekukan (Frozen row)
              formatRequests.push({
                updateSheetProperties: {
                  properties: { sheetId: sid, gridProperties: { frozenRowCount: 1 } },
                  fields: "gridProperties.frozenRowCount"
                }
              });
+             
+             // 2. Format Header (Tebal, Latar Biru Gelap, Teks Putih, Tengah)
              formatRequests.push({
                repeatCell: {
-                 range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1 },
+                 range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: colsCount },
                  cell: {
                    userEnteredFormat: {
                      backgroundColor: { red: 0.1, green: 0.16, blue: 0.23 }, // dark blue-slate
-                     textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }
+                     textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                     horizontalAlignment: "CENTER",
+                     verticalAlignment: "MIDDLE"
                    }
                  },
-                 fields: "userEnteredFormat(backgroundColor,textFormat)"
+                 fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                }
              });
+
+             // 3. Banding (warna selang-seling untuk baris data)
+             formatRequests.push({
+               addBanding: {
+                 bandedRange: {
+                   range: { sheetId: sid, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: colsCount },
+                   rowProperties: {
+                     firstBandColor: { red: 1, green: 1, blue: 1 },
+                     secondBandColor: { red: 0.95, green: 0.96, blue: 0.98 }
+                   }
+                 }
+               }
+             });
+
+             // 4. Border (Garis tabel) tipis
+             formatRequests.push({
+               updateBorders: {
+                 range: { sheetId: sid, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: colsCount },
+                 top: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                 bottom: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                 left: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                 right: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                 innerHorizontal: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                 innerVertical: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } }
+               }
+             });
+
+             // 5. Format Mata Uang (Currency)
+             let curStart = 0; let curEnd = 0;
+             if (title === pLaporanTitle) { curStart = 5; curEnd = 18; }
+             if (title === pKhususTitle) { curStart = 4; curEnd = 11; }
+             if (title === literaturTitle) { curStart = 14; curEnd = 15; }
+             
+             if (curStart < curEnd) {
+               formatRequests.push({
+                 repeatCell: {
+                   range: { sheetId: sid, startRowIndex: 1, startColumnIndex: curStart, endColumnIndex: curEnd },
+                   cell: {
+                     userEnteredFormat: {
+                       numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }
+                     }
+                   },
+                   fields: "userEnteredFormat.numberFormat"
+                 }
+               });
+             }
+
+             // 6. Auto-resize lebar kolom
+             formatRequests.push({
+               autoResizeDimensions: {
+                 dimensions: { sheetId: sid, dimension: "COLUMNS", startIndex: 0, endIndex: colsCount }
+               }
+             });
+             
            }
          });
 
@@ -478,6 +551,7 @@ export default function App() {
          }
        } catch (ignore) {
          // If formatting fails, ignore it to not ruin the success flow.
+         console.error("Gagal melakukan formatting:", ignore);
        }
 
        toastLabel.remove();
