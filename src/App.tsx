@@ -496,7 +496,7 @@ export default function App() {
              // Local Dashboard Rows (Row 0, 1, 2, 3)
              formatRequests.push({
                updateCells: {
-                 range: { sheetId: sid, startRowIndex: 0, startColumnIndex: 0 },
+                 range: { sheetId: sid, startRowIndex: 0, endRowIndex: 4, startColumnIndex: 0, endColumnIndex: colsCount },
                  rows: [
                    // Row 0: Title
                    { values: [ makeCellLocal("📊 " + title.toUpperCase(), false, locFmt) ] },
@@ -704,7 +704,7 @@ export default function App() {
 
            formatRequests.push({
              updateCells: {
-               range: { sheetId: dashId, startRowIndex: 0, startColumnIndex: 0 },
+               range: { sheetId: dashId, startRowIndex: 0, endRowIndex: dashRows.length, startColumnIndex: 0, endColumnIndex: 20 },
                rows: dashRows,
                fields: "userEnteredValue,userEnteredFormat,dataValidation"
              }
