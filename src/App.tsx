@@ -430,19 +430,19 @@ export default function App() {
           { range: `'${pKhususTitle}'!C3`, values: [ [ `=SUMIF(D:D, $C$2, K:K)` ] ] },
           { range: `'${literaturTitle}'!C3`, values: [ [ `=SUMIF(D:D, $C$2, O:O)` ] ] },
           // Dashboard Formulas
-          { range: "'DASHBOARD'!B8", values: [ [ `=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!R:R)` ] ] },
-          { range: "'DASHBOARD'!D8", values: [ [ `=SUMIF('${pKhususTitle}'!D:D, $C$5, '${pKhususTitle}'!K:K)` ] ] },
-          { range: "'DASHBOARD'!F8", values: [ [ `=SUMIF('${literaturTitle}'!D:D, $C$5, '${literaturTitle}'!O:O)` ] ] },
-          { range: "'DASHBOARD'!H8", values: [ [ `=B8+D8+F8` ] ] },
+          { range: `'${dashTitle}'!B8`, values: [ [ `=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!R:R)` ] ] },
+          { range: `'${dashTitle}'!D8`, values: [ [ `=SUMIF('${pKhususTitle}'!D:D, $C$5, '${pKhususTitle}'!K:K)` ] ] },
+          { range: `'${dashTitle}'!F8`, values: [ [ `=SUMIF('${literaturTitle}'!D:D, $C$5, '${literaturTitle}'!O:O)` ] ] },
+          { range: `'${dashTitle}'!H8`, values: [ [ `=B8+D8+F8` ] ] },
        ];
        
        const colLetters = ['F','G','H','I','J','K','L','M','N','O','P','Q'];
        for (let i = 0; i < 12; i++) {
-           updateData.push({ range: `'DASHBOARD'!C${11 + i}`, values: [ [ `=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})` ] ] });
+           updateData.push({ range: `'${dashTitle}'!C${11 + i}`, values: [ [ `=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})` ] ] });
        }
-       updateData.push({ range: "'DASHBOARD'!I11", values: [ [ "=B8" ] ] });
-       updateData.push({ range: "'DASHBOARD'!I12", values: [ [ "=D8" ] ] });
-       updateData.push({ range: "'DASHBOARD'!I13", values: [ [ "=F8" ] ] });
+       updateData.push({ range: `'${dashTitle}'!I11`, values: [ [ "=B8" ] ] });
+       updateData.push({ range: `'${dashTitle}'!I12`, values: [ [ "=D8" ] ] });
+       updateData.push({ range: `'${dashTitle}'!I13`, values: [ [ "=F8" ] ] });
        
        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchClear`, {
           method: 'POST',
