@@ -644,7 +644,6 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       data = data.filter(c => c.type !== 'resort');
     }
 
-    // ALWAYS sort by Wilayah -> Resort -> Name for reporting consistency
     data.sort((a,b) => {
       // GLOBAL PRIORITY: Jemaat vs Pos PI (Pos PI goes to the absolute bottom)
       const isAPosPI = a.nama.toLowerCase().includes('pos pi');
@@ -653,6 +652,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       if (isAPosPI && !isBPosPI) return 1;
       if (!isAPosPI && isBPosPI) return -1;
       
+      if (filterResort === 'Semua Resort' && sortType === 'order') {
+        const wA = getWilayahLevel(a.wilayah);
+        const wB = getWilayahLevel(b.wilayah);
+        if (wA !== wB) return wA - wB;
+        
+        const rComp = compareResorts(a.resort || '', b.resort || '');
+        if (rComp !== 0) return rComp;
+        
+        if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
+        return (a.order || 0) - (b.order || 0);
+      }
+
       const wA = getWilayahLevel(a.wilayah);
       const wB = getWilayahLevel(b.wilayah);
       if (wA !== wB) return wA - wB;
@@ -675,7 +686,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         // Find all payments that belong to this identity, regardless of which ID/alias was used
         const pembayaranList = payments.filter(p => {
           // 1. Check if category and period match
-          if (p.kategori !== kategori) return false;
+          if ((p.kategori || '').toLowerCase() !== kategori.toLowerCase()) return false;
           if (normalizePeriode(p.periode) !== normalizePeriode(periodeAktif)) return false;
 
           // 2. Check identity match
@@ -1940,7 +1951,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         transform: 'scale(1)',
                         transformOrigin: 'top left',
                         margin: '0',
-                        padding: '2cm 2.54cm 2.54cm 2.54cm',
+                        padding: '1.5cm 2cm 1.5cm 2cm',
                       }
                     });
                     const link = document.createElement('a');
@@ -1967,7 +1978,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       });
                     }
 
-                    const waMessage = `Shalom Majelis Jemaat *${printData?.nama}* (Resort ${printData?.resort}).\nBerikut rincian tanda terima persembahan ke Kantor Pusat untuk periode ${printData?.periode || periodeAktif}:\n${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nTerima kasih atas pelayanannya. Tuhan Yesus memberkati.\n\n_Catatan: Gambar surat resmi telah terunduh ke perangkat/komputer Anda, silakan dilampirkan pada pesan ini._`;
+                    const waMessage = `Shalom Majelis Jemaat *${printData?.nama}* (Resort ${printData?.resort}).\nBerikut rincian tanda terima persembahan ke Kantor Pusat untuk periode ${printData?.periode || periodeAktif}:\n${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nTerima kasih atas pelayanannya. Tuhan Yesus memberkati.\n\n_Catatan: Gambar surat resmi telah terunduh, dan tersalin (copy). Silakan langsung "Paste/Tempel" (Ctrl+V) di kolom chat gambar ini!_`;
                     
                     if (navigator.share) {
                       try {
@@ -1982,6 +1993,19 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       } catch (err) {
                         console.warn('Share API blocked or failed, falling back to wa.me', err);
                       }
+                    }
+                    
+                    try {
+                      const res = await fetch(dataUrl);
+                      const blob = await res.blob();
+                      if (navigator.clipboard && window.ClipboardItem) {
+                        await navigator.clipboard.write([
+                          new ClipboardItem({ [blob.type]: blob })
+                        ]);
+                        alert('Gambar ucapan terima kasih telah COPY ke clipboard! Saat WhatsApp terbuka, silakan "Paste" (Ctrl+V) di kolom chat untuk melampirkannya.');
+                      }
+                    } catch (e) {
+                      console.log('Clipboard copy failed:', e);
                     }
 
                     window.open(`https://wa.me/${printData.wa}?text=${encodeURIComponent(waMessage)}`, '_blank');
@@ -2024,7 +2048,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         </div>
 
         <div className="print-preview-container">
-          <div id="printable-page" style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '12pt', paddingTop: '2cm', paddingLeft: '1cm', paddingRight: '1cm', color: 'black' }} ref={printRef}>
+          <div id="printable-page" style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '12pt', paddingTop: '1.5cm', paddingBottom: '1.5cm', paddingLeft: '2cm', paddingRight: '2cm', color: 'black' }} ref={printRef}>
       <div className="print-section mt-0">
          {/* Header */}
          <div className="text-center mb-8 relative pt-0">
@@ -2057,7 +2081,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                 </div>
                 <div className="border-t-[3px] border-black pb-[1px]"></div>
                 <div className="border-t-[1px] border-black pt-[3px] mb-6">
-                   <p className="text-center text-red-600 font-bold text-[16px] tracking-wider font-sans transform scale-y-110">ANGGOTA PERSEKUTUAN GEREJA-GEREJA DI INDONESIA (PGI)</p>
+                   <p className="text-center text-red-600 font-bold text-[16px] tracking-wider transform scale-y-110">ANGGOTA PERSEKUTUAN GEREJA-GEREJA DI INDONESIA (PGI)</p>
                 </div>
               </div>
             )}
@@ -2092,7 +2116,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               </div>
             ) : (printType === 'penerimaan' || printType === 'tunggakan' || printType === 'global-receipt' || printType === 'global-arrears' || printType === 'terimakasih') ? (
               <div className="space-y-6 text-[15px]">
-                <div className="flex justify-between items-start leading-relaxed font-sans -mt-4 mb-4">
+                <div className="flex justify-between items-start leading-relaxed -mt-4 mb-4">
                   <div className="flex-1">
                     <table className="w-full text-left max-w-sm">
                       <tbody>
@@ -2177,10 +2201,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 count++;
                                 return (
                                   <tr key={cat+f}>
-                                    <td className="w-5 align-top text-left font-sans text-sm">{count}.</td>
-                                    <td className="text-[15px] font-sans">{getFormattedPaymentName(cat, f)}</td>
-                                    <td className="w-12 text-left text-[15px] font-sans">Rp.</td>
-                                    <td className="w-32 text-right text-[15px] font-sans">{formatRupiah(val)},-</td>
+                                    <td className="w-5 align-top text-left text-sm">{count}.</td>
+                                    <td className="text-[15px]">{getFormattedPaymentName(cat, f)}</td>
+                                    <td className="w-12 text-left text-[15px]">Rp.</td>
+                                    <td className="w-32 text-right text-[15px]">{formatRupiah(val)},-</td>
                                   </tr>
                                 );
                               });
@@ -2192,20 +2216,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             if (val <= 0) return null;
                             return (
                               <tr key={col}>
-                                <td className="w-5 align-top text-left font-sans text-sm">{idx + 1}.</td>
-                                <td className="text-[15px] font-sans">{getFormattedPaymentName(printData.kategori, col)}</td>
-                                <td className="w-12 text-left text-[15px] font-sans">Rp.</td>
-                                <td className="w-32 text-right text-[15px] font-sans">{formatRupiah(val)},-</td>
+                                <td className="w-5 align-top text-left text-sm">{idx + 1}.</td>
+                                <td className="text-[15px]">{getFormattedPaymentName(printData.kategori, col)}</td>
+                                <td className="w-12 text-left text-[15px]">Rp.</td>
+                                <td className="w-32 text-right text-[15px]">{formatRupiah(val)},-</td>
                                </tr>
                              );
                            })
                         )}
                         {(printType !== 'tunggakan' && printType !== 'global-arrears') && (
                           <tr className="border-t border-black">
-                            <td className="font-bold pt-1 text-center font-sans tracking-widest uppercase">Jumlah</td>
+                            <td className="font-bold pt-1 text-center tracking-widest uppercase">Jumlah</td>
                             <td></td>
-                            <td className="font-bold pt-1 text-left text-[16px] font-sans">Rp.</td>
-                            <td className="font-bold pt-1 text-right text-[16px] font-sans tracking-tight">{formatRupiah(printData.total || printData.jumlah || 0)},-</td>
+                            <td className="font-bold pt-1 text-left text-[16px]">Rp.</td>
+                            <td className="font-bold pt-1 text-right text-[16px] tracking-tight">{formatRupiah(printData.total || printData.jumlah || 0)},-</td>
                           </tr>
                         )}
                       </tbody>
@@ -2259,7 +2283,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   </div>
                 )}
 
-                <div className="fixed bottom-0 left-0 w-full text-center text-[8.5px] pb-4 font-sans leading-tight hidden print:block">
+                <div className="fixed bottom-0 left-0 w-full text-center text-[8.5px] pb-4 leading-tight hidden print:block">
                   Bishop: Pdt. Jon Albert Saragih, M.Th. Hp. 081376987167 – Email: jon.albert98@yahoo.com – Sekjen: Pdt. Lamris Malau, M.Th. Hp. 085278577148 – Email: lamrismalau29@gmail.com
                 </div>
               </div>
