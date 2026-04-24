@@ -1046,27 +1046,27 @@ export default function App() {
     let unsubPayments: (() => void) | undefined;
     let unsubDistributions: (() => void) | undefined;
 
-    if (firebaseUser) {
-      // 3. Listen to Payments
-      unsubPayments = onSnapshot(collection(db, 'payments'), async (snap) => {
-        const pList = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
-        setPayments(pList);
+    // 3. Listen to Payments (Publicly visible to see setoran figures)
+    unsubPayments = onSnapshot(collection(db, 'payments'), async (snap) => {
+      const pList = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
+      setPayments(pList);
+      
+      // SELF-CLEANUP: Find and delete orphaned payments (payments pointing to a non-existent church ID)
+      // Ensure churches are fully loaded first
+      if (churches.length > 0 && currentUserProfile?.role === 'superadmin') {
+        const validChurchIds = new Set(allChurches.map(c => c.id));
+        const orphans = pList.filter(p => !validChurchIds.has(p.gerejaId));
         
-        // SELF-CLEANUP: Find and delete orphaned payments (payments pointing to a non-existent church ID)
-        // Ensure churches are fully loaded first
-        if (churches.length > 0 && currentUserProfile?.role === 'superadmin') {
-          const validChurchIds = new Set(allChurches.map(c => c.id));
-          const orphans = pList.filter(p => !validChurchIds.has(p.gerejaId));
-          
-          if (orphans.length > 0) {
-            console.log(`Self-cleaning ${orphans.length} orphaned payments...`);
-            for (const o of orphans) {
-              try { await deleteDoc(doc(db, 'payments', o.id)); } catch(e) {}
-            }
+        if (orphans.length > 0) {
+          console.log(`Self-cleaning ${orphans.length} orphaned payments...`);
+          for (const o of orphans) {
+            try { await deleteDoc(doc(db, 'payments', o.id)); } catch(e) {}
           }
         }
-      }, (error) => console.warn("Payments access restricted:", error.message));
+      }
+    }, (error) => console.warn("Payments access restricted:", error.message));
 
+    if (firebaseUser) {
       // 4. Listen to Distributions
       unsubDistributions = onSnapshot(collection(db, 'distributions'), (snap) => {
         setDistributions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distribution)));
@@ -1639,29 +1639,6 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         alert('Login Gagal: Username atau Password salah.');
       } else {
         alert('Login Gagal: ' + error.message);
-      }
-    }
-  };
-
-  const handleRegisterInitialAdmin = async () => {
-    if (users.length > 0) return alert("Hanya bisa dilakukan jika belum ada admin (Sistem Baru).");
-    if (!loginForm.username || !loginForm.password) return alert("Isi Username dan Password di atas!");
-    
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, loginForm.username, loginForm.password);
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        username: loginForm.username,
-        role: 'superadmin',
-        password: '' // Optional, we use Firebase Auth
-      });
-      setShowLoginModal(false);
-      setLoginForm({ username: '', password: '' });
-      alert("Sukses! Akun Superadmin Pertama telah berhasil dibuat.");
-    } catch (error: any) {
-      if (error.code === 'auth/operation-not-allowed') {
-        alert('KESALAHAN KONFIGURASI: Metode login Email/Password belum diaktifkan di Firebase Console.');
-      } else {
-        alert('Gagal membuat akun: ' + error.message);
       }
     }
   };
@@ -4967,19 +4944,6 @@ function doPost(e) {
           <button onClick={handleLogin} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">
             Masuk Sebagai Admin
           </button>
-          
-          {users.length === 0 && (
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-[10px] text-yellow-800 mb-2 font-bold uppercase tracking-widest text-center">Inisialisasi Sistem</p>
-              <p className="text-xs text-yellow-700 mb-4 text-center">Belum ada akun admin di database. Silakan isi form di atas lalu klik tombol di bawah untuk membuat akun Superadmin pertama.</p>
-              <button 
-                onClick={handleRegisterInitialAdmin}
-                className="w-full bg-yellow-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-yellow-700 transition-all"
-              >
-                Buat Akun Admin Pertama
-              </button>
-            </div>
-          )}
         </div>
       </Modal>
 
