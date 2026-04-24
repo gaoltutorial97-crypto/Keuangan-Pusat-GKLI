@@ -213,6 +213,220 @@ export default function App() {
   // STATE PENGATURAN TAMPILAN
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [googleDriveToken, setGoogleDriveToken] = useState<string | null>(null);
+
+  const initGoogleAuth = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (googleDriveToken) return resolve(googleDriveToken);
+      
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "761838534142-pq8hfkgkjf4gob9bv8uac67f12cvrd7n.apps.googleusercontent.com";
+      if (!clientId) {
+        alert("⚠️ VITE_GOOGLE_CLIENT_ID belum diatur.");
+        return resolve(null);
+      }
+      
+      // @ts-ignore
+      if (typeof google === 'undefined') {
+        alert("Gagal memuat layanan Google. Pastikan internet Anda lancar.");
+        return resolve(null);
+      }
+
+      // @ts-ignore
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
+        callback: (resp: any) => {
+          if (resp.access_token) {
+            setGoogleDriveToken(resp.access_token);
+            resolve(resp.access_token);
+          } else {
+            resolve(null);
+          }
+        }
+      });
+      client.requestAccessToken();
+    });
+  };
+
+  const handleDirectSync = async () => {
+    const token = await initGoogleAuth();
+    if (!token) return;
+
+    let sheetId = appSettings.googleSpreadsheetId;
+    const toastLabel = document.createElement('div');
+    toastLabel.innerText = "Memproses Sinkronisasi ke Drive...";
+    toastLabel.className = "fixed bottom-5 right-5 bg-blue-600 text-white px-4 py-2 rounded shadow-lg z-50 font-bold";
+    document.body.appendChild(toastLabel);
+
+    try {
+       if (!sheetId) {
+          const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+             method: 'POST',
+             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+             body: JSON.stringify({ name: 'Database Keuangan GKLI', mimeType: 'application/vnd.google-apps.spreadsheet' })
+          });
+          const file = await res.json();
+          sheetId = file.id;
+          const newSettings = { ...appSettings, googleSpreadsheetId: file.id };
+          await setDoc(doc(db, 'settings', 'config'), newSettings);
+          setAppSettings(newSettings);
+       }
+
+       const req = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+       });
+       if (req.status === 404) {
+           throw new Error("File Spreadsheet lama terhapus. Harap kosongkan ID Spreadsheet di Pengaturan agar dibuat baru.");
+       }
+       const sheetData = await req.json();
+       const existingTitles = sheetData.sheets?.map((s:any) => s.properties.title) || [];
+       
+       const batchRequests = [];
+       if (!existingTitles.includes("Jemaat")) {
+          batchRequests.push({ addSheet: { properties: { title: "Jemaat" }}});
+       }
+       if (!existingTitles.includes("Pembayaran")) {
+          batchRequests.push({ addSheet: { properties: { title: "Pembayaran" }}});
+       }
+       if (batchRequests.length > 0) {
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+             method: 'POST',
+             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+             body: JSON.stringify({ requests: batchRequests })
+          });
+       }
+
+       const jemaatHeaders = ["id", "order", "nama", "resort", "wilayah", "wa", "type"];
+       const jemaatValues = [jemaatHeaders.map(h => h.toUpperCase())];
+       churches.forEach(c => {
+          jemaatValues.push(jemaatHeaders.map(h => c[h as keyof typeof c] || ""));
+       });
+
+       const paymentHeaders = ["id", "gerejaId", "kategori", "periode", "jumlah", "tanggal", "receiptSent", "receiptSentAt", "details"];
+       const paymentValues = [paymentHeaders.map(h => h.toUpperCase())];
+       payments.forEach(p => {
+          paymentValues.push(paymentHeaders.map(h => {
+             const val = p[h as keyof typeof p];
+             return (h === 'details') ? JSON.stringify(val) : (val ?? "");
+          }));
+       });
+
+       const updateData = [
+          { range: "Jemaat!A1", values: jemaatValues },
+          { range: "Pembayaran!A1", values: paymentValues }
+       ];
+       
+       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchClear`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ranges: ["Jemaat", "Pembayaran"] })
+       });
+
+       const resUpdate = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updateData })
+       });
+       
+       if (!resUpdate.ok) {
+           const errResp = await resUpdate.json();
+           throw new Error(errResp.error?.message || "Unknown error saat mengupdate data ke sheet");
+       }
+
+       toastLabel.remove();
+       alert("✅ Sinkronisasi 2-Arah ke Google Drive BERHASIL!\nData Anda sekarang tersimpan langsung di Google Drive sebagai Data Keuangan GKLI.");
+
+    } catch (e: any) {
+        toastLabel.remove();
+        alert("Gagal sinkronisasi: " + e.message);
+    }
+  };
+
+  const handleDirectPull = async () => {
+    const sheetId = appSettings.googleSpreadsheetId;
+    if (!sheetId) {
+       alert("Anda belum pernah melakukan Sinkronisasi. Lakukan Sinkronisasi minimal 1x agar ada data yang ditarik.");
+       return;
+    }
+
+    const conf = window.confirm("PENTING!\nMenarik data dari Sheet akan MENIMPA SEMUA data saat ini dengan data dari Google Sheet.\nLanjutkan?");
+    if (!conf) return;
+
+    const token = await initGoogleAuth();
+    if (!token) return;
+
+    const toastLabel = document.createElement('div');
+    toastLabel.innerText = "Mengunduh Data dari Drive...";
+    toastLabel.className = "fixed bottom-5 right-5 bg-orange-600 text-white px-4 py-2 rounded shadow-lg z-50 font-bold";
+    document.body.appendChild(toastLabel);
+
+    try {
+       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet?ranges=Jemaat&ranges=Pembayaran`, {
+           headers: { 'Authorization': `Bearer ${token}` }
+       });
+       if (res.status === 404) throw new Error("File Spreadsheet tidak ditemukan di Google Drive Anda.");
+       const data = await res.json();
+       
+       const jRows = data.valueRanges?.[0]?.values || [];
+       const pRows = data.valueRanges?.[1]?.values || [];
+
+       if (jRows.length <= 1 && pRows.length <= 1) {
+           toastLabel.remove();
+           alert("Data di Sheet masih kosong!");
+           return;
+       }
+
+       const batch = writeBatch(db);
+
+       churches.forEach(c => {
+           batch.delete(doc(db, 'churches', c.id));
+       });
+       payments.forEach(p => {
+           batch.delete(doc(db, 'payments', p.id));
+       });
+
+       if (jRows.length > 1) {
+          const headers = jRows[0].map((h:string) => h.toLowerCase());
+          for (let i=1; i<jRows.length; i++) {
+             const row = jRows[i];
+             const jemaatObj: any = {};
+             headers.forEach((h:string, idx:number) => jemaatObj[h] = row[idx]);
+             if (jemaatObj.id) {
+                batch.set(doc(db, 'churches', jemaatObj.id.toString()), jemaatObj);
+             }
+          }
+       }
+
+       if (pRows.length > 1) {
+          const headers = pRows[0].map((h:string) => h.toLowerCase());
+          for (let i=1; i<pRows.length; i++) {
+             const row = pRows[i];
+             const payObj: any = {};
+             headers.forEach((h:string, idx:number) => {
+                let val = row[idx];
+                if (h === 'details' && val && val.startsWith('{')) {
+                   try { val = JSON.parse(val); } catch(ex){}
+                }
+                if (h === 'jumlah') val = Number(val) || 0;
+                if (h === 'receiptsent') val = (val === 'TRUE' || val === 'true' || val === true);
+                if (h === 'receiptsentat' && typeof val === 'undefined') val = null;
+                payObj[h] = val;
+             });
+             if (payObj.id) {
+                batch.set(doc(db, 'payments', payObj.id.toString()), payObj);
+             }
+          }
+       }
+
+       await batch.commit();
+       toastLabel.remove();
+       alert("✅ RESTORE BERHASIL! Data berhasil ditarik dari Google Sheet dan dipulihkan ke web.");
+       
+    } catch (e: any) {
+        toastLabel.remove();
+        alert("Gagal menarik data: " + e.message);
+    }
+  };
   const [formSettings, setFormSettings] = useState(DEFAULT_SETTINGS);
 
   // STATE DATA GEREJA & PEMBAYARAN
@@ -1404,19 +1618,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
   };
 
-  const syncToGoogleSheets = async () => {
+  const syncToGoogleSheets = async (silent = false) => {
     if (!appSettings.googleSheetUrl) {
-      alert("Silakan atur URL Google Apps Script di Pengaturan terlebih dahulu.");
+      if (!silent) alert("Silakan atur URL Google Apps Script di Pengaturan terlebih dahulu.");
       return;
     }
 
     if (!appSettings.googleSheetUrl.includes('/exec')) {
-      alert("⚠️ URL TIDAK VALID\n\nSepertinya Anda memasukkan URL Editor. Harap masukkan URL hasil 'New Deployment' yang berakhiran dengan /exec");
+      if (!silent) alert("⚠️ URL TIDAK VALID\n\nSepertinya Anda memasukkan URL Editor. Harap masukkan URL hasil 'New Deployment' yang berakhiran dengan /exec");
       return;
     }
     
-    const confirmSync = window.confirm("Apakah Anda ingin mencadangkan seluruh data ke Google Sheet?");
-    if (!confirmSync) return;
+    if (!silent) {
+      const confirmSync = window.confirm("Apakah Anda ingin mencadangkan seluruh data ke Google Sheet?");
+      if (!confirmSync) return;
+    }
 
     try {
       const data = {
@@ -1439,10 +1655,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         body: JSON.stringify(data)
       });
 
-      alert("🚀 INSTRUKSI SINKRONISASI TERKIRIM!\n\nData sedang diproses oleh Google. \n\nTips: Jika data belum muncul di Google Sheet, klik 'Edit Tampilan' lalu tekan tombol 'Cek Koneksi' untuk memastikan link Anda sudah benar.");
+      if (!silent) alert("🚀 INSTRUKSI SINKRONISASI TERKIRIM!\n\nData sedang diproses oleh Google. \n\nTips: Jika data belum muncul di Google Sheet, klik 'Edit Tampilan' lalu tekan tombol 'Cek Koneksi' untuk memastikan link Anda sudah benar.");
     } catch (error) {
       console.error("Sync Error:", error);
-      alert("❌ KEGAGALAN SISTEM\n\nTidak dapat menghubungi server Google. Harap periksa koneksi internet Anda atau pastikan URL Apps Script belum kedaluwarsa.");
+      if (!silent) alert("❌ KEGAGALAN SISTEM\n\nTidak dapat menghubungi server Google. Harap periksa koneksi internet Anda atau pastikan URL Apps Script belum kedaluwarsa.");
     }
   };
 
@@ -3922,11 +4138,26 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </button>
                         <div className="grid grid-cols-2 gap-3">
                           <button onClick={syncToGoogleSheets} className="flex items-center justify-center space-x-3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-transform hover:scale-[1.02]">
-                            <Database size={20} className="text-green-400" /> <span>Sinkron ke Sheet</span>
+                            <Database size={20} className="text-green-400" /> <span>Sinkron via Script</span>
                           </button>
                           <button onClick={pullFromGoogleSheets} className="flex items-center justify-center space-x-3 bg-red-900 text-white py-3 rounded-lg font-bold hover:bg-red-800 transition-transform hover:scale-[1.02]">
-                            <Download size={20} className="text-red-400" /> <span>Tarik Data</span>
+                            <Download size={20} className="text-red-400" /> <span>Tarik via Script</span>
                           </button>
+                        </div>
+                        
+                        <div className="mt-6 border-t border-slate-200 pt-6">
+                            <h4 className="font-bold text-blue-800 mb-2 flex items-center"><Database size={18} className="mr-2" /> Sinkronisasi Google Drive Langsung (Otomatis)</h4>
+                            <p className="text-sm text-slate-600 mb-4">
+                                Sinkronisasi otomatis ke akun Google Drive Anda tanpa perlu menulis Apps Script.
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <button onClick={handleDirectSync} className="flex items-center justify-center space-x-3 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-transform hover:scale-[1.02] shadow-lg shadow-blue-500/20">
+                                <Database size={20} /> <span>Sync ke Drive</span>
+                              </button>
+                              <button onClick={handleDirectPull} className="flex items-center justify-center space-x-3 bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 transition-transform hover:scale-[1.02] shadow-lg shadow-orange-500/20">
+                                <Download size={20} /> <span>Tarik dari Drive</span>
+                              </button>
+                            </div>
                         </div>
                       </div>
                     </div>
@@ -3952,43 +4183,44 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   
   if (action === 'pull') {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("FullBackup");
-    if (!sheet) {
-       output.setContent(JSON.stringify({error: "No backup found"}));
-       output.setMimeType(ContentService.MimeType.JSON);
-       return output;
-    }
-    var lastRow = sheet.getLastRow();
-    if (lastRow <= 1) {
-       output.setContent(JSON.stringify({error: "No backup data"}));
-       output.setMimeType(ContentService.MimeType.JSON);
-       return output;
-    }
+    var jemaatSheet = ss.getSheetByName("Jemaat");
+    var trxSheet = ss.getSheetByName("Pembayaran");
     
-    var values = sheet.getRange(2, 3, lastRow - 1).getValues();
-    var latestData = "";
-    
-    // Cari mundur memastikan selalu mengambil data terakhir yang paling valid
-    for (var i = values.length - 1; i >= 0; i--) {
-      var val = values[i][0];
-      if (val && typeof val === 'string' && val.indexOf('churches') !== -1) {
-         latestData = val;
-         break;
-      }
+    var jemaatData = [];
+    if (jemaatSheet && jemaatSheet.getLastRow() > 1) {
+       var jRows = jemaatSheet.getDataRange().getValues();
+       var headers = jRows[0];
+       for (var i=1; i<jRows.length; i++) {
+          var obj = {};
+          for (var j=0; j<headers.length; j++) obj[headers[j]] = jRows[i][j];
+          if (obj.id) jemaatData.push(obj);
+       }
     }
     
-    if (!latestData) {
-       output.setContent(JSON.stringify({error: "No valid backup payload found"}));
-       output.setMimeType(ContentService.MimeType.JSON);
-       return output;
+    var trxData = [];
+    if (trxSheet && trxSheet.getLastRow() > 1) {
+       var tRows = trxSheet.getDataRange().getValues();
+       var headers = tRows[0];
+       for (var i=1; i<tRows.length; i++) {
+          var obj = {};
+          for (var j=0; j<headers.length; j++) {
+             var val = tRows[i][j];
+             if (headers[j] === 'details' && typeof val === 'string' && val.indexOf('{') === 0) {
+                try { val = JSON.parse(val); } catch(ex){}
+             }
+             obj[headers[j]] = val;
+          }
+          if (obj.id) trxData.push(obj);
+       }
     }
     
-    output.setContent(latestData);
+    var result = { churches: jemaatData, payments: trxData };
+    output.setContent(JSON.stringify(result));
     output.setMimeType(ContentService.MimeType.JSON);
     return output;
   }
   
-  output.setContent("✅ API Keuangan GKLI Aktif! (Cache-Busted & Tarik Data Secure Supported)");
+  output.setContent("✅ API Keuangan GKLI Aktif! (Format Kolom Maju/Mundur)");
   output.setMimeType(ContentService.MimeType.TEXT);
   return output;
 }
@@ -3998,19 +4230,48 @@ function doPost(e) {
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("FullBackup") || ss.insertSheet("FullBackup");
     
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Tanggal", "Aksi", "Data"]);
+    // Sinkronisasi Jemaat
+    if (data.payload && data.payload.churches) {
+      var sheet = ss.getSheetByName("Jemaat") || ss.insertSheet("Jemaat");
+      sheet.clear();
+      var churches = data.payload.churches;
+      if (churches.length > 0) {
+        var headers = ["id", "order", "nama", "resort", "wilayah", "wa", "type"];
+        var rows = [headers];
+        for (var i=0; i<churches.length; i++) {
+           var row = [];
+           for (var j=0; j<headers.length; j++) row.push(churches[i][headers[j]] || "");
+           rows.push(row);
+        }
+        sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
+      }
     }
     
-    sheet.appendRow([new Date(), data.action, JSON.stringify(data.payload)]);
+    // Sinkronisasi Pembayaran
+    if (data.payload && data.payload.payments) {
+      var sheet = ss.getSheetByName("Pembayaran") || ss.insertSheet("Pembayaran");
+      sheet.clear();
+      var payments = data.payload.payments;
+      if (payments.length > 0) {
+        var headers = ["id", "gerejaId", "kategori", "periode", "jumlah", "tanggal", "receiptSent", "receiptSentAt", "details"];
+        var rows = [headers];
+        for (var i=0; i<payments.length; i++) {
+           var row = [];
+           for (var j=0; j<headers.length; j++) {
+              var val = payments[i][headers[j]];
+              if (headers[j] === 'details') val = JSON.stringify(val);
+              row.push(val !== undefined && val !== null ? val : "");
+           }
+           rows.push(row);
+        }
+        sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
+      }
+    }
     
-    return ContentService.createTextOutput("Success")
-      .setMimeType(ContentService.MimeType.TEXT);
+    return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
   } catch (err) {
-    return ContentService.createTextOutput("Error: " + err.message)
-      .setMimeType(ContentService.MimeType.TEXT);
+    return ContentService.createTextOutput("Error: " + err.message).setMimeType(ContentService.MimeType.TEXT);
   }
 }`}
                       </pre>
@@ -4407,8 +4668,30 @@ function doPost(e) {
             <h4 className="font-bold text-green-400 mb-4 flex items-center"><Database size={18} className="mr-2" /> Integrasi Database Cloud</h4>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">URL Web App Google Sheets (Apps Script)</label>
+              <div className="bg-blue-900/30 p-4 rounded-lg border border-blue-800/50">
+                 <h5 className="text-blue-400 font-bold mb-2 flex items-center text-sm">Sinkronisasi Google Drive Otomatis (Baru)</h5>
+                 <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+                   Client ID sudah ditanam (otomatis). Klik tombol 'Sync ke Drive' atau 'Tarik dari Drive' untuk langsung menghubungkan ke Google Drive Anda.
+                 </p>
+                 <p className="text-xs text-amber-500 font-bold italic mb-3">
+                   * Anda tidak perlu memasang Apps script lagi.
+                 </p>
+                 {formSettings.googleSpreadsheetId && (
+                   <div className="mt-3 bg-slate-800/80 p-3 rounded border border-slate-700/50 flex flex-col space-y-2">
+                     <p className="text-[10px] text-slate-400">Sheet ID Tertaut:</p>
+                     <code className="text-xs text-blue-300 break-all">{formSettings.googleSpreadsheetId}</code>
+                     <button 
+                       type="button"
+                       onClick={() => setFormSettings({...formSettings, googleSpreadsheetId: ''})}
+                       className="text-white bg-red-600/80 hover:bg-red-600 px-3 py-1.5 rounded text-[10px] font-bold w-max"
+                     >
+                       Putuskan Tautan Spreadsheet
+                     </button>
+                   </div>
+                 )}
+              </div>
+              <div className="border-t border-slate-800 pt-4">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Opsional: URL Google Sheets Apps Script (Cara Lama)</label>
                 <div className="flex space-x-2">
                   <input 
                     type="text" 

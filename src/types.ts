@@ -44,6 +44,7 @@ export interface AppSettings {
   menuRekapMenu: string;
   menuDownloadMenu: string;
   googleSheetUrl: string;
+  googleSpreadsheetId?: string;
   watzapApiKey?: string;
   watzapSender?: string;
   theme?: 'default' | 'ocean' | 'nature' | 'monochrome';
