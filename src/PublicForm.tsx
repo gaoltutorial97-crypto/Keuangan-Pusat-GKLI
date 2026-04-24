@@ -201,11 +201,17 @@ export default function PublicForm() {
       (p.kategori || '').toLowerCase() === kategori.toLowerCase()
     );
     
+    const combinedDetails: Record<string, number> = {};
     churchPayments.forEach(p => {
       Object.entries(p.details || {}).forEach(([key, val]) => {
-        if ((val as number) > 0) disabled[key] = true;
+        combinedDetails[key] = (combinedDetails[key] || 0) + ((val as number) || 0);
       });
     });
+
+    Object.entries(combinedDetails).forEach(([key, val]) => {
+      if (val > 0) disabled[key] = true;
+    });
+
     return disabled;
   }, [payments, selectedChurchIdentity, periode, kategori, churchGroups]);
 

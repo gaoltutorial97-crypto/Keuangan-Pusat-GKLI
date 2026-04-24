@@ -316,23 +316,26 @@ export default function App() {
     }
 
     // 2. Listen to Churches (Public read allowed in rules)
-    const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), (snap) => {
+    const unsubChurches = onSnapshot(query(collection(db, 'churches'), orderBy('order', 'asc')), async (snap) => {
       const allData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Church));
       setAllChurches(allData);
       
       // Deduplicate: prefer "GKLI " prefixed names if double exists
       const filteredMap = new Map<string, Church>();
+      const toDeleteIds = new Set<string>();
       allData.forEach(c => {
         const key = getChurchIdentityKey(c);
         const hasGKLI = c.nama.toUpperCase().startsWith('GKLI');
         const existing = filteredMap.get(key);
         if (!existing || (hasGKLI && !existing.nama.toUpperCase().startsWith('GKLI'))) {
+          if (existing) toDeleteIds.add(existing.id);
           filteredMap.set(key, c);
+        } else {
+          toDeleteIds.add(c.id);
         }
       });
 
       const data = Array.from(filteredMap.values());
-      const resortHeaders: Church[] = [];
       
       // Also ensure resort headers are generated correctly
       const uniqueResortsMap = new Map<string, string>(); // normKey -> originalName
@@ -343,6 +346,13 @@ export default function App() {
 
       if (data.length > 0) setChurches(data);
       else if (isInitialLoading) setChurches(INITIAL_CHURCHES); 
+      
+      // Auto-clean duplicates
+      if (toDeleteIds.size > 0 && currentUserProfile?.role === 'superadmin') {
+         Array.from(toDeleteIds).forEach(id => {
+            deleteDoc(doc(db, 'churches', id)).catch(() => {});
+         });
+      }
     }, (error) => console.warn("Churches access restricted:", error.message));
 
     let unsubPayments: (() => void) | undefined;
@@ -350,8 +360,23 @@ export default function App() {
 
     if (firebaseUser) {
       // 3. Listen to Payments
-      unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
-        setPayments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
+      unsubPayments = onSnapshot(collection(db, 'payments'), async (snap) => {
+        const pList = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
+        setPayments(pList);
+        
+        // SELF-CLEANUP: Find and delete orphaned payments (payments pointing to a non-existent church ID)
+        // Ensure churches are fully loaded first
+        if (churches.length > 0 && currentUserProfile?.role === 'superadmin') {
+          const validChurchIds = new Set(allChurches.map(c => c.id));
+          const orphans = pList.filter(p => !validChurchIds.has(p.gerejaId));
+          
+          if (orphans.length > 0) {
+            console.log(`Self-cleaning ${orphans.length} orphaned payments...`);
+            for (const o of orphans) {
+              try { await deleteDoc(doc(db, 'payments', o.id)); } catch(e) {}
+            }
+          }
+        }
       }, (error) => console.warn("Payments access restricted:", error.message));
 
       // 4. Listen to Distributions
@@ -1857,10 +1882,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
             @media print {
               @page { size: portrait; margin: 0; }
               .no-print { display: none !important; }
+              .print-preview-container {
+                padding: 0 !important;
+                margin: 0 !important;
+                background-color: white !important;
+              }
               #printable-page { 
                 width: 100% !important; 
                 margin: 0 !important; 
-                padding: 1.5cm !important; 
+                padding: 1.5cm 2cm 1.5cm 2cm !important; 
                 box-shadow: none !important;
                 border: none !important;
               }
@@ -1978,7 +2008,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       });
                     }
 
-                    const waMessage = `Shalom Majelis Jemaat *${printData?.nama}* (Resort ${printData?.resort}).\nBerikut rincian tanda terima persembahan ke Kantor Pusat untuk periode ${printData?.periode || periodeAktif}:\n${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nTerima kasih atas pelayanannya. Tuhan Yesus memberkati.\n\n_Catatan: Gambar surat resmi telah terunduh, dan tersalin (copy). Silakan langsung "Paste/Tempel" (Ctrl+V) di kolom chat gambar ini!_`;
+                    const waMessage = `Shalom Majelis Jemaat *${printData?.nama}* (Resort ${printData?.resort}).\n\nKantor Pusat GKLI mengucapkan *TERIMA KASIH* karena telah menyetorkan persembahan ke Kantor Pusat untuk periode ${printData?.periode || periodeAktif}.\n\nBerikut ini adalah keterangan pengantar penerimaan dan itemnya:${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nTerima kasih atas pelayanannya. Tuhan Yesus memberkati.\n\n_Catatan: Gambar surat resmi telah terunduh, dan tersalin (copy). Silakan langsung "Paste/Tempel" (Ctrl+V) di kolom chat gambar ini!_`;
                     
                     if (navigator.share) {
                       try {
