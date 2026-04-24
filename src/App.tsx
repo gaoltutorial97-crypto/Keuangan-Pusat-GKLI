@@ -284,13 +284,33 @@ export default function App() {
        const sheetData = await req.json();
        const existingTitles = sheetData.sheets?.map((s:any) => s.properties.title) || [];
        
-       const batchRequests = [];
-       if (!existingTitles.includes("Jemaat")) {
-          batchRequests.push({ addSheet: { properties: { title: "Jemaat" }}});
-       }
-       if (!existingTitles.includes("Pembayaran")) {
-          batchRequests.push({ addSheet: { properties: { title: "Pembayaran" }}});
-       }
+       const batchRequests: any[] = [];
+       const sheetsToHide: number[] = [];
+       sheetData.sheets?.forEach((s: any) => {
+         if ((s.properties.title === "Jemaat" || s.properties.title === "Pembayaran") && !s.properties.hidden) {
+           sheetsToHide.push(s.properties.sheetId);
+         }
+       });
+
+       const pLaporanTitle = "Lap. Persembahan II";
+       const pKhususTitle = "Lap. Persembahan Khusus";
+       const literaturTitle = "Lap. Literatur";
+
+       if (!existingTitles.includes("Jemaat")) batchRequests.push({ addSheet: { properties: { title: "Jemaat", hidden: true }}});
+       if (!existingTitles.includes("Pembayaran")) batchRequests.push({ addSheet: { properties: { title: "Pembayaran", hidden: true }}});
+       if (!existingTitles.includes(pLaporanTitle)) batchRequests.push({ addSheet: { properties: { title: pLaporanTitle }}});
+       if (!existingTitles.includes(pKhususTitle)) batchRequests.push({ addSheet: { properties: { title: pKhususTitle }}});
+       if (!existingTitles.includes(literaturTitle)) batchRequests.push({ addSheet: { properties: { title: literaturTitle }}});
+
+       sheetsToHide.forEach(id => {
+         batchRequests.push({
+           updateSheetProperties: {
+             properties: { sheetId: id, hidden: true },
+             fields: "hidden"
+           }
+         });
+       });
+
        if (batchRequests.length > 0) {
           await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
              method: 'POST',
@@ -314,15 +334,97 @@ export default function App() {
           }));
        });
 
+       // GENERATE FORMATTED PROFESSIONAL SHEETS
+       const sortedBaseChurches = [...churches].sort((a,b) => {
+          const wA = getWilayahLevel(a.wilayah);
+          const wB = getWilayahLevel(b.wilayah);
+          if (wA !== wB) return wA - wB;
+          const resA = a.resort || '';
+          const resB = b.resort || '';
+          const rComp = compareResorts(resA, resB);
+          if (rComp !== 0) return rComp;
+          if (a.type !== b.type) return a.type === 'resort' ? -1 : 1;
+          return a.nama.localeCompare(b.nama);
+       });
+
+       const periodesToSync = periods || [periodeAktif];
+
+       const buildReportRows = (
+         category: 'laporan' | 'pelean' | 'alaman',
+         churchesList: Church[]
+       ) => {
+         const cols = SPREADSHEET_COLUMNS[category];
+         const headers = ["Nama Jemaat", "Resort", "Wilayah", "Tahun (Periode)", ...cols, "TOTAL (Rp)", "Terakhir Bayar"];
+         if (category === 'laporan') headers.splice(4, 0, "STATUS");
+
+         const rows: any[][] = [headers];
+
+         periodesToSync.forEach(prd => {
+           churchesList.forEach(c => {
+             const targetIdentityKey = getChurchIdentityKey(c);
+             const pList = payments.filter(p => {
+               if ((p.kategori || '').toLowerCase() !== category) return false;
+               if (normalizePeriode(p.periode) !== normalizePeriode(prd)) return false;
+               const pChurch = allChurches.find(ach => ach.id === p.gerejaId);
+               if (pChurch) return getChurchIdentityKey(pChurch) === targetIdentityKey;
+               const aliases = churchAliasesMap[c.id] || [c.id];
+               return aliases.includes(p.gerejaId);
+             });
+
+             let cDetails: Record<string, number> = {};
+             pList.forEach(p => {
+               if (p.details) Object.entries(p.details).forEach(([k,v]) => cDetails[k] = (cDetails[k]||0)+((v as number)||0));
+             });
+
+             const total = Object.values(cDetails).reduce((sum, v) => sum + (v||0), 0);
+
+             let status = 'Menunggak';
+             const curCols = cols.filter(col => (cDetails[col]||0)>0).length;
+             if(curCols === cols.length) status = 'Lunas';
+             else if(curCols > 0) status = 'Proses';
+
+             let lastDate = "";
+             if (pList.length > 0) {
+                lastDate = pList.reduce((latest, curr) => {
+                  if (!latest) return curr.tanggal;
+                  if (!curr.tanggal) return latest;
+                  return new Date(curr.tanggal) > new Date(latest) ? curr.tanggal : latest;
+                }, "") as string || "";
+             }
+
+             const rowVals = [
+               c.nama,
+               c.resort || "",
+               c.wilayah || "",
+               prd
+             ];
+             if (category === 'laporan') rowVals.push(status);
+             cols.forEach(col => rowVals.push(cDetails[col] || ""));
+             rowVals.push(total || 0);
+             rowVals.push(lastDate);
+
+             rows.push(rowVals);
+           });
+         });
+         return rows;
+       };
+
+       const lapLaporan = buildReportRows('laporan', sortedBaseChurches.filter(c => c.type !== 'resort'));
+       const lapPelean = buildReportRows('pelean', sortedBaseChurches);
+       const lapAlaman = buildReportRows('alaman', sortedBaseChurches);
+
        const updateData = [
           { range: "Jemaat!A1", values: jemaatValues },
-          { range: "Pembayaran!A1", values: paymentValues }
+          { range: "Pembayaran!A1", values: paymentValues },
+          { range: `'${pLaporanTitle}'!A1`, values: lapLaporan },
+          { range: `'${pKhususTitle}'!A1`, values: lapPelean },
+          { range: `'${literaturTitle}'!A1`, values: lapAlaman }
        ];
        
        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchClear`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ranges: ["Jemaat", "Pembayaran"] })
+          body: JSON.stringify({ ranges: ["Jemaat", "Pembayaran", `'${pLaporanTitle}'`, `'${pKhususTitle}'`, `'${literaturTitle}'`] })
        });
 
        const resUpdate = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`, {
@@ -336,8 +438,50 @@ export default function App() {
            throw new Error(errResp.error?.message || "Unknown error saat mengupdate data ke sheet");
        }
 
+       // 3. APPLY PROFESSIONAL FORMATTING (Frozen row, Bold dark header)
+       try {
+         const finalReq = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+         const finalSheetData = await finalReq.json();
+         
+         const formatRequests: any[] = [];
+         finalSheetData.sheets?.forEach((s: any) => {
+           const title = s.properties.title;
+           const sid = s.properties.sheetId;
+           if (title === pLaporanTitle || title === pKhususTitle || title === literaturTitle) {
+             formatRequests.push({
+               updateSheetProperties: {
+                 properties: { sheetId: sid, gridProperties: { frozenRowCount: 1 } },
+                 fields: "gridProperties.frozenRowCount"
+               }
+             });
+             formatRequests.push({
+               repeatCell: {
+                 range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1 },
+                 cell: {
+                   userEnteredFormat: {
+                     backgroundColor: { red: 0.1, green: 0.16, blue: 0.23 }, // dark blue-slate
+                     textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }
+                   }
+                 },
+                 fields: "userEnteredFormat(backgroundColor,textFormat)"
+               }
+             });
+           }
+         });
+
+         if (formatRequests.length > 0) {
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+               method: 'POST',
+               headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({ requests: formatRequests })
+            });
+         }
+       } catch (ignore) {
+         // If formatting fails, ignore it to not ruin the success flow.
+       }
+
        toastLabel.remove();
-       alert("✅ Sinkronisasi 2-Arah ke Google Drive BERHASIL!\nData Anda sekarang tersimpan langsung di Google Drive sebagai Data Keuangan GKLI.");
+       alert("✅ Sinkronisasi Berhasil!\nSheet Laporan profesional telah dibuat di Google Drive Anda.\n\nTips: Buka Google Sheet tersebut, lalu gunakan fitur 'Filter' pada kolom 'Tahun (Periode)' untuk memilih laporan per tahun dengan mudah!");
 
     } catch (e: any) {
         toastLabel.remove();
@@ -4707,15 +4851,15 @@ function doPost(e) {
                      </p>
                    </div>
                    <div className="border-t border-amber-800/50 pt-3">
-                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error: "Google Drive API has not been used..."</p>
+                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error API Belum Aktif (Drive / Sheets API)</p>
                      <p className="text-xs text-amber-200">
-                       Error ini terjadi karena API Google Drive/Sheets belum aktif di project Google Cloud Anda.
+                       Jika Anda mendapati error <b>"Google Sheets API has not been used..."</b> atau <b>"Google Drive API has not been used..."</b>, itu berarti layanannya belum diaktifkan.
                        <br/>
-                       <b>Cara mengaktifkannya:</b><br/>
-                       1. Buka <b>Google Cloud Console</b>.<br/>
-                       2. Cari <b>"Google Drive API"</b> di kotak pencarian paling atas, klik, lalu pilih <b>"Enable" (Aktifkan)</b>.<br/>
-                       3. Cari juga <b>"Google Sheets API"</b>, klik, dan pilih <b>"Enable" (Aktifkan)</b>.<br/>
-                       4. Tunggu sekitar 1-2 menit agar sistem Google memperbarui data, lalu coba klik <b>"Sync ke Drive"</b> lagi di aplikasi ini.
+                       <b>Cara paling mudah mengatasinya:</b><br/>
+                       1. <b>Salin (Copy) link tautan</b> yang berawalan <code className="text-[10px] bg-black/30 p-0.5 rounded">https://console.developers.google.com/...</code> yang tertera di dalam pesan error tersebut.<br/>
+                       2. <b>Buka tab baru</b> di browser Anda, <b>Tempel (Paste)</b> link tersebut lalu tekan Enter.<br/>
+                       3. Di halaman Google Cloud yang terbuka, klik tombol biru bertuliskan <b>"ENABLE" (AKTIFKAN)</b>.<br/>
+                       4. <b>Sangat Penting:</b> Setelah mengaktifkan, <b>tunggu sekitar 3-5 menit</b> agar sistem Google mendata perubahan tersebut. Setelah itu, baru klik tombol <b>"Sync ke Drive"</b> lagi di aplikasi ini.
                      </p>
                    </div>
                  </div>
