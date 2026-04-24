@@ -425,8 +425,24 @@ export default function App() {
           { range: "Pembayaran!A1", values: paymentValues },
           { range: `'${pLaporanTitle}'!A5`, values: lapLaporan },
           { range: `'${pKhususTitle}'!A5`, values: lapPelean },
-          { range: `'${literaturTitle}'!A5`, values: lapAlaman }
+          { range: `'${literaturTitle}'!A5`, values: lapAlaman },
+          { range: `'${pLaporanTitle}'!C3`, values: [ [ `=SUMIF(D:D, $C$2, R:R)` ] ] },
+          { range: `'${pKhususTitle}'!C3`, values: [ [ `=SUMIF(D:D, $C$2, K:K)` ] ] },
+          { range: `'${literaturTitle}'!C3`, values: [ [ `=SUMIF(D:D, $C$2, O:O)` ] ] },
+          // Dashboard Formulas
+          { range: "'DASHBOARD'!B8", values: [ [ `=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!R:R)` ] ] },
+          { range: "'DASHBOARD'!D8", values: [ [ `=SUMIF('${pKhususTitle}'!D:D, $C$5, '${pKhususTitle}'!K:K)` ] ] },
+          { range: "'DASHBOARD'!F8", values: [ [ `=SUMIF('${literaturTitle}'!D:D, $C$5, '${literaturTitle}'!O:O)` ] ] },
+          { range: "'DASHBOARD'!H8", values: [ [ `=B8+D8+F8` ] ] },
        ];
+       
+       const colLetters = ['F','G','H','I','J','K','L','M','N','O','P','Q'];
+       for (let i = 0; i < 12; i++) {
+           updateData.push({ range: `'DASHBOARD'!C${11 + i}`, values: [ [ `=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})` ] ] });
+       }
+       updateData.push({ range: "'DASHBOARD'!I11", values: [ [ "=B8" ] ] });
+       updateData.push({ range: "'DASHBOARD'!I12", values: [ [ "=D8" ] ] });
+       updateData.push({ range: "'DASHBOARD'!I13", values: [ [ "=F8" ] ] });
        
        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchClear`, {
           method: 'POST',
@@ -480,9 +496,11 @@ export default function App() {
              const isIndo = true; // Use stringValue with = to let Sheets UI parse dynamically if needed, or use formulaValue
              const makeCellLocal = (value: any, isFormula = false, format: any = {}, dataVal: any = null) => {
                 const c: any = { userEnteredFormat: format };
-                if (isFormula) c.userEnteredValue = { formulaValue: value };
-                else if (typeof value === 'number') c.userEnteredValue = { numberValue: value };
-                else c.userEnteredValue = { stringValue: value };
+                if (value !== null) {
+                    if (isFormula) c.userEnteredValue = { formulaValue: value };
+                    else if (typeof value === 'number') c.userEnteredValue = { numberValue: value };
+                    else c.userEnteredValue = { stringValue: value };
+                }
                 if (dataVal) c.dataValidation = dataVal;
                 return c;
              };
@@ -512,7 +530,7 @@ export default function App() {
                    { values: [
                        makeCellLocal(""),
                        makeCellLocal("TOTAL PENDAPATAN :", false, { textFormat: { bold: true, fontSize: 12 }, horizontalAlignment: "RIGHT", verticalAlignment: "MIDDLE" }),
-                       makeCellLocal(`=SUMIF(D:D,$C$2,${sumColName}:${sumColName})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, textFormat: { bold: true, fontSize: 16, foregroundColor: {red:0.1, green:0.4, blue:0.1} }, backgroundColor: {red:0.9, green:1, blue:0.9}, borders: { bottom: { style: "SOLID", width: 2, color: {red:0.1, green:0.5, blue:0.1} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" })
+                       makeCellLocal(null, false, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, textFormat: { bold: true, fontSize: 16, foregroundColor: {red:0.1, green:0.4, blue:0.1} }, backgroundColor: {red:0.9, green:1, blue:0.9}, borders: { bottom: { style: "SOLID", width: 2, color: {red:0.1, green:0.5, blue:0.1} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" })
                      ]
                    },
                    // Row 3: Empty spacing
@@ -603,10 +621,13 @@ export default function App() {
          if (dashSheet) {
            const dashId = dashSheet.properties.sheetId;
 
-           const makeCell = (value: any, isFormula = false, format: any = {}) => ({
-             userEnteredValue: isFormula ? { formulaValue: value } : (typeof value === 'number' ? { numberValue: value } : { stringValue: value }),
-             userEnteredFormat: format
-           });
+           const makeCell = (value: any, isFormula = false, format: any = {}) => {
+             const c: any = { userEnteredFormat: format };
+             if (value !== null) {
+                 c.userEnteredValue = isFormula ? { formulaValue: value } : (typeof value === 'number' ? { numberValue: value } : { stringValue: value });
+             }
+             return c;
+           };
 
            const dashRows: any[] = [];
            // R0-R2: Header
@@ -657,10 +678,10 @@ export default function App() {
            dashRows.push({
              values: [
                makeCell(""),
-              makeCell(`=SUMIF('${pLaporanTitle}'!D:D,$C$5,'${pLaporanTitle}'!R:R)`, true, valFormat), makeCell(""),
-              makeCell(`=SUMIF('${pKhususTitle}'!D:D,$C$5,'${pKhususTitle}'!K:K)`, true, valFormat), makeCell(""),
-              makeCell(`=SUMIF('${literaturTitle}'!D:D,$C$5,'${literaturTitle}'!O:O)`, true, valFormat), makeCell(""),
-               makeCell(`=B8+D8+F8`, true, Object.assign({}, valFormat, { backgroundColor: {red:0.95, green:0.95, blue:0.95} })), makeCell("")
+               makeCell(null, false, valFormat), makeCell(""),
+               makeCell(null, false, valFormat), makeCell(""),
+               makeCell(null, false, valFormat), makeCell(""),
+               makeCell(null, false, Object.assign({}, valFormat, { backgroundColor: {red:0.95, green:0.95, blue:0.95} })), makeCell("")
              ]
            });
 
@@ -688,7 +709,7 @@ export default function App() {
                const rowValues = [
                    makeCell(""),
                    makeCell(bulan[i], false, { borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }),
-                  makeCell(`=SUMIF('${pLaporanTitle}'!D:D,$C$5,'${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
+                   makeCell(null, false, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
                ];
                
                // Fill cols D, E, F, G with empty
@@ -696,7 +717,7 @@ export default function App() {
 
                if (i < 3) {
                    rowValues.push(makeCell(catNames[i], false, { borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }));
-                   rowValues.push(makeCell(catFormulas[i], true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }));
+                   rowValues.push(makeCell(null, false, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }));
                }
 
                dashRows.push({ values: rowValues });
