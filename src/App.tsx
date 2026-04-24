@@ -292,9 +292,16 @@ export default function App() {
          }
        });
 
+       const dashTitle = "📊 DASHBOARD";
        const pLaporanTitle = "Lap. Persembahan II";
        const pKhususTitle = "Lap. Persembahan Khusus";
        const literaturTitle = "Lap. Literatur";
+
+       const existingDash = sheetData.sheets?.find((s:any) => s.properties.title === dashTitle);
+       if (existingDash) {
+          batchRequests.push({ deleteSheet: { sheetId: existingDash.properties.sheetId } });
+       }
+       batchRequests.push({ addSheet: { properties: { title: dashTitle, index: 0, tabColor: { red: 0.1, green: 0.6, blue: 0.3 } }}});
 
        if (!existingTitles.includes("Jemaat")) batchRequests.push({ addSheet: { properties: { title: "Jemaat", hidden: true }}});
        if (!existingTitles.includes("Pembayaran")) batchRequests.push({ addSheet: { properties: { title: "Pembayaran", hidden: true }}});
@@ -532,15 +539,81 @@ export default function App() {
                });
              }
 
-             // 6. Auto-resize lebar kolom
+             // 7. Add Basic Filter (Dropdowns on Headers)
              formatRequests.push({
-               autoResizeDimensions: {
-                 dimensions: { sheetId: sid, dimension: "COLUMNS", startIndex: 0, endIndex: colsCount }
+               setBasicFilter: {
+                 filter: {
+                   range: { sheetId: sid, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: colsCount }
+                 }
                }
              });
              
            }
          });
+
+         const dashSheet = finalSheetData.sheets?.find((s:any) => s.properties.title === dashTitle);
+         const pLapSheet = finalSheetData.sheets?.find((s:any) => s.properties.title === pLaporanTitle);
+         
+         if (dashSheet && pLapSheet) {
+           const dashId = dashSheet.properties.sheetId;
+           const pLapId = pLapSheet.properties.sheetId;
+           
+           formatRequests.push({
+             updateCells: {
+               range: { sheetId: dashId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 },
+               rows: [{
+                 values: [
+                   { userEnteredValue: { stringValue: "📊 DASHBOARD KEUANGAN GKLI" }, userEnteredFormat: { textFormat: { bold: true, fontSize: 16, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.1, green: 0.2, blue: 0.3 }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" } }
+                 ]
+               }],
+               fields: "userEnteredValue,userEnteredFormat"
+             }
+           });
+           
+           formatRequests.push({
+             mergeCells: {
+               range: { sheetId: dashId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 },
+               mergeType: "MERGE_ALL"
+             }
+           });
+
+           formatRequests.push({
+             updateCells: {
+               range: { sheetId: dashId, startRowIndex: 3, startColumnIndex: 0 },
+               rows: [{
+                 values: [{
+                   userEnteredValue: { stringValue: "Rekapitulasi Total Pendapatan per Wilayah:" },
+                   userEnteredFormat: { textFormat: { bold: true, fontSize: 12 } }
+                 }]
+               }],
+               fields: "userEnteredValue,userEnteredFormat"
+             }
+           });
+
+           formatRequests.push({
+             updateCells: {
+               range: { sheetId: dashId, startRowIndex: 5, startColumnIndex: 0 },
+               rows: [{
+                 values: [{
+                   pivotTable: {
+                     source: { sheetId: pLapId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: 19 },
+                     rows: [{ sourceColumnOffset: 2, showTotals: true, sortOrder: "ASCENDING" }], // Wilayah
+                     columns: [{ sourceColumnOffset: 3, showTotals: true, sortOrder: "DESCENDING" }], // Tahun
+                     values: [{ sourceColumnOffset: 17, summarizeFunction: "SUM" }] // Total Rp
+                   }
+                 }]
+               }],
+               fields: "pivotTable"
+             }
+           });
+           
+           formatRequests.push({
+             updateSheetProperties: {
+               properties: { sheetId: dashId, gridProperties: { hideGridlines: true } },
+               fields: "gridProperties.hideGridlines"
+             }
+           });
+         }
 
          if (formatRequests.length > 0) {
             await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
