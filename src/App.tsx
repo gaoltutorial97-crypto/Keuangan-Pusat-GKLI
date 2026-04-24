@@ -423,9 +423,9 @@ export default function App() {
        const updateData = [
           { range: "Jemaat!A1", values: jemaatValues },
           { range: "Pembayaran!A1", values: paymentValues },
-          { range: `'${pLaporanTitle}'!A1`, values: lapLaporan },
-          { range: `'${pKhususTitle}'!A1`, values: lapPelean },
-          { range: `'${literaturTitle}'!A1`, values: lapAlaman }
+          { range: `'${pLaporanTitle}'!A5`, values: lapLaporan },
+          { range: `'${pKhususTitle}'!A5`, values: lapPelean },
+          { range: `'${literaturTitle}'!A5`, values: lapAlaman }
        ];
        
        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchClear`, {
@@ -469,18 +469,65 @@ export default function App() {
              if (title === pKhususTitle) colsCount = 12;
              if (title === literaturTitle) colsCount = 16;
 
-             // 1. Baris Pertama dibekukan (Frozen row)
+             // 1. Frozen row (Freeze top 5 rows now)
              formatRequests.push({
                updateSheetProperties: {
-                 properties: { sheetId: sid, gridProperties: { frozenRowCount: 1 } },
+                 properties: { sheetId: sid, gridProperties: { frozenRowCount: 5 } },
                  fields: "gridProperties.frozenRowCount"
                }
              });
+
+             const isIndo = true; // Use stringValue with = to let Sheets UI parse dynamically if needed, or use formulaValue
+             const makeCellLocal = (value: any, isFormula = false, format: any = {}, dataVal: any = null) => {
+                const c: any = { userEnteredFormat: format };
+                if (isFormula) c.userEnteredValue = { formulaValue: value };
+                else if (typeof value === 'number') c.userEnteredValue = { numberValue: value };
+                else c.userEnteredValue = { stringValue: value };
+                if (dataVal) c.dataValidation = dataVal;
+                return c;
+             };
+
+             const locFmt = { textFormat: { bold: true, fontSize: 13, foregroundColor: {red:1, green:1, blue:1} }, backgroundColor: {red:0.1, green:0.2, blue:0.3}, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" };
+
+             let sumColName = "R";
+             if (title === pKhususTitle) sumColName = "K";
+             if (title === literaturTitle) sumColName = "O";
+
+             // Local Dashboard Rows (Row 0, 1, 2, 3)
+             formatRequests.push({
+               updateCells: {
+                 range: { sheetId: sid, startRowIndex: 0, startColumnIndex: 0 },
+                 rows: [
+                   // Row 0: Title
+                   { values: [ makeCellLocal("📊 " + title.toUpperCase(), false, locFmt) ] },
+                   // Row 1: Dropdown Year
+                   { values: [
+                       makeCellLocal(""),
+                       makeCellLocal("PILIH TAHUN :", false, { textFormat: { bold: true, fontSize: 12 }, horizontalAlignment: "RIGHT", verticalAlignment: "MIDDLE" }),
+                       makeCellLocal(periodeAktif, false, { backgroundColor: {red:0.9, green:0.95, blue:1}, textFormat: { bold: true, fontSize: 13 }, borders: { bottom: { style: "SOLID", width:2, color: {red:0.2, green:0.4, blue:0.8} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" }, { condition: { type: "ONE_OF_LIST", values: periodesToSync.map((p:string) => ({ userEnteredValue: p })) }, showCustomUi: true, strict: true }),
+                       makeCellLocal("  ⬅️ Ubah tahun di sini untuk melihat total di bawah ini.", false, { textFormat: { italic: true, foregroundColor: {red:0.4, green:0.4, blue:0.4} }, verticalAlignment: "MIDDLE" })
+                     ]
+                   },
+                   // Row 2: Total for selected year
+                   { values: [
+                       makeCellLocal(""),
+                       makeCellLocal("TOTAL PENDAPATAN :", false, { textFormat: { bold: true, fontSize: 12 }, horizontalAlignment: "RIGHT", verticalAlignment: "MIDDLE" }),
+                       makeCellLocal(`=SUMIF(D6:D, C2, ${sumColName}6:${sumColName})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, textFormat: { bold: true, fontSize: 16, foregroundColor: {red:0.1, green:0.4, blue:0.1} }, backgroundColor: {red:0.9, green:1, blue:0.9}, borders: { bottom: { style: "SOLID", width: 2, color: {red:0.1, green:0.5, blue:0.1} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" })
+                     ]
+                   },
+                   // Row 3: Empty spacing
+                   { values: [] },
+                 ],
+                 fields: "userEnteredValue,userEnteredFormat,dataValidation"
+               }
+             });
+
+             formatRequests.push({ mergeCells: { range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: colsCount }, mergeType: "MERGE_ALL" } });
              
-             // 2. Format Header (Tebal, Latar Biru Gelap, Teks Putih, Tengah)
+             // 2. Format Header (Tebal, Latar Biru Gelap, Teks Putih, Tengah) - at startRowIndex: 4
              formatRequests.push({
                repeatCell: {
-                 range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: colsCount },
+                 range: { sheetId: sid, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 0, endColumnIndex: colsCount },
                  cell: {
                    userEnteredFormat: {
                      backgroundColor: { red: 0.1, green: 0.16, blue: 0.23 }, // dark blue-slate
@@ -493,11 +540,11 @@ export default function App() {
                }
              });
 
-             // 3. Banding (warna selang-seling untuk baris data)
+             // 3. Banding (warna selang-seling untuk baris data) - starting at 5
              formatRequests.push({
                addBanding: {
                  bandedRange: {
-                   range: { sheetId: sid, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: colsCount },
+                   range: { sheetId: sid, startRowIndex: 5, startColumnIndex: 0, endColumnIndex: colsCount },
                    rowProperties: {
                      firstBandColor: { red: 1, green: 1, blue: 1 },
                      secondBandColor: { red: 0.95, green: 0.96, blue: 0.98 }
@@ -509,7 +556,7 @@ export default function App() {
              // 4. Border (Garis tabel) tipis
              formatRequests.push({
                updateBorders: {
-                 range: { sheetId: sid, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: colsCount },
+                 range: { sheetId: sid, startRowIndex: 4, startColumnIndex: 0, endColumnIndex: colsCount },
                  top: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
                  bottom: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
                  left: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 } },
@@ -528,7 +575,7 @@ export default function App() {
              if (curStart < curEnd) {
                formatRequests.push({
                  repeatCell: {
-                   range: { sheetId: sid, startRowIndex: 1, startColumnIndex: curStart, endColumnIndex: curEnd },
+                   range: { sheetId: sid, startRowIndex: 5, startColumnIndex: curStart, endColumnIndex: curEnd },
                    cell: {
                      userEnteredFormat: {
                        numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }
@@ -543,7 +590,7 @@ export default function App() {
              formatRequests.push({
                setBasicFilter: {
                  filter: {
-                   range: { sheetId: sid, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: colsCount }
+                   range: { sheetId: sid, startRowIndex: 4, startColumnIndex: 0, endColumnIndex: colsCount }
                  }
                }
              });
@@ -610,9 +657,9 @@ export default function App() {
            dashRows.push({
              values: [
                makeCell(""),
-               makeCell(`=SUMIFS('${pLaporanTitle}'!R:R, '${pLaporanTitle}'!D:D, C5)`, true, valFormat), makeCell(""),
-               makeCell(`=SUMIFS('${pKhususTitle}'!K:K, '${pKhususTitle}'!D:D, C5)`, true, valFormat), makeCell(""),
-               makeCell(`=SUMIFS('${literaturTitle}'!O:O, '${literaturTitle}'!D:D, C5)`, true, valFormat), makeCell(""),
+               makeCell(`=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!R:R)`, true, valFormat), makeCell(""),
+               makeCell(`=SUMIF('${pKhususTitle}'!D:D, $C$5, '${pKhususTitle}'!K:K)`, true, valFormat), makeCell(""),
+               makeCell(`=SUMIF('${literaturTitle}'!D:D, $C$5, '${literaturTitle}'!O:O)`, true, valFormat), makeCell(""),
                makeCell(`=B8+D8+F8`, true, Object.assign({}, valFormat, { backgroundColor: {red:0.95, green:0.95, blue:0.95} })), makeCell("")
              ]
            });
@@ -641,7 +688,7 @@ export default function App() {
                const rowValues = [
                    makeCell(""),
                    makeCell(bulan[i], false, { borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }),
-                   makeCell(`=SUMIFS('${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]}, '${pLaporanTitle}'!D:D, $C$5)`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
+                   makeCell(`=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
                ];
                
                // Fill cols D, E, F, G with empty
@@ -748,7 +795,7 @@ export default function App() {
        }
 
        toastLabel.remove();
-       alert("✅ Sinkronisasi Berhasil!\nSheet Laporan profesional telah dibuat di Google Drive Anda.\n\nTips: Buka Google Sheet tersebut, lalu gunakan fitur 'Filter' pada kolom 'Tahun (Periode)' untuk memilih laporan per tahun dengan mudah!");
+       alert("✅ Sinkronisasi Berhasil!\nSheet Laporan profesional telah dibuat di Google Drive Anda.\n\nTips: Buka sheet Dashboard atau Lap. Persembahan untuk memilih dan mensortir tahun dengan menu drop-down yang telah disediakan!");
 
     } catch (e: any) {
         toastLabel.remove();
