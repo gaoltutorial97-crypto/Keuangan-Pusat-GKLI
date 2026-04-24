@@ -512,7 +512,7 @@ export default function App() {
                    { values: [
                        makeCellLocal(""),
                        makeCellLocal("TOTAL PENDAPATAN :", false, { textFormat: { bold: true, fontSize: 12 }, horizontalAlignment: "RIGHT", verticalAlignment: "MIDDLE" }),
-                       makeCellLocal(`=SUMIF(D6:D, C2, ${sumColName}6:${sumColName})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, textFormat: { bold: true, fontSize: 16, foregroundColor: {red:0.1, green:0.4, blue:0.1} }, backgroundColor: {red:0.9, green:1, blue:0.9}, borders: { bottom: { style: "SOLID", width: 2, color: {red:0.1, green:0.5, blue:0.1} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" })
+                       makeCellLocal(`=SUMIF(D:D,$C$2,${sumColName}:${sumColName})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, textFormat: { bold: true, fontSize: 16, foregroundColor: {red:0.1, green:0.4, blue:0.1} }, backgroundColor: {red:0.9, green:1, blue:0.9}, borders: { bottom: { style: "SOLID", width: 2, color: {red:0.1, green:0.5, blue:0.1} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" })
                      ]
                    },
                    // Row 3: Empty spacing
@@ -657,9 +657,9 @@ export default function App() {
            dashRows.push({
              values: [
                makeCell(""),
-               makeCell(`=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!R:R)`, true, valFormat), makeCell(""),
-               makeCell(`=SUMIF('${pKhususTitle}'!D:D, $C$5, '${pKhususTitle}'!K:K)`, true, valFormat), makeCell(""),
-               makeCell(`=SUMIF('${literaturTitle}'!D:D, $C$5, '${literaturTitle}'!O:O)`, true, valFormat), makeCell(""),
+              makeCell(`=SUMIF('${pLaporanTitle}'!D:D,$C$5,'${pLaporanTitle}'!R:R)`, true, valFormat), makeCell(""),
+              makeCell(`=SUMIF('${pKhususTitle}'!D:D,$C$5,'${pKhususTitle}'!K:K)`, true, valFormat), makeCell(""),
+              makeCell(`=SUMIF('${literaturTitle}'!D:D,$C$5,'${literaturTitle}'!O:O)`, true, valFormat), makeCell(""),
                makeCell(`=B8+D8+F8`, true, Object.assign({}, valFormat, { backgroundColor: {red:0.95, green:0.95, blue:0.95} })), makeCell("")
              ]
            });
@@ -688,7 +688,7 @@ export default function App() {
                const rowValues = [
                    makeCell(""),
                    makeCell(bulan[i], false, { borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }),
-                   makeCell(`=SUMIF('${pLaporanTitle}'!D:D, $C$5, '${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
+                  makeCell(`=SUMIF('${pLaporanTitle}'!D:D,$C$5,'${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]})`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
                ];
                
                // Fill cols D, E, F, G with empty
