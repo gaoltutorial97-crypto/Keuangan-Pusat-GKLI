@@ -625,7 +625,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     
     // Apply filters matching the global ones
     if (filterResort !== 'Semua Resort') {
-      data = data.filter(c => c.resort === filterResort);
+      const normFilter = normalizeResortName(filterResort);
+      data = data.filter(c => normalizeResortName(c.resort) === normFilter);
     }
     if (filterWilayah !== 'Semua Wilayah') {
       data = data.filter(c => c.wilayah === filterWilayah);
@@ -669,17 +670,32 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     return data
       .map(gereja => {
-        const aliases = churchAliasesMap[gereja.id] || [gereja.id];
-        const pembayaranList = payments.filter(p => 
-          aliases.includes(p.gerejaId) && 
-          p.kategori === kategori && 
-          normalizePeriode(p.periode) === normalizePeriode(periodeAktif)
-        );
+        const targetIdentityKey = getChurchIdentityKey(gereja);
+        
+        // Find all payments that belong to this identity, regardless of which ID/alias was used
+        const pembayaranList = payments.filter(p => {
+          // 1. Check if category and period match
+          if (p.kategori !== kategori) return false;
+          if (normalizePeriode(p.periode) !== normalizePeriode(periodeAktif)) return false;
+
+          // 2. Check identity match
+          // Look up the full church info for this payment's gerejaId to get its identity key
+          const pChurch = allChurches.find(c => c.id === p.gerejaId);
+          if (pChurch) {
+            return getChurchIdentityKey(pChurch) === targetIdentityKey;
+          }
+          
+          // Fallback: if church not found in current list, check if the ID itself is one of this church's known aliases
+          const aliases = churchAliasesMap[gereja.id] || [gereja.id];
+          return aliases.includes(p.gerejaId);
+        });
         
         let combinedDetails: Record<string, number> = {};
         pembayaranList.forEach(p => {
           if (p.details) {
-            combinedDetails = { ...combinedDetails, ...p.details };
+            Object.entries(p.details).forEach(([k, v]) => {
+              combinedDetails[k] = (combinedDetails[k] || 0) + (v as number || 0);
+            });
           }
         });
 
@@ -749,7 +765,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       .filter(p => {
         const church = allChurches.find(c => c.id === p.gerejaId);
         if (!church) return false;
-        const matchResort = filterResort === 'Semua Resort' || church.resort === filterResort;
+        const matchResort = filterResort === 'Semua Resort' || normalizeResortName(church.resort) === normalizeResortName(filterResort);
         const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
         return normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && matchResort && matchWilayah;
       })
@@ -761,7 +777,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     payments.forEach(p => {
       const church = allChurches.find(c => c.id === p.gerejaId);
       if (!church) return;
-      const matchResort = filterResort === 'Semua Resort' || church.resort === filterResort;
+      const matchResort = filterResort === 'Semua Resort' || normalizeResortName(church.resort) === normalizeResortName(filterResort);
       const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
       
       if (normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && matchResort && matchWilayah) {
@@ -780,7 +796,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     [dataAlaman, dataPelean, dataLaporanKeuangan].forEach((dataset) => {
       dataset.filter(item => {
-        const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+        const matchResort = filterResort === 'Semua Resort' || normalizeResortName(item.resort) === normalizeResortName(filterResort);
         const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
         return matchResort && matchWilayah && item.type !== 'resort';
       }).forEach(item => {
@@ -795,7 +811,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     });
 
     const totalDistribusiItems = dataDistribusi.filter(item => {
-      const matchResort = filterResort === 'Semua Resort' || item.resort === filterResort;
+      const matchResort = filterResort === 'Semua Resort' || normalizeResortName(item.resort) === normalizeResortName(filterResort);
       const matchWilayah = filterWilayah === 'Semua Wilayah' || item.wilayah === filterWilayah;
       return matchResort && matchWilayah && item.type !== 'resort';
     }).reduce((sum, item) => {
@@ -1199,11 +1215,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     // Filter out headers before saving
     const churchesOnly = newOrder.filter(item => item.type !== 'group-header');
     
+    // Extract the original order values of these items available in the UI
+    // So that we only swap their existing order values, instead of overwriting global values
+    const originalOrders = churchesOnly.map(c => c.order || 0).sort((a, b) => a - b);
+    
     // Batch update order fields in Firestore
     const batch = writeBatch(db);
     churchesOnly.forEach((church, index) => {
-      const newIdx = index + 1;
-      if (church.order !== newIdx) {
+      const newIdx = originalOrders[index];
+      if (church.order !== newIdx && !church.isSynthesized) {
         batch.update(doc(db, 'churches', church.id), { order: newIdx });
       }
     });
@@ -1212,6 +1232,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       await batch.commit();
     } catch (err: any) {
       console.error("Reorder failed:", err);
+      alert("Gagal memindahkan urutan: " + err.message);
     }
   };
 
@@ -1698,6 +1719,19 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     return (maxNomorSurat + 1).toLocaleString('id-ID');
   };
 
+  const sortPaymentDetailsEntries = (cat: string, entries: [string, any][]) => {
+    const monthOrder: Record<string, number> = {
+      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'Mei': 5, 'Jun': 6,
+      'Jul': 7, 'Agu': 8, 'Agt': 8, 'Sep': 9, 'Okt': 10, 'Nov': 11, 'Des': 12
+    };
+    return entries.sort(([a], [b]) => {
+      if (cat.toLowerCase() === 'laporan') {
+        return (monthOrder[a] || 99) - (monthOrder[b] || 99);
+      }
+      return a.localeCompare(b);
+    });
+  };
+
   const getFormattedPaymentName = (cat: string, field: string) => {
     const monthMap: Record<string, string> = {
       'Jan': 'Januari', 'Feb': 'Februari', 'Mar': 'Maret', 'Apr': 'April',
@@ -1914,7 +1948,42 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     link.href = dataUrl;
                     link.click();
                     
-                    const waMessage = `Halo Majelis Jemaat GKLI ${printData?.nama}. Terlampir Surat Ucapan Terima Kasih periode ${printData?.periode || periodeAktif}. Terima kasih.`;
+                    let rincianItems = '';
+                    if (printType === 'global-receipt') {
+                      Object.entries(printData.updates || {}).forEach(([cat, fields]: [any, any]) => {
+                        sortPaymentDetailsEntries(cat, fields.map((f: string) => [f, null])).forEach(([f]) => {
+                          const val = printData.allDetails?.[cat]?.[f];
+                          if (val > 0) {
+                            rincianItems += `\n- ${getFormattedPaymentName(cat, f)} : Rp ${formatRupiah(val)}`;
+                          }
+                        });
+                      });
+                    } else if (printData.items) {
+                      sortPaymentDetailsEntries(printData.kategori, printData.items.map((col: string) => [col, null])).forEach(([col]) => {
+                        const val = printData.details?.[col] || 0;
+                        if (val > 0) {
+                          rincianItems += `\n- ${getFormattedPaymentName(printData.kategori, col)} : Rp ${formatRupiah(val)}`;
+                        }
+                      });
+                    }
+
+                    const waMessage = `Shalom Majelis Jemaat *${printData?.nama}* (Resort ${printData?.resort}).\nBerikut rincian tanda terima persembahan ke Kantor Pusat untuk periode ${printData?.periode || periodeAktif}:\n${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nTerima kasih atas pelayanannya. Tuhan Yesus memberkati.\n\n_Catatan: Gambar surat resmi telah terunduh ke perangkat/komputer Anda, silakan dilampirkan pada pesan ini._`;
+                    
+                    if (navigator.share) {
+                      try {
+                        const blob = await (await fetch(dataUrl)).blob();
+                        const file = new File([blob], `GKLI_${printData?.nama || 'Surat'}.jpg`, { type: 'image/jpeg' });
+                        await navigator.share({
+                          title: 'Surat Tanda Terima',
+                          text: waMessage,
+                          files: [file]
+                        });
+                        return;
+                      } catch (err) {
+                        console.warn('Share API blocked or failed, falling back to wa.me', err);
+                      }
+                    }
+
                     window.open(`https://wa.me/${printData.wa}?text=${encodeURIComponent(waMessage)}`, '_blank');
                   }
                 } catch (err) {
@@ -1955,7 +2024,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         </div>
 
         <div className="print-preview-container">
-          <div id="printable-page" className="font-serif text-black" ref={printRef}>
+          <div id="printable-page" style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '12pt', paddingTop: '2cm', paddingLeft: '1cm', paddingRight: '1cm', color: 'black' }} ref={printRef}>
       <div className="print-section mt-0">
          {/* Header */}
          <div className="text-center mb-8 relative pt-0">
@@ -2118,7 +2187,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             });
                           })()
                         ) : (
-                          (printData.items || []).map((col: string, idx: number) => {
+                          sortPaymentDetailsEntries(printData.kategori, (printData.items || []).map((col: string) => [col, null])).map(([col], idx) => {
                             const val = printData.details?.[col] || 0;
                             if (val <= 0) return null;
                             return (
@@ -2424,7 +2493,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                         <span className="angka-keuangan text-green-600 text-sm">Rp {formatRupiah(p.jumlah)}</span>
                                       </div>
                                       <div className="pl-4 space-y-1 mt-2">
-                                        {Object.entries(p.details || {}).map(([key, val]) => (
+                                        {sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).map(([key, val]) => (
                                           (val as number) > 0 && (
                                             <div key={key} className="flex justify-between text-slate-500 text-xs">
                                               <span>- {getFormattedPaymentName(p.kategori, key)}</span>
@@ -2459,7 +2528,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     let rincian = '';
                                     pendingPayments.forEach(p => {
                                       rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
-                                      Object.entries(p.details || {}).forEach(([key, val]) => {
+                                      sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
                                         if ((val as number) > 0) {
                                           rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
                                         }
@@ -2600,7 +2669,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     let rincian = "";
                                     sentPayments.forEach(p => {
                                       rincian += `\n*${(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}* (Rp ${formatRupiah(p.jumlah)}):`;
-                                      Object.entries(p.details || {}).forEach(([key, val]) => {
+                                      sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
                                         if ((val as number) > 0) {
                                           rincian += `\n- ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
                                         }

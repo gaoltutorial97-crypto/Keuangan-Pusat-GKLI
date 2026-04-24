@@ -187,11 +187,18 @@ export default function PublicForm() {
     const group = churchGroups[selectedChurchIdentity];
     if (!group) return disabled;
 
-    // Filter payments for ANY alias ID of this jemaat
-    const churchPayments = payments.filter(p => 
-      group.aliases.includes(p.gerejaId) && 
+    const churchPayments = payments.filter(p => {
+      // Match by categorized ID (aliases)
+      if (group.aliases.includes(p.gerejaId)) return true;
+      
+      // Fallback: Check if the payment's gerejaId belongs to a church with the same identity
+      const pChurch = allChurches.find(c => c.id === p.gerejaId);
+      if (pChurch && getChurchIdentityKey(pChurch) === selectedChurchIdentity) return true;
+      
+      return false;
+    }).filter(p => 
       normalizePeriode(p.periode) === normalizePeriode(periode) && 
-      p.kategori === kategori
+      (p.kategori || '').toLowerCase() === kategori.toLowerCase()
     );
     
     churchPayments.forEach(p => {
@@ -249,6 +256,7 @@ export default function PublicForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedChurchIdentity) return alert('Silakan pilih nama jemaat Bapak/Ibu.');
+    if (!periode) return alert('Silakan pilih tahun/periode setoran.');
     if (totalSumbangan <= 0) return alert('Silakan isi nominal setoran.');
 
     setIsSubmitting(true);
@@ -257,7 +265,7 @@ export default function PublicForm() {
       const group = churchGroups[selectedChurchIdentity];
       const church = group.master;
       const paymentData = {
-        gerejaId: church.id, // Use master ID for submission
+        gerejaId: church.id,
         periode: periode,
         kategori: kategori,
         details: details,
@@ -269,6 +277,7 @@ export default function PublicForm() {
         buktiTransferBase64: buktiImage
       };
 
+      console.log("Submitting payment to center...", { churchId: church.id, periode, total: totalSumbangan });
       await addDoc(collection(db, 'payments'), paymentData);
       setSuccessData({ church, paymentData });
     } catch (err: any) {
@@ -402,8 +411,13 @@ export default function PublicForm() {
         
         <header className="mb-10 flex flex-col items-center">
           <img src={appSettings.logoUrl || "https://upload.wikimedia.org/wikipedia/commons/0/05/Logo_GKLI.png"} className="h-20 w-auto mb-4" alt="Logo" />
-          <h1 className="text-2xl font-black tracking-tight text-center uppercase">{appSettings.title}</h1>
-          <p className="text-slate-500 text-sm font-bold tracking-widest uppercase">Portal Penyetoran Jemaat</p>
+          <h1 className="text-2xl font-black tracking-tight text-center uppercase">{appSettings.title || "Donasi GKLI"}</h1>
+          <div className="flex items-center gap-2 mt-1">
+             <div className={`w-2 h-2 rounded-full ${isPaymentsLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+             <p className="text-slate-500 text-[10px] font-bold tracking-widest uppercase">
+               {isPaymentsLoaded ? 'Data Terkoneksi (Real-time)' : 'Menghubungkan...'}
+             </p>
+          </div>
         </header>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-[32px] shadow-2xl border border-slate-200 p-6 md:p-10 space-y-8">
