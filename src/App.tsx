@@ -266,6 +266,9 @@ export default function App() {
              body: JSON.stringify({ name: 'Database Keuangan GKLI', mimeType: 'application/vnd.google-apps.spreadsheet' })
           });
           const file = await res.json();
+          if (!res.ok) {
+             throw new Error(file.error?.message || "Gagal membuat file Spreadsheet di Google Drive Anda.");
+          }
           sheetId = file.id;
           const newSettings = { ...appSettings, googleSpreadsheetId: file.id };
           await setDoc(doc(db, 'settings', 'config'), newSettings);
@@ -4673,6 +4676,37 @@ function doPost(e) {
                  <p className="text-xs text-slate-300 mb-3 leading-relaxed">
                    Client ID sudah ditanam (otomatis). Klik tombol 'Sync ke Drive' atau 'Tarik dari Drive' untuk langsung menghubungkan ke Google Drive Anda.
                  </p>
+                 <div className="bg-amber-900/40 p-3 rounded border border-amber-800/50 mb-3 space-y-3">
+                   <div>
+                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error 400: redirect_uri_mismatch</p>
+                     <p className="text-xs text-amber-200">
+                       Jika Anda melihat error ini saat login Google, buka kembali <b>Google Cloud Console</b> Anda, cari Client ID Anda, lalu pada bagian <b>Authorized JavaScript origins (Asal JavaScript yang diizinkan)</b> tambahkan URL berikut:
+                     </p>
+                     <code className="text-[10px] text-green-400 select-all p-1 bg-black/50 rounded block mt-2 mb-1">https://keuangan-pusat-gkli.vercel.app</code>
+                     <code className="text-[10px] text-green-400 select-all p-1 bg-black/50 rounded block">{window.location.origin}</code>
+                   </div>
+                   <div className="border-t border-amber-800/50 pt-3">
+                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error 403: access_denied</p>
+                     <p className="text-xs text-amber-200">
+                       Aplikasi Anda di Google Cloud Console masih dalam status <b>Testing</b>. Oleh karena itu, hanya email yang terdaftar sebagai <b>Test users</b> yang bisa login.
+                       <br/>
+                       Berdasarkan gambar tampilan Google yang baru Anda kirimkan, silakan perhatikan menu di sebelah kiri, klik menu <b>Audience</b> (tepat di bawah tulisan Branding). Di halaman tersebut, cari bagian <b>Test users</b>, klik <b>ADD USERS</b> dan masukkan email Anda (<span className="font-bold">lutheranchurch.priangaol@gmail.com</span>).
+                       <br/>
+                       <i>Atau</i>, pada halaman yang sama, pastikan status aplikasi (Publishing status) Anda pindah dari <b>Testing</b> menjadi <b>Production</b>.
+                     </p>
+                   </div>
+                   <div className="border-t border-amber-800/50 pt-3">
+                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Peringatan: "Google belum memverifikasi aplikasi ini"</p>
+                     <p className="text-xs text-amber-200">
+                       Peringatan ini <b>wajar</b> muncul karena ini adalah aplikasi pribadi yang mengakses Google Drive Anda dan belum diajukan ke Google untuk verifikasi publik.
+                       <br/>
+                       <br/>
+                       <b>Cara melewatinya:</b><br/>
+                       1. Klik tulisan <b>"Lanjutan"</b> (atau "Advanced") di pojok kiri bawah layar Google tersebut.<br/>
+                       2. Lalu klik tautan <b>"Buka ..."</b> (atau "Go to ... (unsafe)") yang muncul di bagian paling bawah.
+                     </p>
+                   </div>
+                 </div>
                  <p className="text-xs text-amber-500 font-bold italic mb-3">
                    * Anda tidak perlu memasang Apps script lagi.
                  </p>
