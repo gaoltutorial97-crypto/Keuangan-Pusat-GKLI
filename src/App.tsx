@@ -552,67 +552,187 @@ export default function App() {
          });
 
          const dashSheet = finalSheetData.sheets?.find((s:any) => s.properties.title === dashTitle);
-         const pLapSheet = finalSheetData.sheets?.find((s:any) => s.properties.title === pLaporanTitle);
          
-         if (dashSheet && pLapSheet) {
+         if (dashSheet) {
            const dashId = dashSheet.properties.sheetId;
-           const pLapId = pLapSheet.properties.sheetId;
-           
-           formatRequests.push({
-             updateCells: {
-               range: { sheetId: dashId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 },
-               rows: [{
-                 values: [
-                   { userEnteredValue: { stringValue: "📊 DASHBOARD KEUANGAN GKLI" }, userEnteredFormat: { textFormat: { bold: true, fontSize: 16, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.1, green: 0.2, blue: 0.3 }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" } }
-                 ]
-               }],
-               fields: "userEnteredValue,userEnteredFormat"
-             }
+
+           const makeCell = (value: any, isFormula = false, format: any = {}) => ({
+             userEnteredValue: isFormula ? { formulaValue: value } : (typeof value === 'number' ? { numberValue: value } : { stringValue: value }),
+             userEnteredFormat: format
            });
+
+           const dashRows: any[] = [];
+           // R0-R2: Header
+           dashRows.push({ values: [ makeCell("📊 EXECUTIVE DASHBOARD KEUANGAN GKLI", false, { backgroundColor: {red:0.05, green:0.1, blue:0.2}, textFormat: { bold: true, fontSize: 18, foregroundColor: {red:1, green:1, blue:1} }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" }) ] });
+           dashRows.push({ values: [] });
+           dashRows.push({ values: [] });
            
-           formatRequests.push({
-             mergeCells: {
-               range: { sheetId: dashId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 },
-               mergeType: "MERGE_ALL"
-             }
+           // R3: Empty
+           dashRows.push({ values: [] });
+
+           // R4: Filter
+           dashRows.push({
+             values: [
+               makeCell(""),
+               makeCell("PILIH TAHUN :", false, { textFormat: { bold: true, fontSize: 12 }, horizontalAlignment: "RIGHT" }),
+               {
+                 userEnteredValue: { stringValue: periodeAktif },
+                 userEnteredFormat: { backgroundColor: {red:0.9, green:0.95, blue:1}, textFormat: { bold: true, fontSize: 13 }, borders: { bottom: { style: "SOLID", width:2, color: {red:0.2, green:0.4, blue:0.8} } }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" },
+                 dataValidation: { condition: { type: "ONE_OF_LIST", values: periodesToSync.map(p => ({ userEnteredValue: p })) }, showCustomUi: true, strict: true }
+               },
+               makeCell("  ⬅️ Ubah pilihan dropdown ini untuk memperbarui semua data dan grafik laporan di bawah ini.", false, { textFormat: { italic: true, foregroundColor: {red:0.4, green:0.4, blue:0.4} }, verticalAlignment: "MIDDLE" })
+             ]
            });
+
+           // R5: Informational Text for 2-way sync
+           dashRows.push({
+             values: [
+               makeCell(""),
+               makeCell("PENTING: Sheet laporan ini (Dashboard dan Rekap) DIBUAT OTOMATIS dari aplikasi web. JANGAN merubah nominal di sheet secara langsung karena akan tertimpa saat Anda menekan tombol Sync di aplikasi.", false, { textFormat: { bold: true, italic: true, fontSize: 9, foregroundColor: {red:0.8, green:0.1, blue:0.1} }, verticalAlignment: "MIDDLE" })
+             ]
+           });
+
+           const statFormat = (bg: any) => ({ backgroundColor: bg, textFormat: { bold: true, fontSize: 10, foregroundColor: {red:1, green:1, blue:1} }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE" });
+           const valFormat = { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, textFormat: { bold: true, fontSize: 16 }, horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE", borders: { bottom: { style: "SOLID", width: 1, color: {red:0.8, green:0.8, blue:0.8} }, left: {style: "SOLID", width: 1, color: {red:0.8, green:0.8, blue:0.8}}, right: {style: "SOLID", width: 1, color: {red:0.8, green:0.8, blue:0.8}} } };
+
+           // R6: Stat Headers
+           dashRows.push({
+             values: [
+               makeCell(""),
+               makeCell("TOTAL PERSEMBAHAN II", false, statFormat({red:0.1, green:0.4, blue:0.7})), makeCell(""),
+               makeCell("TOTAL PERS. KHUSUS", false, statFormat({red:0.8, green:0.4, blue:0.1})), makeCell(""),
+               makeCell("TOTAL LITERATUR", false, statFormat({red:0.1, green:0.5, blue:0.3})), makeCell(""),
+               makeCell("TOTAL KESELURUHAN", false, statFormat({red:0.2, green:0.2, blue:0.2})), makeCell("")
+             ]
+           });
+
+           // R7: Stat Formulas
+           dashRows.push({
+             values: [
+               makeCell(""),
+               makeCell(`=SUMIFS('${pLaporanTitle}'!R:R, '${pLaporanTitle}'!D:D, C5)`, true, valFormat), makeCell(""),
+               makeCell(`=SUMIFS('${pKhususTitle}'!K:K, '${pKhususTitle}'!D:D, C5)`, true, valFormat), makeCell(""),
+               makeCell(`=SUMIFS('${literaturTitle}'!O:O, '${literaturTitle}'!D:D, C5)`, true, valFormat), makeCell(""),
+               makeCell(`=B8+D8+F8`, true, Object.assign({}, valFormat, { backgroundColor: {red:0.95, green:0.95, blue:0.95} })), makeCell("")
+             ]
+           });
+
+           // R8: Empty
+           dashRows.push({ values: [] });
+
+           // R9: Tables & Chart placeholders Headers
+           dashRows.push({
+             values: [
+               makeCell(""),
+               makeCell("Bulan", false, statFormat({red:0.3, green:0.3, blue:0.3})),
+               makeCell("Persembahan II", false, statFormat({red:0.3, green:0.3, blue:0.3})),
+               makeCell(""), makeCell(""), makeCell(""), makeCell(""),
+               makeCell("Kategori", false, statFormat({red:0.3, green:0.3, blue:0.3})),
+               makeCell("Total", false, statFormat({red:0.3, green:0.3, blue:0.3}))
+             ]
+           });
+
+           const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+           const colLetters = ['F','G','H','I','J','K','L','M','N','O','P','Q']; // Jan is Col F (index 5) in Lap. Persembahan II
+           const catNames = ['Persembahan II', 'Pers. Khusus', 'Literatur'];
+           const catFormulas = ['=B8', '=D8', '=F8'];
+
+           for (let i = 0; i < 12; i++) {
+               const rowValues = [
+                   makeCell(""),
+                   makeCell(bulan[i], false, { borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }),
+                   makeCell(`=SUMIFS('${pLaporanTitle}'!${colLetters[i]}:${colLetters[i]}, '${pLaporanTitle}'!D:D, $C$5)`, true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" })
+               ];
+               
+               // Fill cols D, E, F, G with empty
+               rowValues.push(makeCell("")); rowValues.push(makeCell("")); rowValues.push(makeCell("")); rowValues.push(makeCell(""));
+
+               if (i < 3) {
+                   rowValues.push(makeCell(catNames[i], false, { borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }));
+                   rowValues.push(makeCell(catFormulas[i], true, { numberFormat: { type: "CURRENCY", pattern: "Rp#,##0" }, borders: { bottom: {style:'SOLID', width:1, color: {red:0.8, green:0.8, blue:0.8}} }, verticalAlignment: "MIDDLE" }));
+               }
+
+               dashRows.push({ values: rowValues });
+           }
 
            formatRequests.push({
              updateCells: {
-               range: { sheetId: dashId, startRowIndex: 3, startColumnIndex: 0 },
-               rows: [{
-                 values: [{
-                   userEnteredValue: { stringValue: "Rekapitulasi Total Pendapatan per Wilayah:" },
-                   userEnteredFormat: { textFormat: { bold: true, fontSize: 12 } }
-                 }]
-               }],
-               fields: "userEnteredValue,userEnteredFormat"
+               range: { sheetId: dashId, startRowIndex: 0, startColumnIndex: 0 },
+               rows: dashRows,
+               fields: "userEnteredValue,userEnteredFormat,dataValidation"
              }
            });
 
+           // Merges
+           const merges = [
+             { sheetId: dashId, startRowIndex: 0, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: 9 }, // Header
+             { sheetId: dashId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 3, endColumnIndex: 9 }, // Note Filter Info
+             { sheetId: dashId, startRowIndex: 5, endRowIndex: 6, startColumnIndex: 1, endColumnIndex: 9 }, // Note Warning
+             { sheetId: dashId, startRowIndex: 6, endRowIndex: 7, startColumnIndex: 1, endColumnIndex: 3 }, // P2 Head
+             { sheetId: dashId, startRowIndex: 7, endRowIndex: 8, startColumnIndex: 1, endColumnIndex: 3 }, // P2 Val
+             { sheetId: dashId, startRowIndex: 6, endRowIndex: 7, startColumnIndex: 3, endColumnIndex: 5 }, // PK Head
+             { sheetId: dashId, startRowIndex: 7, endRowIndex: 8, startColumnIndex: 3, endColumnIndex: 5 }, // PK Val
+             { sheetId: dashId, startRowIndex: 6, endRowIndex: 7, startColumnIndex: 5, endColumnIndex: 7 }, // Lit Head
+             { sheetId: dashId, startRowIndex: 7, endRowIndex: 8, startColumnIndex: 5, endColumnIndex: 7 }, // Lit Val
+             { sheetId: dashId, startRowIndex: 6, endRowIndex: 7, startColumnIndex: 7, endColumnIndex: 9 }, // Tot Head
+             { sheetId: dashId, startRowIndex: 7, endRowIndex: 8, startColumnIndex: 7, endColumnIndex: 9 }, // Tot Val
+           ];
+           merges.forEach(m => formatRequests.push({ mergeCells: { range: m, mergeType: "MERGE_ALL" } }));
+
+           // Column Widths
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 0, endIndex: 1 }, properties: { pixelSize: 20 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 1, endIndex: 2 }, properties: { pixelSize: 130 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 2, endIndex: 3 }, properties: { pixelSize: 150 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 3, endIndex: 4 }, properties: { pixelSize: 130 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 4, endIndex: 5 }, properties: { pixelSize: 150 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 5, endIndex: 6 }, properties: { pixelSize: 130 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 6, endIndex: 7 }, properties: { pixelSize: 150 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 7, endIndex: 8 }, properties: { pixelSize: 130 }, fields: "pixelSize" } });
+           formatRequests.push({ updateDimensionProperties: { range: { sheetId: dashId, dimension: "COLUMNS", startIndex: 8, endIndex: 9 }, properties: { pixelSize: 150 }, fields: "pixelSize" } });
+
+           // Hide Gridlines
+           formatRequests.push({ updateSheetProperties: { properties: { sheetId: dashId, gridProperties: { hideGridlines: true } }, fields: "gridProperties.hideGridlines" } });
+
+           // CHARTS
+           // Chart 1: Monthly Line/Area Chart for Persembahan II
+           // Position: D11 (index Row 10, Col 3)
            formatRequests.push({
-             updateCells: {
-               range: { sheetId: dashId, startRowIndex: 5, startColumnIndex: 0 },
-               rows: [{
-                 values: [{
-                   pivotTable: {
-                     source: { sheetId: pLapId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: 19 },
-                     rows: [{ sourceColumnOffset: 2, showTotals: true, sortOrder: "ASCENDING" }], // Wilayah
-                     columns: [{ sourceColumnOffset: 3, showTotals: true, sortOrder: "DESCENDING" }], // Tahun
-                     values: [{ sourceColumnOffset: 17, summarizeFunction: "SUM" }] // Total Rp
+             addChart: {
+               chart: {
+                 spec: {
+                   title: "Tren Pendapatan Persembahan II per Bulan (Rp)",
+                   basicChart: {
+                     chartType: "AREA",
+                     legendPosition: "NO_LEGEND",
+                     axis: [ { position: "BOTTOM_AXIS" }, { position: "LEFT_AXIS" } ],
+                     domains: [{ domain: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: 10, endRowIndex: 22, startColumnIndex: 1, endColumnIndex: 2 }] } } }],
+                     series: [{ series: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: 10, endRowIndex: 22, startColumnIndex: 2, endColumnIndex: 3 }] } }, color: {red:0.1, green:0.4, blue:0.7} }]
                    }
-                 }]
-               }],
-               fields: "pivotTable"
+                 },
+                 position: { overlayPosition: { anchorCell: { sheetId: dashId, rowIndex: 9, columnIndex: 3 }, offsetXPixels: 15, offsetYPixels: 0, widthPixels: 550, heightPixels: 300 } }
+               }
              }
            });
-           
+
+           // Chart 2: Category Pie Chart
+           // Position: H15 (index Row 14, Col 7)
            formatRequests.push({
-             updateSheetProperties: {
-               properties: { sheetId: dashId, gridProperties: { hideGridlines: true } },
-               fields: "gridProperties.hideGridlines"
+             addChart: {
+               chart: {
+                 spec: {
+                   title: "Distribusi Kategori Total Pendapatan",
+                   pieChart: {
+                     legendPosition: "RIGHT_LEGEND",
+                     domain: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: 10, endRowIndex: 13, startColumnIndex: 7, endColumnIndex: 8 }] } },
+                     series: { sourceRange: { sources: [{ sheetId: dashId, startRowIndex: 10, endRowIndex: 13, startColumnIndex: 8, endColumnIndex: 9 }] } },
+                     pieHole: 0.5
+                   }
+                 },
+                 position: { overlayPosition: { anchorCell: { sheetId: dashId, rowIndex: 14, columnIndex: 7 }, offsetXPixels: 0, offsetYPixels: 10, widthPixels: 450, heightPixels: 240 } }
+               }
              }
            });
+
          }
 
          if (formatRequests.length > 0) {
