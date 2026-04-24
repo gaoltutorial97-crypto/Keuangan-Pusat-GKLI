@@ -2000,10 +2000,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
                   let waMessage = '';
                   const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+                  const cleanPrintDataNama = printData?.nama ? printData.nama.replace(/^GKLI\s*/i, '') : '';
                   if (printType === 'global-arrears' || printType === 'tunggakan') {
-                    waMessage = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${printData?.nama} Resort ${printData?.resort}, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan yang belum kami terima (Tunggakan):\n${rincianItems}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
+                    waMessage = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanPrintDataNama}* Resort *${printData?.resort}*, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan yang belum kami terima (Tunggakan):\n${rincianItems}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
                   } else {
-                    waMessage = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${printData?.nama} Resort ${printData?.resort}, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincianItems}\n\nTOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
+                    waMessage = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanPrintDataNama}* Resort *${printData?.resort}*, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
                   }
 
                   window.open(`https://wa.me/${printData.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(waMessage)}`, '_blank');
@@ -2570,7 +2571,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     });
                                     
                                     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-                                    const text = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${church.nama} Resort ${church.resort}, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\nTOTAL: Rp ${formatRupiah(totalJumlah)}\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
+                                    const cleanChurchNama = church.nama ? church.nama.replace(/^GKLI\s*/i, '') : '';
+                                    const text = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanChurchNama}* Resort *${church.resort}*, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\n*TOTAL: Rp ${formatRupiah(totalJumlah)}*\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
                                     
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
@@ -2719,7 +2721,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     });
                                     
                                     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-                                    const text = `Shalom Bapak/Ibu Majelis Jemaat GKLI ${church.nama} Resort ${church.resort}, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\nTOTAL: Rp ${formatRupiah(total)}\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\nPdt. Jeprianto Marbun, S.Th`;
+                                    const cleanChurchNama = church.nama ? church.nama.replace(/^GKLI\s*/i, '') : '';
+                                    const text = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanChurchNama}* Resort *${church.resort}*, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                     } else {
@@ -2821,8 +2824,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         Object.entries(church.activeArrears).forEach(([cat, fields]) => {
                           const f = fields as string[];
                           if (f.length > 0) {
-                            summaryLines.push(`*${(CATEGORY_LABELS[cat] || cat).toUpperCase()}*:`);
-                            summaryLines.push(`  - ${f.join(', ')}`);
+                            const catName = (cat === 'laporan' ? (appSettings.menuLaporan || 'Persembahan II') :
+                                            cat === 'pelean' ? (appSettings.menuPelean || 'Persembahan Khusus') :
+                                            (appSettings.menuAlaman || 'Literatur')).toUpperCase();
+                            summaryLines.push(`*${catName}*:`);
+                            f.forEach(item => {
+                              summaryLines.push(`* ${item}`);
+                            });
                           }
                         });
 
@@ -2897,7 +2905,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 <button 
                                   disabled={!church.hasActive}
                                   onClick={() => {
-                                    const text = `Syalom Bapak/Ibu Majelis Jemaat ${church.nama}, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan periode ${periodeAktif} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.`;
+                                    const cleanChurchNama = church.nama ? church.nama.replace(/^GKLI\s*/i, '') : '';
+                                    const text = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanChurchNama}* Resort *${church.resort}*, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan periode ${periodeAktif} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                     } else {
