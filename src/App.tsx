@@ -215,6 +215,9 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [googleDriveToken, setGoogleDriveToken] = useState<string | null>(null);
 
+  // STATE DEVOTION
+  const [dailyDevotion, setDailyDevotion] = useState<{content: string, date: string} | null>(null);
+
   const initGoogleAuth = (): Promise<string | null> => {
     return new Promise((resolve) => {
       if (googleDriveToken) return resolve(googleDriveToken);
@@ -1156,6 +1159,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       document.documentElement.removeAttribute('data-theme');
     }
   }, [appSettings.theme]);
+
+  // FETCH DEVOTION
+  useEffect(() => {
+    const todayRaw = new Date();
+    const dateStr = todayRaw.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
+    const unsubDevotion = onSnapshot(doc(db, 'devotions', dateStr), (docSnap) => {
+      if (docSnap.exists()) {
+        setDailyDevotion(docSnap.data() as {content: string, date: string});
+      } else {
+        setDailyDevotion(null);
+      }
+    });
+    return () => unsubDevotion();
+  }, []);
 
   const uniqueResortsOrdered = useMemo(() => {
     return Array.from(new Set(churches.map(c => normalizeResortName(c.resort)))).filter(r => r && r !== '-').sort(compareResorts);
@@ -3037,6 +3054,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           {currentUserProfile?.role === 'superadmin' && (
             <>
               <NavHeader label="Pengaturan Sistem" />
+              <NavItem active={activeTab === 'renungan'} onClick={() => { setActiveTab('renungan'); setMobileSidebarOpen(false); }} icon={<BookOpen size={20} className="text-yellow-500" />} label="Renungan Harian" className="text-yellow-500" />
               <NavItem active={activeTab === 'templates'} onClick={() => { setActiveTab('templates'); setMobileSidebarOpen(false); }} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
               <NavItem active={false} onClick={() => { setFormSettings(appSettings); setShowSettingsModal(true); setMobileSidebarOpen(false); }} icon={<Settings size={20} className="text-yellow-500" />} label="Edit Tampilan" className="text-yellow-500" />
               <NavItem active={activeTab === 'akun'} onClick={() => { setActiveTab('akun'); setMobileSidebarOpen(false); }} icon={<UserPlus size={20} className="text-yellow-500" />} label="Manajemen Akun" className="text-yellow-500" />
@@ -4744,6 +4762,72 @@ function doPost(e) {
                 </div>
               )}
 
+              {activeTab === 'renungan' && currentUserProfile?.role === 'superadmin' && (
+                <div className="space-y-8">
+                  <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 rounded-2xl shadow-xl overflow-hidden text-white relative">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl -ml-32 -mb-32"></div>
+                    <div className="p-6 md:p-8 relative z-10">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                          <h3 className="font-bold text-xl flex items-center gap-2"><BookOpen className="text-indigo-400" /> Pusat Renungan Pastoral</h3>
+                          <p className="text-indigo-200 pl-8 mt-1 text-sm">Hasil generate renungan untuk hari ini yang akan/sudah dikirim otomatis.</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                            onClick={() => {
+                              if (!dailyDevotion) {
+                                alert("Belum ada renungan hari ini.");
+                                return;
+                              }
+                              window.open(
+                                `https://wa.me/?text=${encodeURIComponent(dailyDevotion.content)}`,
+                                '_blank'
+                              );
+                            }}
+                          >
+                            <MessageCircle size={16} /> Share WA Manual
+                          </button>
+                          <button 
+                            className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+                            onClick={async () => {
+                              if (window.confirm("Buat/Ulangi renungan untuk hari ini via AI? Ini dapat memakan waktu beberapa detik.")) {
+                                try {
+                                  const res = await fetch('/api/cron/devotion', { method: 'POST' });
+                                  const data = await res.json();
+                                  if (!res.ok) throw new Error(data.error || "Terjadi kesalahan sistem");
+                                  alert(data.message || "Selesai!");
+                                } catch (error: any) {
+                                  alert("Gagal memperbarui renungan: " + error.message);
+                                }
+                              }
+                            }}
+                          >
+                            <Plus size={16} /> Generate AI Ulang
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/60 backdrop-blur-md p-6 md:p-8 rounded-xl border border-white/10 mt-4 custom-scrollbar overflow-y-auto max-h-[60vh] text-base leading-relaxed whitespace-pre-wrap font-serif text-slate-100 shadow-inner">
+                        {dailyDevotion ? dailyDevotion.content : (
+                          <div className="text-indigo-300 italic text-center py-16">
+                            Belum ada renungan untuk hari ini.<br/>Silakan klik "Generate AI Ulang" di sudut kanan atas.
+                          </div>
+                        )}
+                      </div>
+
+                      {dailyDevotion && (
+                        <div className="text-xs text-indigo-300 mt-4 flex items-center justify-between">
+                          <p>* Renungan ini dikirim otomatis ke grup WhatsApp yang dikonfigurasi di Pengaturan Sistem setiap jam 06:00 WIB.</p>
+                          <p>Tgl: {dailyDevotion.date}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'akun' && currentUserProfile?.role === 'superadmin' && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -5100,13 +5184,19 @@ function doPost(e) {
                 onChange={v => setFormSettings({...formSettings, watzapApiKey: v})} 
               />
               <SettingInput 
-                label="Watzap Sender Number (Device Key)" 
+                label="Watzap Sender (Device Key / Sender No)" 
                 value={formSettings.watzapSender || ''} 
                 onChange={v => setFormSettings({...formSettings, watzapSender: v})} 
               />
+              <SettingInput 
+                label="Target WA Group/Nomor untuk Renungan" 
+                value={formSettings.watzapGroupId || ''} 
+                onChange={v => setFormSettings({...formSettings, watzapGroupId: v})} 
+                placeholder="Contoh: 08123456789 atau ID Group"
+              />
             </div>
             <p className="text-[10px] text-slate-400 leading-relaxed italic">
-              * Digunakan untuk pengiriman tagihan otomatis setiap tanggal 15 & 30. Pastikan Device di Watzap.id dalam status Connected.
+              * Digunakan untuk pengiriman tagihan otomatis (tanggal 15 & 30) & Renungan Harian (jam 06:00). Pastikan Device di Watzap.id Connected.
             </p>
           </div>
 

@@ -47,6 +47,7 @@ export interface AppSettings {
   googleSpreadsheetId?: string;
   watzapApiKey?: string;
   watzapSender?: string;
+  watzapGroupId?: string;
   theme?: 'default' | 'ocean' | 'nature' | 'monochrome';
   periodeList?: string[];
   periodeAktif?: string;
@@ -60,4 +61,4 @@ export interface Distribution {
   tanggal: string;
 }
 
-export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat' | 'arsip';
+export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat' | 'arsip' | 'renungan';

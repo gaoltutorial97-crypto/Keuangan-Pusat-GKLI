@@ -6,7 +6,8 @@ import { fileURLToPath } from 'url';
 import cron from 'node-cron';
 import axios from 'axios';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, setDoc, doc, query, where } from 'firebase/firestore';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -45,6 +46,88 @@ const PORT = 3000;
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
+// Initialize Gemini
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+async function generateAndSendDailyDevotion() {
+  console.log('[CRON] Men-generate Renungan Harian...');
+  // Check timezone / date
+  const todayRaw = new Date();
+  const dateStr = todayRaw.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
+  
+  try {
+    // 0. Fetch Settings from Firestore
+    let apiKey = process.env.WATZAP_API_KEY;
+    let sender = process.env.WATZAP_SENDER;
+    let groupId = '';
+
+    const settingsSnap = await getDocs(query(collection(db, 'settings')));
+    const appSettings = settingsSnap.docs.find(d => d.id === 'config')?.data();
+    if (appSettings?.watzapApiKey) apiKey = appSettings.watzapApiKey;
+    if (appSettings?.watzapSender) sender = appSettings.watzapSender;
+    if (appSettings?.watzapGroupId) groupId = appSettings.watzapGroupId;
+
+    const promptText = `Tuliskan satu renungan pastoral singkat untuk dikirim ke jemaat Gereja (Lutheran) melalui WhatsApp pagi ini. 
+Gaya bahasa: SANGAT NATURAL, hangat, kebapakan, layaknya seorang pendeta yang menyapa secara personal di WhatsApp. JANGAN gunakan daftar poin-poin (bullet points), JANGAN gunakan kata-kata kaku khas AI seperti 'kesimpulan', 'pada intinya', 'adapun pelajaran'. Mengalir saja seperti orang bercerita.
+Kriteria Utama:
+1. Doktrin Lutheran Konservatif: Biblis dan berpusat pada Kristus.
+2. Struktur mengalir: 
+   - Salam hangat (Syalom Bapak/Ibu majelis/jemaat terkasih...)
+   - Satu kutipan ayat Alkitab pendek
+   - Refleksi singkat (1-2 paragraf pendek)
+   - Doa penutup singkat (Mari kita berdoa... Amin.)
+3. Panjang maksimal: 250 - 350 kata.
+4. Gunakan sedikit emoji secara wajar. Gunakan *bold* untuk kata-kata penting.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: promptText,
+    });
+
+    const devotionContent = response.text;
+    if (!devotionContent) throw new Error("Gagal generate renungan dari Gemini");
+
+    // Save to Firestore for display in UI Dashboard
+    await setDoc(doc(db, 'devotions', dateStr), {
+      date: dateStr,
+      content: devotionContent,
+      createdAt: new Date().toISOString()
+    });
+
+    console.log(`[CRON] Renungan berhasil disimpan untuk tanggal ${dateStr}`);
+
+    // Send to Watzap if configured
+    if (apiKey && sender && groupId) {
+      // Assuming user inputs Watzap Group ID, Watzap uses 'group_id' in a specific endpoint or phone_no 
+      // We'll try the group message endpoint if it contains a dash (typical WA group ID usually contains a dash or just use send_message_group)
+      let endpoint = 'https://api.watzap.id/v1/send_message_group';
+      let payload: any = {
+        api_key: apiKey,
+        number_key: sender,
+        message: devotionContent
+      };
+      
+      if (groupId.includes('-') || groupId.length > 15) {
+         payload.group_id = groupId;
+      } else {
+         // Fallback to normal message if it looks like a normal phone number
+         endpoint = 'https://api.watzap.id/v1/send_message';
+         payload.phone_no = groupId;
+      }
+
+      await axios.post(endpoint, payload);
+      console.log(`[CRON] Renungan terkirim ke WhatsApp Group/Nomor ${groupId}`);
+    } else {
+      console.warn('[CRON] Watzap Group ID/API Key tidak lengkap. Tidak dikirim ke WA.');
+    }
+    
+    return devotionContent;
+  } catch (err: any) {
+    console.error('[CRON] Gagal memproses renungan harian:', err.message);
+    throw err;
+  }
+}
+
 async function sendAutomatedReminders() {
   console.log('[CRON] Menjalankan Penagihan Otomatis...');
   
@@ -54,7 +137,7 @@ async function sendAutomatedReminders() {
 
   try {
     const settingsSnap = await getDocs(query(collection(db, 'settings')));
-    const appSettings = settingsSnap.docs.find(d => d.id === 'app')?.data();
+    const appSettings = settingsSnap.docs.find(d => d.id === 'config')?.data();
     if (appSettings?.watzapApiKey) apiKey = appSettings.watzapApiKey;
     if (appSettings?.watzapSender) sender = appSettings.watzapSender;
   } catch (err) {
@@ -141,6 +224,13 @@ cron.schedule('0 0 9 15,30 * *', () => {
   timezone: "Asia/Jakarta"
 });
 
+// Jadwal Renungan Harian (Setiap Hari Jam 06:00 WIB)
+cron.schedule('0 0 6 * * *', () => {
+  generateAndSendDailyDevotion();
+}, {
+  timezone: "Asia/Jakarta"
+});
+
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', serverTime: new Date().toISOString() });
@@ -153,6 +243,15 @@ app.post('/api/cron/trigger', async (req, res) => {
   
   await sendAutomatedReminders();
   res.json({ message: 'Penagihan otomatis dipicu secara manual' });
+});
+
+app.post('/api/cron/devotion', async (req, res) => {
+  try {
+    const content = await generateAndSendDailyDevotion();
+    res.json({ message: 'Renungan Harian berhasil di-generate', content });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Vite Middleware setup

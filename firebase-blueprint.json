@@ -56,6 +56,17 @@
         "username": { "type": "string" },
         "role": { "type": "string", "enum": ["superadmin", "staff"] }
       }
+    },
+    "Devotion": {
+      "title": "Devotion",
+      "description": "Daily devotion generated via AI",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "content"]
     }
   },
   "firestore": {
@@ -74,6 +85,10 @@
     "/users/{userId}": {
       "schema": "UserRole",
       "description": "User roles and metadata"
+    },
+    "/devotions/{date}": {
+      "schema": "Devotion",
+      "description": "Collection of daily devotions"
     }
   }
 }
