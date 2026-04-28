@@ -68,8 +68,10 @@ async function generateAndSendDailyDevotion() {
     if (appSettings?.watzapGroupId) groupId = appSettings.watzapGroupId;
 
     const promptText = `Tuliskan pesan renungan pastoral singkat untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
-PENTING: Gaya bahasa harus SANGAT NATURAL, hangat, dan kebapakan (seperti pendeta sungguhan yang mengetik manual).
-DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti sedang bercerita santai namun bermakna.
+PENTING: Gaya bahasa harus SANGAT NATURAL, luwes, selayaknya bahasa manusia dan bahasa Indonesia yang baik dan benar (tidak kaku seperti terjemahan mesin).
+DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti pendeta yang sedang menulis pesan otentik.
+DILARANG KERAS menggunakan satupun emoji/emoticon dalam teks.
+DILARANG KERAS menggunakan tanda baca asteris/bintang (*) atau format markdown (seperti **, _, #). Biarkan tulisan apa adanya berupa teks biasa namun berkualitas dan profesional.
 
 Kriteria Khusus:
 1. Tidak keluar dari konteks teks, historis, teologis, logis, dan pastoral.
@@ -80,9 +82,7 @@ Kriteria Khusus:
 Struktur (Gabungkan menjadi 3-4 paragraf saja):
 1. Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu letakkan 1 ayat Alkitab pendek yang sesuai.
 2. Refleksi yang menjawab tantangan masa kini dengan kebenaran Firman Tuhan.
-3. Doa penutup yang sangat singkat (misal: "Mari kita berdoa... Amin.")
-
-Gunakan sedikit emoji secara wajar. Gunakan tanda bintang * untuk kata penting.`;
+3. Doa penutup yang sangat singkat (misal: "Mari kita berdoa... Amin.")`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
