@@ -3493,14 +3493,81 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         </p>
                         <button 
                            onClick={async () => {
-                              if (!appSettings.watzapApiKey) return alert("Mohon konfigurasi API Key Watzap di Pengaturan terlebih dahulu.");
-                              if (window.confirm("Kirim tagihan ke seluruh jemaat yang menunggak sekarang?")) {
+                              if (!appSettings.watzapApiKey || !appSettings.watzapSender) return alert("Mohon konfigurasi API Key dan Sender Watzap di Pengaturan terlebih dahulu.");
+                              if (window.confirm("Kirim WhatsApp penagihan ke seluruh jemaat yang menunggak sekarang? (Ini akan memerlukan waktu)")) {
                                  try {
-                                    const res = await fetch('/api/cron/trigger', { method: 'POST' });
-                                    const data = await res.json();
-                                    alert(data.message || "Proses dimulai di latar belakang.");
+                                    const currentPeriod = new Date().getFullYear().toString();
+                                    const currentMonthIdx = new Date().getMonth();
+                                    
+                                    const SPREADSHEET_COLUMNS = {
+                                      laporan: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+                                      pelean: ['Pendidikan', 'Ulang Tahun', 'PGI/LWF/UEM', 'Zending', 'Pensiun', 'Diakonia'],
+                                      alaman: ['Almanak', 'Kalender', 'Evang. Edisi 1', 'Evang. Edisi 2', 'Evang. Edisi 3', 'Buku SKM', 'Buku Ende', 'Agenda Batak', 'Agenda Indonesia', 'Confesi Ausburg']
+                                    };
+                                    
+                                    const CATEGORY_LABELS = {
+                                      laporan: 'Persembahan II',
+                                      pelean: 'Persembahan Khusus (Namarboho)',
+                                      alaman: 'Literatur'
+                                    };
+
+                                    alert("Memproses penagihan otomatis... mohon tunggu dan jangan tutup halaman ini.");
+                                    let sentCount = 0;
+
+                                    for (const church of churches) {
+                                      if (!church.wa || church.type === 'resort') continue;
+
+                                      const arrears: Record<string, string[]> = {};
+                                      let hasArrears = false;
+
+                                      Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
+                                        const payment = payments.find(p => p.gerejaId === church.id && p.kategori === cat && p.periode === currentPeriod);
+                                        let unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+                                        
+                                        if (cat === 'laporan') {
+                                          unpaid = unpaid.filter(col => {
+                                            const monthIdx = SPREADSHEET_COLUMNS.laporan.indexOf(col);
+                                            return monthIdx !== -1 && monthIdx <= currentMonthIdx;
+                                          });
+                                        }
+
+                                        if (unpaid.length > 0) {
+                                          arrears[cat] = unpaid;
+                                          hasArrears = true;
+                                        }
+                                      });
+
+                                      if (hasArrears) {
+                                        const summaryLines: string[] = [];
+                                        Object.entries(arrears).forEach(([cat, fields]) => {
+                                          summaryLines.push(`*${(CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS] || cat).toUpperCase()}*:`);
+                                          summaryLines.push(`  - ${fields.join(', ')}`);
+                                        });
+
+                                        const message = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}*, kami dari Kantor Pusat GKLI ingin mengingatkan secara otomatis terkait kewajiban persembahan periode ${currentPeriod} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Terima kasih, Tuhan memberkati.`;
+
+                                        try {
+                                          await fetch('https://api.watzap.id/v1/send_message', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              api_key: appSettings.watzapApiKey,
+                                              number_key: appSettings.watzapSender,
+                                              phone_no: church.wa,
+                                              message: message
+                                            })
+                                          });
+                                          sentCount++;
+                                          // Delay to avoid Watzap rate limit
+                                          await new Promise(r => setTimeout(r, 1000));
+                                        } catch (err: any) {
+                                          console.error(`Gagal mengirim ke ${church.nama}:`, err);
+                                        }
+                                      }
+                                    }
+                                    alert(`Proses selesai! Berhasil mengirim tagihan ke ${sentCount} jemaat.`);
                                  } catch (err) {
-                                    alert("Gagal memicu penagihan otomatis.");
+                                    alert("Terjadi kesalahan sistem saat penagihan.");
                                  }
                               }
                            }}
@@ -4790,14 +4857,88 @@ function doPost(e) {
                             <MessageCircle size={16} /> Share WA Manual
                           </button>
                           <button 
+                            className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-green-500/30"
+                            onClick={async () => {
+                              if (!dailyDevotion) return alert("Belum ada renungan.");
+                              if (!appSettings.watzapApiKey || !appSettings.watzapSender || !appSettings.watzapGroupId) {
+                                return alert("Mohon lengkapi Watzap API Key, Sender, dan Group ID di Pengaturan Sistem.");
+                              }
+                              if (window.confirm("Broadcast renungan ini via Watzap.id sekarang?")) {
+                                try {
+                                  let endpoint = 'https://api.watzap.id/v1/send_message_group';
+                                  let payload: any = {
+                                    api_key: appSettings.watzapApiKey,
+                                    number_key: appSettings.watzapSender,
+                                    message: dailyDevotion.content
+                                  };
+                                  if (appSettings.watzapGroupId.includes('-') || appSettings.watzapGroupId.length > 15) {
+                                     payload.group_id = appSettings.watzapGroupId;
+                                  } else {
+                                     endpoint = 'https://api.watzap.id/v1/send_message';
+                                     payload.phone_no = appSettings.watzapGroupId;
+                                  }
+                                  const res = await fetch(endpoint, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                  });
+                                  if (!res.ok) throw new Error(await res.text());
+                                  alert("Berhasil dikirim ke Watzap!");
+                                } catch (error: any) {
+                                  alert("Gagal kirim via Watzap: " + error.message);
+                                }
+                              }
+                            }}
+                          >
+                            <MessageCircle size={16} /> Broadcast Watzap
+                          </button>
+                          <button 
                             className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/30"
                             onClick={async () => {
-                              if (window.confirm("Buat/Ulangi renungan untuk hari ini via AI? Ini dapat memakan waktu beberapa detik.")) {
+                              if (!appSettings.geminiApiKey) {
+                                alert("Mohon isi Gemini API Key di Pengaturan Sistem terlebih dahulu.");
+                                return;
+                              }
+                              if (window.confirm("Buat/Ulangi renungan untuk hari ini via AI? (Ini akan langsung disimpan dan TIDAK otomatis terkirim, bisa share manual).")) {
                                 try {
-                                  const res = await fetch('/api/cron/devotion', { method: 'POST' });
+                                  const promptText = `Tuliskan pesan renungan pagi singkat untuk dikirim ke jemaat melalui grup WhatsApp.
+PENTING: Gaya bahasa harus SANGAT NATURAL, hangat, dan kebapakan (seperti pendeta sungguhan yang mengetik manual).
+DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti sedang bercerita santai namun bermakna.
+
+Struktur (Gabungkan menjadi 3 paragraf saja):
+1. Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu letakkan 1 ayat Alkitab pendek.
+2. Refleksi singkat yang menguatkan untuk menjalani aktivitas hari ini.
+3. Doa penutup yang sangat singkat (misal: "Mari kita berdoa... Amin.")
+
+Gunakan sedikit emoji. Gunakan tanda bintang * untuk kata penting. Doktrin: Lutheran.`;
+
+                                  const payload = {
+                                    contents: [{ parts: [{ text: promptText }] }],
+                                    generationConfig: { temperature: 0.7 }
+                                  };
+
+                                  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${appSettings.geminiApiKey}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                  });
+                                  
                                   const data = await res.json();
-                                  if (!res.ok) throw new Error(data.error || "Terjadi kesalahan sistem");
-                                  alert(data.message || "Selesai!");
+                                  if (!res.ok) throw new Error(data.error?.message || "Gagal dari server AI");
+                                  
+                                  const devotionContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                                  if (!devotionContent) throw new Error("Format balasan AI tidak sesuai.");
+
+                                  const todayRaw = new Date();
+                                  const dateStr = todayRaw.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
+                                  
+                                  await setDoc(doc(db, 'devotions', dateStr), {
+                                    date: dateStr,
+                                    content: devotionContent,
+                                    createdAt: new Date().toISOString()
+                                  });
+
+                                  alert("Renungan sukses dibuat! Cek layar Anda.");
                                 } catch (error: any) {
                                   alert("Gagal memperbarui renungan: " + error.message);
                                 }
@@ -5193,6 +5334,12 @@ function doPost(e) {
                 value={formSettings.watzapGroupId || ''} 
                 onChange={v => setFormSettings({...formSettings, watzapGroupId: v})} 
                 placeholder="Contoh: 08123456789 atau ID Group"
+              />
+              <SettingInput 
+                label="Gemini API Key (Untuk AI Renungan)" 
+                value={formSettings.geminiApiKey || ''} 
+                onChange={v => setFormSettings({...formSettings, geminiApiKey: v})} 
+                placeholder="AIzaSy..."
               />
             </div>
             <p className="text-[10px] text-slate-400 leading-relaxed italic">
