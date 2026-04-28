@@ -4,6 +4,7 @@ export interface Church {
   resort: string;
   wilayah: string;
   wa: string;
+  waPendeta?: string;
   order?: number;
   type?: 'jemaat' | 'resort'; // Tambahkan tipe untuk membedakan Jemaat dan Resort
   isSynthesized?: boolean;

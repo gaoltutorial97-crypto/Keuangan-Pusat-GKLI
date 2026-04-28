@@ -1106,7 +1106,7 @@ export default function App() {
 
   // STATE MODAL LAINNYA
   const [showChurchModal, setShowChurchModal] = useState(false);
-  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: 1, type: 'jemaat' });
+  const [formChurch, setFormChurch] = useState<Church>({ id: '', nama: '', resort: '', wilayah: '', wa: '', waPendeta: '', order: 1, type: 'jemaat' });
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order' | 'pos_pi'>('order');
@@ -1981,7 +1981,19 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     } else {
       text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, dari Kantor Pusat GKLI ingin mengingatkan bahwa catatan kas kami untuk item *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} masih kosong (menunggak). Mohon agar dapat segera diselesaikan. Terima kasih, Tuhan memberkati.`;
     }
-    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
+    
+    let opened = 0;
+    if (item.wa) {
+      window.open(`https://wa.me/${item.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+      opened++;
+    }
+    if (item.waPendeta) {
+      window.open(`https://wa.me/${item.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+      opened++;
+    }
+    if (opened === 0) {
+      alert(`Nomor WhatsApp untuk jemaat ${item.nama} belum tersedia.`);
+    }
   };
 
   const handleKirimWABatch = (item: any) => {
@@ -1994,7 +2006,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     
     const text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan (${catLabel.toUpperCase()}) periode ${item.periode} untuk item berikut:\n${details}\n\n*Total: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
     
-    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
+    let opened = 0;
+    if (item.wa) {
+      window.open(`https://wa.me/${item.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+      opened++;
+    }
+    if (item.waPendeta) {
+      window.open(`https://wa.me/${item.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+      opened++;
+    }
+    if (opened === 0) {
+      alert(`Nomor WhatsApp untuk jemaat ${item.nama} belum tersedia.`);
+    }
   };
 
   const toggleCellSelection = (gerejaId: string, colName: string) => {
@@ -2029,7 +2052,19 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const text = type === 'tagihan' 
       ? `Syalom Jemaat ${item.nama}, mohon kesediaannya untuk menyelesaikan administrasi ${catLabel.toUpperCase()} periode ${item.periode}.`
       : `Syalom Jemaat ${item.nama}, terima kasih atas persembahan ${catLabel.toUpperCase()} sebesar Rp ${formatRupiah(item.jumlah)}.`;
-    window.open(`https://wa.me/${item.wa}?text=${encodeURIComponent(text)}`, '_blank');
+    
+    let opened = 0;
+    if (item.wa) {
+      window.open(`https://wa.me/${item.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+      opened++;
+    }
+    if (item.waPendeta) {
+      window.open(`https://wa.me/${item.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+      opened++;
+    }
+    if (opened === 0) {
+      alert(`Nomor WhatsApp untuk jemaat ${item.nama} belum tersedia.`);
+    }
   };
 
   const handleBulkImport = async () => {
@@ -2699,7 +2734,18 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     waMessage = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanPrintDataNama}* Resort *${printData?.resort}*, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincianItems}\n\n*TOTAL: Rp ${formatRupiah(printData?.total || printData?.jumlah || 0)}*\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\n*Bendum GKLI*`;
                   }
 
-                  window.open(`https://wa.me/${printData.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                  let opened = 0;
+                  if (printData.wa) {
+                    window.open(`https://wa.me/${printData.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                    opened++;
+                  }
+                  if (printData.waPendeta) {
+                    window.open(`https://wa.me/${printData.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(waMessage)}`, '_blank');
+                    opened++;
+                  }
+                  if (opened === 0) {
+                    alert('Nomor WA jemaat belum tersedia.');
+                  }
                   
                   if (printType === 'global-receipt' && printData.paymentIds && printData.paymentIds.length > 0) {
                     if (window.confirm("Apakah Anda ingin memindahkan data pembayaran ini ke arsip sekarang?")) {
@@ -3267,10 +3313,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     const cleanChurchNama = church.nama ? church.nama.replace(/^GKLI\s*/i, '') : '';
                                     const text = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanChurchNama}* Resort *${church.resort}*, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\n*TOTAL: Rp ${formatRupiah(totalJumlah)}*\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
                                     
+                                    let opened = 0;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
-                                    } else {
-                                      alert(`Nomor WhatsApp untuk jemaat ${church.nama} belum tersedia.`);
+                                      opened++;
+                                    }
+                                    if (church.waPendeta) {
+                                      window.open(`https://wa.me/${church.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                      opened++;
+                                    }
+                                    if (opened === 0) {
+                                      alert(`Nomor WhatsApp Bendahara & Pendeta untuk jemaat ${church.nama} belum tersedia.`);
                                     }
                                     
                                     if (window.confirm("Apakah Anda ingin memindahkan data ini ke arsip?")) {
@@ -3416,10 +3469,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
                                     const cleanChurchNama = church.nama ? church.nama.replace(/^GKLI\s*/i, '') : '';
                                     const text = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanChurchNama}* Resort *${church.resort}*, terima kasih telah mengirimkan persembahan ke Kantor Pusat, pada tanggal, ${todayStr} ke Rekening Kantor Pusat GKLI. Dengan rincian:\n${rincian}\n\n*TOTAL: Rp ${formatRupiah(total)}*\n\nDemikian kami sampaikan, Tuhan Yesus Kristus kepala Gereja memberkati kita.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
+                                    let opened = 0;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
-                                    } else {
-                                      alert(`Nomor WhatsApp untuk jemaat ${church.nama} belum tersedia.`);
+                                      opened++;
+                                    }
+                                    if (church.waPendeta) {
+                                      window.open(`https://wa.me/${church.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                      opened++;
+                                    }
+                                    if (opened === 0) {
+                                      alert(`Nomor WhatsApp Bendahara & Pendeta untuk jemaat ${church.nama} belum tersedia.`);
                                     }
                                   }}
                                   className="flex items-center justify-center space-x-2 bg-slate-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors"
@@ -3515,7 +3575,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     let sentCount = 0;
 
                                     for (const church of churches) {
-                                      if (!church.wa || church.type === 'resort') continue;
+                                      if ((!church.wa && !church.waPendeta) || church.type === 'resort') continue;
 
                                       const arrears: Record<string, string[]> = {};
                                       let hasArrears = false;
@@ -3547,19 +3607,28 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                         const message = `Syalom Bapak/Ibu Majelis Jemaat *${church.nama}*, kami dari Kantor Pusat GKLI ingin mengingatkan secara otomatis terkait kewajiban persembahan periode ${currentPeriod} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Terima kasih, Tuhan memberkati.`;
 
                                         try {
-                                          await fetch('https://api.watzap.id/v1/send_message', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                              api_key: appSettings.watzapApiKey,
-                                              number_key: appSettings.watzapSender,
-                                              phone_no: church.wa,
-                                              message: message
-                                            })
-                                          });
+                                          const sendWatzap = async (phone: string) => {
+                                            await fetch('https://api.watzap.id/v1/send_message', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({
+                                                api_key: appSettings.watzapApiKey,
+                                                number_key: appSettings.watzapSender,
+                                                phone_no: phone,
+                                                message: message
+                                              })
+                                            });
+                                            // Delay to avoid Watzap rate limit
+                                            await new Promise(r => setTimeout(r, 1000));
+                                          };
+                                          
+                                          if (church.wa) {
+                                            await sendWatzap(church.wa);
+                                          }
+                                          if (church.waPendeta) {
+                                            await sendWatzap(church.waPendeta);
+                                          }
                                           sentCount++;
-                                          // Delay to avoid Watzap rate limit
-                                          await new Promise(r => setTimeout(r, 1000));
                                         } catch (err: any) {
                                           console.error(`Gagal mengirim ke ${church.nama}:`, err);
                                         }
@@ -3667,10 +3736,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   onClick={() => {
                                     const cleanChurchNama = church.nama ? church.nama.replace(/^GKLI\s*/i, '') : '';
                                     const text = `Shalom Bapak/Ibu Majelis Jemaat *GKLI ${cleanChurchNama}* Resort *${church.resort}*, kami dari Kantor Pusat GKLI ingin mengingatkan terkait kewajiban persembahan periode ${periodeAktif} yang belum kami terima (Tunggakan):\n\n${summaryLines.join('\n')}\n\nMohon kerja samanya untuk segera melengkapi setoran tersebut. Kiranya Tuhan Yesus memberkati.\n\nSalam dari Kantor Pusat GKLI,\nBendum,\n\n\n*Pdt. Jeprianto Marbun, S.Th*`;
+                                    let opened = 0;
                                     if (church.wa) {
                                       window.open(`https://wa.me/${church.wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
-                                    } else {
-                                      alert(`Nomor WhatsApp untuk jemaat ${church.nama} belum tersedia.`);
+                                      opened++;
+                                    }
+                                    if (church.waPendeta) {
+                                      window.open(`https://wa.me/${church.waPendeta.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                      opened++;
+                                    }
+                                    if (opened === 0) {
+                                      alert(`Nomor WhatsApp Bendahara & Pendeta untuk jemaat ${church.nama} belum tersedia.`);
                                     }
                                   }}
                                   className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-lg ${
@@ -5208,14 +5284,21 @@ Struktur (Gabungkan menjadi 3-4 paragraf saja):
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No. WA (628...)</label>
-              <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="628..." />
+              <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="WA Bendahara/Gereja" />
             </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No. WA Pendeta (Opsional)</label>
+              <input type="text" value={formChurch.waPendeta || ''} onChange={e => setFormChurch({...formChurch, waPendeta: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="WA Pendeta" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Posisi Urutan</label>
               <input type="number" value={formChurch.order} onChange={e => setFormChurch({...formChurch, order: parseInt(e.target.value) || 0})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Posisi" />
             </div>
+            <div></div>
           </div>
-          <button onClick={handleSaveChurch} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">Simpan Data Jemaat</button>
+          <button onClick={handleSaveChurch} className="w-full mt-4 bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">Simpan Data Jemaat</button>
         </div>
       </Modal>
 
