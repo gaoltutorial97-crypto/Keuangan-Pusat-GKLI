@@ -67,17 +67,22 @@ async function generateAndSendDailyDevotion() {
     if (appSettings?.watzapSender) sender = appSettings.watzapSender;
     if (appSettings?.watzapGroupId) groupId = appSettings.watzapGroupId;
 
-    const promptText = `Tuliskan satu renungan pastoral singkat untuk dikirim ke jemaat Gereja (Lutheran) melalui WhatsApp pagi ini. 
-Gaya bahasa: SANGAT NATURAL, hangat, kebapakan, layaknya seorang pendeta yang menyapa secara personal di WhatsApp. JANGAN gunakan daftar poin-poin (bullet points), JANGAN gunakan kata-kata kaku khas AI seperti 'kesimpulan', 'pada intinya', 'adapun pelajaran'. Mengalir saja seperti orang bercerita.
-Kriteria Utama:
-1. Doktrin Lutheran Konservatif: Biblis dan berpusat pada Kristus.
-2. Struktur mengalir: 
-   - Salam hangat (Syalom Bapak/Ibu majelis/jemaat terkasih...)
-   - Satu kutipan ayat Alkitab pendek
-   - Refleksi singkat (1-2 paragraf pendek)
-   - Doa penutup singkat (Mari kita berdoa... Amin.)
-3. Panjang maksimal: 250 - 350 kata.
-4. Gunakan sedikit emoji secara wajar. Gunakan *bold* untuk kata-kata penting.`;
+    const promptText = `Tuliskan pesan renungan pastoral singkat untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
+PENTING: Gaya bahasa harus SANGAT NATURAL, hangat, dan kebapakan (seperti pendeta sungguhan yang mengetik manual).
+DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti sedang bercerita santai namun bermakna.
+
+Kriteria Khusus:
+1. Tidak keluar dari konteks teks, historis, teologis, logis, dan pastoral.
+2. Berdasarkan Doktrin Lutheran Konservatif, Biblis, Apologetika Lutheran, serta pembedaan yang jelas antara Hukum Taurat (teguran dosa) dan Injil (pengampunan Kristus) - Law and Gospel.
+3. Tafsir yang dalam namun mudah dipahami oleh jemaat Lutheran awam.
+4. Kaitkan dengan topik yang sedang relevan/viral/menarik saat ini di masyarakat, untuk menjadi solusi dan penguatan bagi pergumulan jemaat.
+
+Struktur (Gabungkan menjadi 3-4 paragraf saja):
+1. Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu letakkan 1 ayat Alkitab pendek yang sesuai.
+2. Refleksi yang menjawab tantangan masa kini dengan kebenaran Firman Tuhan.
+3. Doa penutup yang sangat singkat (misal: "Mari kita berdoa... Amin.")
+
+Gunakan sedikit emoji secara wajar. Gunakan tanda bintang * untuk kata penting.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',

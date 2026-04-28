@@ -4901,16 +4901,22 @@ function doPost(e) {
                               }
                               if (window.confirm("Buat/Ulangi renungan untuk hari ini via AI? (Ini akan langsung disimpan dan TIDAK otomatis terkirim, bisa share manual).")) {
                                 try {
-                                  const promptText = `Tuliskan pesan renungan pagi singkat untuk dikirim ke jemaat melalui grup WhatsApp.
+                                  const promptText = `Tuliskan pesan renungan pastoral singkat untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
 PENTING: Gaya bahasa harus SANGAT NATURAL, hangat, dan kebapakan (seperti pendeta sungguhan yang mengetik manual).
 DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti sedang bercerita santai namun bermakna.
 
-Struktur (Gabungkan menjadi 3 paragraf saja):
-1. Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu letakkan 1 ayat Alkitab pendek.
-2. Refleksi singkat yang menguatkan untuk menjalani aktivitas hari ini.
+Kriteria Khusus:
+1. Tidak keluar dari konteks teks, historis, teologis, logis, dan pastoral.
+2. Berdasarkan Doktrin Lutheran Konservatif, Biblis, Apologetika Lutheran, serta pembedaan yang jelas antara Hukum Taurat (teguran dosa) dan Injil (pengampunan Kristus) - Law and Gospel.
+3. Tafsir yang dalam namun mudah dipahami oleh jemaat Lutheran awam.
+4. Kaitkan dengan topik yang sedang relevan/viral/menarik saat ini di masyarakat, untuk menjadi solusi dan penguatan bagi pergumulan jemaat.
+
+Struktur (Gabungkan menjadi 3-4 paragraf saja):
+1. Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu letakkan 1 ayat Alkitab pendek yang sesuai.
+2. Refleksi yang menjawab tantangan masa kini dengan kebenaran Firman Tuhan.
 3. Doa penutup yang sangat singkat (misal: "Mari kita berdoa... Amin.")
 
-Gunakan sedikit emoji. Gunakan tanda bintang * untuk kata penting. Doktrin: Lutheran.`;
+Gunakan sedikit emoji secara wajar. Gunakan tanda bintang * untuk kata penting.`;
 
                                   const payload = {
                                     contents: [{ parts: [{ text: promptText }] }],
