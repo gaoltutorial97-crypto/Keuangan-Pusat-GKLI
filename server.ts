@@ -67,22 +67,28 @@ async function generateAndSendDailyDevotion() {
     if (appSettings?.watzapSender) sender = appSettings.watzapSender;
     if (appSettings?.watzapGroupId) groupId = appSettings.watzapGroupId;
 
-    const promptText = `Tuliskan pesan renungan pastoral singkat untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
+    const dayOfYear = Math.floor((todayRaw.getTime() - new Date(todayRaw.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
+
+    const promptText = `Tuliskan pesan renungan pastoral singkat siap saji dan luar biasa untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
 PENTING: Gaya bahasa harus SANGAT NATURAL, luwes, selayaknya bahasa manusia dan bahasa Indonesia yang baik dan benar (tidak kaku seperti terjemahan mesin).
 DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti pendeta yang sedang menulis pesan otentik.
 DILARANG KERAS menggunakan satupun emoji/emoticon dalam teks.
 DILARANG KERAS menggunakan tanda baca asteris/bintang (*) atau format markdown (seperti **, _, #). Biarkan tulisan apa adanya berupa teks biasa namun berkualitas dan profesional.
+PASTIKAN PENGGUNAAN KATA SELALU BERVARIASI DAN TIDAK IDENTIK DENGAN RENUNGAN SEBELUMNYA. Jangan menggunakan pola kalimat yang repetitif setiap kali generate.
 
-Kriteria Khusus:
-1. Tidak keluar dari konteks teks, historis, teologis, logis, dan pastoral.
-2. Berdasarkan Doktrin Lutheran Konservatif, Biblis, Apologetika Lutheran, serta pembedaan yang jelas antara Hukum Taurat (teguran dosa) dan Injil (pengampunan Kristus) - Law and Gospel.
-3. Tafsir yang dalam namun mudah dipahami oleh jemaat Lutheran awam.
-4. Kaitkan dengan topik yang sedang relevan/viral/menarik saat ini di masyarakat, untuk menjadi solusi dan penguatan bagi pergumulan jemaat.
+URUTAN PEMBACAAN ALKITAB:
+Hari ini adalah hari ke-${dayOfYear} dari 365. Berdasarkan jadwal pembacaan Alkitab kronologis satu tahun (mulai berurut dari Kejadian sampai Wahyu), tentukan SATU perikop/pasal yang jatuh pada hari ini, dan ambil 1 ayat bagian dari perikop tersebut sebagai teks renungan utama.
 
-Struktur (Gabungkan menjadi 3-4 paragraf saja):
-1. Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu letakkan 1 ayat Alkitab pendek yang sesuai.
-2. Refleksi yang menjawab tantangan masa kini dengan kebenaran Firman Tuhan.
-3. Doa penutup yang sangat singkat (misal: "Mari kita berdoa... Amin.")`;
+Kriteria Khusus Theologi:
+1. Konteks: Tafsiran tidak boleh keluar dari konteks teks, historis, teologis, logis, dan penerapan hermeneutik dekat maupun jauh.
+2. Teologi & Doktrin: Sepenuhnya berlandaskan Doktrin Lutheran Konservatif (Book of Concord), Apologetika Lutheran, biblis, dan memegang teguh pembedaan tajam antara Hukum Taurat (Law - yang menegur dosa) dan Injil (Gospel - yang menghidupkan dan memberi pengampunan Kristus).
+3. Akademis Namun Praktis: Mengandung struktur yang jelas dan dalam (mengambil pandangan pakar ahli Lutheran tentang homiletika/khotbah), namun disajikan dengan bahasa pastoral yang mudah dan nyaman dipahami oleh pendeta dan jemaat awam.
+4. Topikal & Solutif: Singgung fenomena viral/topik yang selalu menarik di masyarakat saat ini, gunakan sebagai titik temu untuk memberikan solusi dan penguatan bagi pergumulan konkrit jemaat.
+
+Struktur (Gabungkan menjadi 1 tulisan utuh 3-4 paragraf yang mengalir tanpa sub-judul atau penomoran angka):
+- Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu cantumkan 1 ayat Alkitab yang terpilih hari ini.
+- Refleksi mendalam yang menjawab tantangan masa kini berdasarkan Hukum Taurat dan Injil.
+- Doa penutup yang sangat singkat menyatu di akhir tulisan (misal: "Mari kita berdoa... Amin.")`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
