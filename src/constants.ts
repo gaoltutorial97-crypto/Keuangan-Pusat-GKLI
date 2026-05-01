@@ -11,7 +11,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   laporan: 'Persembahan II',
   pelean: 'Persembahan Khusus',
   alaman: 'Literatur',
-  khusus: 'Persembahan Khusus'
+  khusus: 'Persembahan Khusus',
+  perorangan: 'Pembelian Perorangan'
 };
 
 export const CATEGORY_ICONS = {

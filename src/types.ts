@@ -5,8 +5,9 @@ export interface Church {
   wilayah: string;
   wa: string;
   waPendeta?: string;
+  jenisKelamin?: 'Laki-laki' | 'Perempuan';
   order?: number;
-  type?: 'jemaat' | 'resort'; // Tambahkan tipe untuk membedakan Jemaat dan Resort
+  type?: 'jemaat' | 'resort' | 'perorangan' | 'agg-perorangan'; // Tambahkan tipe untuk membedakan Jemaat, Resort, dan Perorangan
   isSynthesized?: boolean;
   isVirtual?: boolean;
 }
@@ -63,4 +64,4 @@ export interface Distribution {
   tanggal: string;
 }
 
-export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat' | 'arsip' | 'renungan';
+export type TabType = 'dashboard' | 'gereja' | 'periode' | 'laporan' | 'pelean' | 'alaman' | 'perorangan' | 'distribusi' | 'download' | 'akun' | 'templates' | 'pengiriman' | 'penagihan' | 'sertifikat' | 'arsip' | 'renungan';

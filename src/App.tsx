@@ -83,20 +83,26 @@ const TableCellInput = ({
     if (!isFocused) {
       setLocalVal(initialVal === 0 ? '' : formatFn(initialVal));
     }
-  }, [initialVal, isFocused, formatFn]);
+  }, [initialVal, isFocused]); // intentionally omit formatFn because it changes reference every render inline
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Keep it as raw number string while typing to prevent Android keyboard reset issues
     const raw = e.target.value.replace(/[^0-9]/g, '');
-    if (raw === '') {
-      setLocalVal('');
-    } else {
-      setLocalVal(formatFn(parseInt(raw)));
-    }
+    setLocalVal(raw);
+  };
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    // Strip formatting temporarily to allow ease of typing
+    setLocalVal(initialVal === 0 ? '' : initialVal.toString());
   };
 
   const handleBlur = () => {
     setIsFocused(false);
     onSave(localVal);
+    // Optimistic formatting before parent re-renders
+    const rawNum = parseInt(localVal || '0', 10);
+    setLocalVal(rawNum === 0 ? '' : formatFn(rawNum));
   };
 
   const isZero = !localVal || localVal === '0';
@@ -108,9 +114,11 @@ const TableCellInput = ({
   return (
     <input 
       type="text" 
+      inputMode="numeric"
+      pattern="[0-9]*"
       value={localVal}
       onChange={handleChange}
-      onFocus={() => setIsFocused(true)}
+      onFocus={handleFocus}
       onBlur={handleBlur}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -1349,17 +1357,20 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     ws.sort((a, b) => getWilayahLevel(a) - getWilayahLevel(b));
     return ['Semua Wilayah', ...ws];
   }, [churches]);
-  const getLaporanData = (kategori: 'laporan' | 'pelean' | 'alaman') => {
+  const getLaporanData = (tabId: 'laporan' | 'pelean' | 'alaman' | 'perorangan') => {
+    const kategori = tabId === 'perorangan' ? 'alaman' : tabId;
     const columns = SPREADSHEET_COLUMNS[kategori];
     let data = [...churches]; // Use base churches to avoid global sort interference
     
     // Apply filters matching the global ones
-    if (filterResort !== 'Semua Resort') {
-      const normFilter = normalizeResortName(filterResort);
-      data = data.filter(c => normalizeResortName(c.resort) === normFilter);
-    }
-    if (filterWilayah !== 'Semua Wilayah') {
-      data = data.filter(c => c.wilayah === filterWilayah);
+    if (tabId !== 'perorangan') {
+      if (filterResort !== 'Semua Resort') {
+        const normFilter = normalizeResortName(filterResort);
+        data = data.filter(c => normalizeResortName(c.resort) === normFilter);
+      }
+      if (filterWilayah !== 'Semua Wilayah') {
+        data = data.filter(c => c.wilayah === filterWilayah);
+      }
     }
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
@@ -1369,9 +1380,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       );
     }
 
-    // Persembahan II (Laporan) tidak menampilkan Resort entity row
-    if (kategori === 'laporan') {
-      data = data.filter(c => c.type !== 'resort');
+    // Filter based on tabId
+    if (tabId === 'laporan') {
+      data = data.filter(c => c.type !== 'resort' && c.type !== 'perorangan');
+    } else if (tabId === 'pelean') {
+      data = data.filter(c => c.type !== 'perorangan');
+    } else if (tabId === 'alaman') {
+      data = data.filter(c => c.type !== 'perorangan');
+    } else if (tabId === 'perorangan') {
+      data = data.filter(c => c.type === 'perorangan');
     }
 
     data.sort((a,b) => {
@@ -1409,7 +1426,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       return a.nama.localeCompare(b.nama);
     });
 
-    return data
+    const mappedData = data
       .map(gereja => {
         const targetIdentityKey = getChurchIdentityKey(gereja);
         
@@ -1471,6 +1488,45 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           periode: periodeAktif
         };
       });
+
+    if (tabId === 'alaman') {
+      const peroranganData = getLaporanData('perorangan');
+      if (peroranganData.length > 0) {
+        let totalJumlah = 0;
+        let aggDetails: Record<string, number> = {};
+        let allDetailsCount = 0;
+        let filledDetailsCount = 0;
+
+        peroranganData.forEach(p => {
+          totalJumlah += p.jumlah || 0;
+          Object.entries(p.details || {}).forEach(([col, val]) => {
+            aggDetails[col] = (aggDetails[col] || 0) + ((val as number) || 0);
+          });
+        });
+        
+        columns.forEach(col => {
+           allDetailsCount++;
+           if ((aggDetails[col] || 0) > 0) filledDetailsCount++;
+        });
+
+        mappedData.push({
+          id: 'agg-perorangan',
+          nama: 'PEMBELIAN PERORANGAN',
+          resort: '-',
+          wilayah: '-',
+          wa: '',
+          type: 'agg-perorangan',
+          status: filledDetailsCount === allDetailsCount ? 'Lunas' : filledDetailsCount > 0 ? 'Proses' : 'Menunggak',
+          jumlah: totalJumlah,
+          tanggal: null,
+          details: aggDetails,
+          kategori: 'alaman',
+          periode: periodeAktif
+        });
+      }
+    }
+
+    return mappedData;
   };
 
   const dataAlaman = useMemo(() => getLaporanData('alaman'), [sortedChurches, payments, periodeAktif, churchAliasesMap]);
@@ -1705,8 +1761,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     setShowSettingsModal(false);
   };
 
-  const handleCellChange = async (gerejaId: string, kategori: 'laporan' | 'pelean' | 'alaman', field: string, value: string) => {
+  const handleCellChange = async (gerejaId: string, kategoriParam: 'laporan' | 'pelean' | 'alaman' | 'perorangan', field: string, value: string) => {
     if (!currentUserProfile) return; 
+
+    const kategori = kategoriParam === 'perorangan' ? 'alaman' : kategoriParam;
 
     let rawNum = parseInt(value.replace(/[^0-9]/g, ''));
     if (isNaN(rawNum)) rawNum = 0;
@@ -1976,10 +2034,11 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
     const formattedName = getFormattedPaymentName(item.kategori, colName);
     let text = "";
+    const greetingTitle = item.type === 'perorangan' ? (item.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (item.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'Bapak/Ibu Majelis Jemaat';
     if (val > 0) {
-      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} sebesar *Rp ${formatRupiah(val)}*. Tuhan memberkati.`;
+      text = `Syalom ${greetingTitle} ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} sebesar *Rp ${formatRupiah(val)}*. Tuhan memberkati.`;
     } else {
-      text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, dari Kantor Pusat GKLI ingin mengingatkan bahwa catatan kas kami untuk item *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} masih kosong (menunggak). Mohon agar dapat segera diselesaikan. Terima kasih, Tuhan memberkati.`;
+      text = `Syalom ${greetingTitle} ${item.nama}, dari Kantor Pusat GKLI ingin mengingatkan bahwa catatan kas kami untuk item *${formattedName.toUpperCase()}* (${catLabel.toUpperCase()}) periode ${item.periode} masih kosong (menunggak). Mohon agar dapat segera diselesaikan. Terima kasih, Tuhan memberkati.`;
     }
     
     let opened = 0;
@@ -2004,7 +2063,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const details = selected.map(col => `- *${getFormattedPaymentName(item.kategori, col).toUpperCase()}*: Rp ${formatRupiah(item.details[col])}`).join('\n');
     const total = selected.reduce((sum, col) => sum + (item.details[col] || 0), 0);
     
-    const text = `Syalom Bapak/Ibu Majelis Jemaat ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan (${catLabel.toUpperCase()}) periode ${item.periode} untuk item berikut:\n${details}\n\n*Total: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
+    const greetingTitle = item.type === 'perorangan' ? (item.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (item.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'Bapak/Ibu Majelis Jemaat';
+    const text = `Syalom ${greetingTitle} ${item.nama}, kami dari Kantor Pusat GKLI mengucapkan terima kasih atas persembahan (${catLabel.toUpperCase()}) periode ${item.periode} untuk item berikut:\n${details}\n\n*Total: Rp ${formatRupiah(total)}*\n\nKiranya Tuhan Yesus senantiasa memberkati pelayanan kita.`;
     
     let opened = 0;
     if (item.wa) {
@@ -2049,9 +2109,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const handleKirimWA = (item: any, type: 'tagihan' | 'terimakasih') => {
     const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
+    const greetingTitle = item.type === 'perorangan' ? (item.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (item.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'Jemaat';
     const text = type === 'tagihan' 
-      ? `Syalom Jemaat ${item.nama}, mohon kesediaannya untuk menyelesaikan administrasi ${catLabel.toUpperCase()} periode ${item.periode}.`
-      : `Syalom Jemaat ${item.nama}, terima kasih atas persembahan ${catLabel.toUpperCase()} sebesar Rp ${formatRupiah(item.jumlah)}.`;
+      ? `Syalom ${greetingTitle} ${item.nama}, mohon kesediaannya untuk menyelesaikan administrasi ${catLabel.toUpperCase()} periode ${item.periode}.`
+      : `Syalom ${greetingTitle} ${item.nama}, terima kasih atas persembahan ${catLabel.toUpperCase()} sebesar Rp ${formatRupiah(item.jumlah)}.`;
     
     let opened = 0;
     if (item.wa) {
@@ -2266,7 +2327,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   const handleDownloadCurrentMenu = (format: 'excel' | 'word' | 'pdf') => {
     if (format === 'pdf') {
-      if (['laporan', 'pelean', 'alaman'].includes(activeTab)) {
+     if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(activeTab)) {
         setPrintData({ kategori: activeTab });
         setPrintType('rekap');
       } else {
@@ -2308,8 +2369,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
         churches.forEach((c, idx) => {
           htmlContent += `<tr><td>${idx + 1}</td><td>${c.id}</td><td>${c.nama}</td><td>${c.resort}</td><td>${c.wa}</td></tr>`;
         });
-      } else if (['laporan', 'pelean', 'alaman'].includes(activeTab)) {
-        const columns = SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS];
+      } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(activeTab)) {
+        const columns = SPREADSHEET_COLUMNS[activeTab === 'perorangan' ? 'alaman' : activeTab as keyof typeof SPREADSHEET_COLUMNS];
         const data = getLaporanData(activeTab as any);
         htmlContent += `<tr><th>NO</th><th>NAMA JEMAAT</th><th>STATUS</th>${columns.map(c => `<th>${c}</th>`).join('')}<th>TOTAL</th></tr>`;
         data.forEach((item, idx) => {
@@ -2352,8 +2413,8 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       churches.forEach((c, idx) => {
         csvContent += `${idx + 1},${c.id},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}","${c.wa}"\n`;
       });
-    } else if (['laporan', 'pelean', 'alaman'].includes(activeTab)) {
-      const columns = SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS];
+    } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(activeTab)) {
+      const columns = SPREADSHEET_COLUMNS[activeTab === 'perorangan' ? 'alaman' : activeTab as keyof typeof SPREADSHEET_COLUMNS];
       const data = getLaporanData(activeTab as any);
       const colTotals: Record<string, number> = {};
       columns.forEach(col => colTotals[col] = 0);
@@ -2831,7 +2892,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
            
            {printType === 'rekap' ? (
              <div>
-               <h3 className="text-center text-xl font-bold underline mb-4">REKAPITULASI {(CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
+               <h3 className="text-center text-xl font-bold underline mb-4">REKAPITULASI {(printData.kategori === 'perorangan' ? 'PEMBELIAN PERORANGAN' : CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
                <p className="text-center mb-6">PERIODE: {periodeAktif}</p>
                <table className="w-full border-collapse border border-black text-sm">
                  <thead>
@@ -2872,8 +2933,17 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <p className="text-right mb-0">Sihabonghabong, {today}</p>
                     <div className="mt-6">
                       <p className="mb-0">Kepada, Yth.</p>
-                      <p className="font-extrabold italic mb-0">Majelis Jemaat {printData.nama.startsWith('GKLI') ? '' : 'GKLI '}{printData.nama}</p>
-                      <p className="mb-0">Resort {printData.resort}</p>
+                      {printData.type === 'perorangan' ? (
+                        <>
+                          <p className="font-extrabold italic mb-0">{printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bpk/Ibu/Sdr/i')} {printData.nama}</p>
+                          <p className="mb-0">-</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-extrabold italic mb-0">Majelis Jemaat {printData.nama.startsWith('GKLI') ? '' : 'GKLI '}{printData.nama}</p>
+                          <p className="mb-0">Resort {printData.resort}</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2883,14 +2953,14 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                   <br/>
                   <p>
                     {printType.includes('arrears') || printType === 'tunggakan'
-                      ? `Berdasarkan catatan kas kami hingga tanggal ${today}, kami mendapati bahwa kewajiban administrasi periode ${printData.periode} dari Jemaat bapak/ibu hingga saat ini masih belum kami terima (menunggak) dengan rincian sebagai berikut:`
+                      ? `Berdasarkan catatan kas kami hingga tanggal ${today}, kami mendapati bahwa kewajiban administrasi periode ${printData.periode} dari ${printData.type === 'perorangan' ? (printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu')) : 'Jemaat bapak/ibu'} hingga saat ini masih belum kami terima (menunggak) dengan rincian sebagai berikut:`
                       : `Terpujilah Allah Tuhan kita di dalam nama Yesus Kristus, sebagai kepala gereja, yang senantiasa menolong dan memberkati gereja-Nya.`
                     }
                   </p>
                   
                   {(!printType.includes('arrears') && printType !== 'tunggakan') && (
                     <p className="mt-4">
-                      Melalui surat ini kami juga mengucapkan banyak terima kasih kepada bapak/ibu Majelis Jemaat/Resort yang telah setia memberikan persembahan ke Kantor Pusat, pada tanggal {today} telah diterima sebanyak <span className="font-bold">Rp. {formatRupiah(printData.total || printData.jumlah || 0)},-</span> <span className="font-bold italic">({terbilang(printData.total || printData.jumlah || 0).trim().replace(/\s+/g, ' ')} Rupiah)</span> dengan rincian, sebagai berikut:
+                      Melalui surat ini kami juga mengucapkan banyak terima kasih kepada {printData.type === 'perorangan' ? (printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'bapak/ibu Majelis Jemaat/Resort'} yang telah setia memberikan persembahan ke Kantor Pusat, pada tanggal {today} telah diterima sebanyak <span className="font-bold">Rp. {formatRupiah(printData.total || printData.jumlah || 0)},-</span> <span className="font-bold italic">({terbilang(printData.total || printData.jumlah || 0).trim().replace(/\s+/g, ' ')} Rupiah)</span> dengan rincian, sebagai berikut:
                     </p>
                   )}
                 </div>
@@ -3088,6 +3158,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           <NavItem active={activeTab === 'laporan'} onClick={() => { setActiveTab('laporan'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label={appSettings.menuLaporan} />
           <NavItem active={activeTab === 'pelean'} onClick={() => { setActiveTab('pelean'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label={appSettings.menuPelean} />
           <NavItem active={activeTab === 'alaman'} onClick={() => { setActiveTab('alaman'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label={appSettings.menuAlaman} />
+          <NavItem active={activeTab === 'perorangan'} onClick={() => { setActiveTab('perorangan'); setMobileSidebarOpen(false); }} icon={<FileText size={20} />} label="Pembelian Perorangan" />
           <NavItem active={activeTab === 'distribusi'} onClick={() => { setActiveTab('distribusi'); setMobileSidebarOpen(false); }} icon={<Truck size={20} />} label="Distribusi Literatur" />
 
           <NavHeader label={appSettings.menuRekapJudul} />
@@ -3575,7 +3646,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                     let sentCount = 0;
 
                                     for (const church of churches) {
-                                      if ((!church.wa && !church.waPendeta) || church.type === 'resort') continue;
+                                      if ((!church.wa && !church.waPendeta) || church.type === 'resort' || church.type === 'perorangan' || church.type === 'agg-perorangan') continue;
 
                                       const arrears: Record<string, string[]> = {};
                                       let hasArrears = false;
@@ -4403,23 +4474,32 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                 </div>
               )}
 
-              {(activeTab === 'laporan' || activeTab === 'pelean' || activeTab === 'alaman') && (
+              {(activeTab === 'laporan' || activeTab === 'pelean' || activeTab === 'alaman' || activeTab === 'perorangan') && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <h3 className="judul-h3">{appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
-                    <div className="flex gap-3">
-                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                        <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
-                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
-                          {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      </div>
-                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                        <span className="text-[9px] font-bold text-slate-400 capitalize">Wilayah:</span>
-                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
-                          {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
-                        </select>
-                      </div>
+                        <h3 className="judul-h3">{activeTab === 'perorangan' ? 'Pembelian Perorangan' : appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
+                    <div className="flex flex-wrap items-center gap-3">
+                       {activeTab === 'perorangan' && currentUserProfile && (
+                         <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '-', wilayah: '-', wa: '', jenisKelamin: 'Laki-laki', order: churches.length + 1, type: 'perorangan' }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-gold-700 transition-colors shadow-sm shadow-gold-500/20">
+                           <Plus size={14} /> <span>Tambah Pembeli</span>
+                         </button>
+                       )}
+                       {activeTab !== 'perorangan' && (
+                         <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                          <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
+                          <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+                            {uniqueResorts.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                         </div>
+                       )}
+                       {activeTab !== 'perorangan' && (
+                         <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                          <span className="text-[9px] font-bold text-slate-400 capitalize">Wilayah:</span>
+                          <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+                            {uniqueWilayah.map(w => <option key={w} value={w}>{w}</option>)}
+                          </select>
+                         </div>
+                       )}
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
                         <input 
@@ -4444,7 +4524,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Wilayah</th>
                           <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Status</th>
-                          {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => (
+                          {SPREADSHEET_COLUMNS[activeTab === 'perorangan' ? 'alaman' : activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => (
                             <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
                           ))}
                           <th className="px-4 py-4 border-b border-slate-700 text-right bg-gold-600 text-white w-32 font-black tracking-tighter">TOTAL (RP)</th>
@@ -4629,13 +4709,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                       </span>
                                     )}
                                   </td>
-                                  {SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => {
+                                  {SPREADSHEET_COLUMNS[activeTab === 'perorangan' ? 'alaman' : activeTab as keyof typeof SPREADSHEET_COLUMNS].map(col => {
                                     const val = item.details[col] || 0;
                                     const isSelected = (selectedCells[item.id] || []).includes(col);
                                     return (
                                       <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px] z-10 hover:z-20">
                                         <div className="flex items-center h-full px-2">
-                                          {val > 0 && (
+                                          {val > 0 && item.type !== 'agg-perorangan' && (
                                             <div className="mr-1">
                                               <input 
                                                 type="checkbox" 
@@ -4647,21 +4727,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                             </div>
                                           )}
                                           <div className="flex-1 relative flex items-center">
-                                            {currentUserProfile ? (
+                                            {currentUserProfile && item.type !== 'agg-perorangan' ? (
                                               <TableCellInput
                                                 initialVal={val}
                                                 itemType={item.type}
                                                 onSave={(newVal) => handleCellChange(item.id, activeTab as any, col, newVal)}
-                                                formatFn={activeTab === 'alaman' ? (v) => formatInput(v) : (v) => formatRupiah(v)}
+                                                formatFn={activeTab === 'alaman' || activeTab === 'perorangan' ? (v) => formatInput(v) : (v) => formatRupiah(v)}
                                               />
                                             ) : (
-                                              <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' ? 'text-slate-300' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
-                                                {activeTab === 'alaman' ? formatInput(val) : formatRupiah(val)}
+                                              <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' || item.type === 'agg-perorangan' ? 'text-slate-300' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
+                                                {activeTab === 'alaman' || activeTab === 'perorangan' ? formatInput(val) : formatRupiah(val)}
                                               </div>
                                             )}
                                             
                                             {/* Tombol WA Khusus */}
-                                            {item.type !== 'resort' && (
+                                            {item.type !== 'resort' && item.type !== 'agg-perorangan' && (
                                               <button 
                                                 onClick={() => handleKirimWASpesifik(item, col)}
                                                 className="ml-2 p-1 rounded-full text-slate-300 hover:text-green-600 hover:bg-green-50 transition-colors"
@@ -4677,7 +4757,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                   })}
                                   <td className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
                                   <td className="px-4 py-3 text-center">
-                                    {item.type !== 'resort' && (
+                                    {item.type !== 'resort' && item.type !== 'agg-perorangan' && (
                                       <div className="flex flex-col items-center space-y-1">
                                       <div className="flex justify-center space-x-1">
                                         <button 
@@ -5271,12 +5351,26 @@ Struktur (Gabungkan menjadi 1 tulisan utuh 3-4 paragraf yang mengalir tanpa sub-
             >
               <option value="jemaat">Jemaat (Anggota)</option>
               <option value="resort">Pusat / Resort</option>
+              <option value="perorangan">Pembelian Perorangan</option>
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{formChurch.type === 'resort' ? 'Nama Resort' : 'Nama Jemaat'}</label>
-            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder={formChurch.type === 'resort' ? 'Contoh: RESORT MEDAN' : 'Nama Jemaat'} />
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{formChurch.type === 'resort' ? 'Nama Resort' : formChurch.type === 'perorangan' ? 'Nama Perorangan / Pribadi' : 'Nama Jemaat'}</label>
+            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder={formChurch.type === 'resort' ? 'Contoh: RESORT MEDAN' : formChurch.type === 'perorangan' ? 'Nama Orang' : 'Nama Jemaat'} />
           </div>
+          {formChurch.type === 'perorangan' && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Jenis Kelamin</label>
+              <select 
+                value={formChurch.jenisKelamin || 'Laki-laki'} 
+                onChange={e => setFormChurch({...formChurch, jenisKelamin: e.target.value as 'Laki-laki' | 'Perempuan'})}
+                className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 bg-white"
+              >
+                <option value="Laki-laki">Laki-laki (Sdr.)</option>
+                <option value="Perempuan">Perempuan (Sdri.)</option>
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Resort</label>
