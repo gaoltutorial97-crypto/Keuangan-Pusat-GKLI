@@ -3195,7 +3195,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col w-full overflow-hidden">
+      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col w-full overflow-x-hidden">
         <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
           <div className="flex items-center space-x-3 lg:space-x-6">
             <button 
@@ -3257,7 +3257,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           </div>
         </header>
 
-        <div className="p-8 flex-1">
+        <div className="p-4 md:p-6 lg:p-8 flex-1">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}

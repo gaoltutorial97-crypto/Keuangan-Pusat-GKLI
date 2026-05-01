@@ -1,0 +1,686 @@
+128:      className={`w-full py-3 outline-none bg-transparent font-mono data-value text-${align} ${customClasses || defaultColorClasses}`}
+2590:      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+2594:          className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+2596:          <div className="bg-gold-600 p-8 text-center text-white">
+2597:            <div className="bg-white/20 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md overflow-hidden">
+2599:                <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+2604:            <h1 className="text-2xl font-bold">{appSettings.title}</h1>
+2605:            <p className="text-gold-100 mt-2">Akses Terbatas: Silakan Masuk</p>
+2607:          <div className="p-8 space-y-6">
+2608:            <div className="space-y-4">
+2610:                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest">Username</label>
+2611:                <div className="relative">
+2612:                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+2619:                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-gold-500 transition-all"
+2625:                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest">Password</label>
+2626:                <div className="relative">
+2627:                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+2634:                    className="w-full border border-slate-200 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-gold-500 transition-all"
+2643:              className="w-full bg-gold-600 text-white py-4 rounded-xl font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+2647:            <p className="text-center text-xs text-slate-400">
+2694:        <div className="no-print fixed top-0 left-0 right-0 bg-slate-900 text-white p-4 flex justify-between items-center z-50 shadow-xl">
+2695:          <div className="flex items-center gap-3">
+2696:             <div className="bg-gold-500 p-2 rounded-lg">
+2697:                <Printer size={20} className="text-slate-900" />
+2699:             <h3 className="font-bold text-lg tracking-tight">Mode Siap Cetak (Potret)</h3>
+2701:          <div className="flex gap-3">
+2702:            <button onClick={() => setPrintType(null)} className="px-5 py-2.5 bg-slate-700 rounded-xl font-bold hover:bg-slate-600 transition-all">Kembali</button>
+2740:              className="px-5 py-2.5 bg-emerald-600 rounded-xl font-bold hover:bg-emerald-500 flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
+2823:              className="px-5 py-2.5 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
+2829:              className="px-5 py-2.5 bg-gold-600 rounded-xl font-bold hover:bg-gold-500 flex items-center gap-2 shadow-lg transition-all"
+2844:                className="px-5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl font-bold hover:bg-slate-700 flex items-center gap-2 shadow-lg transition-all"
+2846:                <Archive size={18} className="text-yellow-500" /> 
+2847:                <span className="text-yellow-500">Arsipkan Sekarang</span>
+2853:        <div className="print-preview-container">
+2855:      <div className="print-section mt-0">
+2857:         <div className="text-center mb-8 relative pt-0">
+2859:              <div className="border-b-[3px] border-black pb-4 text-center">
+2860:                <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-w-4xl max-h-40 object-contain mx-auto" />
+2863:              <div className="w-full border-b-[3px] border-black pb-4">
+2864:                <div className="flex items-center justify-between mb-2 gap-4">
+2865:                  <div className="w-32 h-32 flex items-center justify-center shrink-0 relative">
+2866:                     <div className="absolute inset-0 rounded-full border-[3px] border-blue-800 flex items-center justify-center bg-yellow-400 overflow-hidden shadow-sm">
+2867:                        <div className="w-20 h-20 rounded-full border-2 border-red-600 flex items-center justify-center bg-white">
+2868:                          <span className="text-2xl text-blue-800 font-serif font-black">GKLI</span>
+2872:                  <div className="flex-1 text-center font-serif leading-tight">
+2873:                     <h1 className="text-2xl md:text-[26px] font-medium uppercase tracking-widest text-black mb-1">KANTOR PUSAT</h1>
+2874:                     <h2 className="text-3xl md:text-[32px] font-bold text-blue-700 uppercase tracking-wider mb-1">GEREJA KRISTEN LUTHER INDONESIA</h2>
+2875:                     <h3 className="text-xl md:text-2xl italic text-red-600 font-bold mb-1">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</h3>
+2876:                     <p className="text-[12px] font-bold text-blue-800 tracking-wide mt-1">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
+2877:                     <p className="text-[12px] font-bold text-blue-800 tracking-wide">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
+2879:                  <div className="w-32 shrink-0"></div>
+2881:                <div className="text-center font-serif text-[12px] leading-tight mb-2 tracking-wide text-black">
+2885:                <div className="border-t-[3px] border-black pb-[1px]"></div>
+2886:                <div className="border-t-[1px] border-black pt-[3px] mb-6">
+2887:                   <p className="text-center text-red-600 font-bold text-[16px] tracking-wider transform scale-y-110">ANGGOTA PERSEKUTUAN GEREJA-GEREJA DI INDONESIA (PGI)</p>
+2895:               <h3 className="text-center text-xl font-bold underline mb-4">REKAPITULASI {(printData.kategori === 'perorangan' ? 'PEMBELIAN PERORANGAN' : CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
+2896:               <p className="text-center mb-6">PERIODE: {periodeAktif}</p>
+2897:               <table className="w-full border-collapse border border-black text-sm">
+2899:                   <tr className="bg-gray-100">
+2900:                     <th className="border border-black p-2">NO</th>
+2901:                     <th className="border border-black p-2">NAMA JEMAAT</th>
+2902:                     <th className="border border-black p-2">RESORT</th>
+2903:                     <th className="border border-black p-2">STATUS</th>
+2904:                     <th className="border border-black p-2">TOTAL (Rp)</th>
+2910:                       <td className="border border-black p-2 text-center">{idx + 1}</td>
+2911:                       <td className="border border-black p-2 font-bold">{item.nama}</td>
+2912:                       <td className="border border-black p-2">{item.resort}</td>
+2913:                       <td className="border border-black p-2 text-center">{item.status}</td>
+2914:                       <td className="border border-black p-2 text-right">{formatRupiah(item.jumlah)}</td>
+2921:              <div className="space-y-6 text-[15px]">
+2922:                <div className="flex justify-between items-start leading-relaxed -mt-4 mb-4">
+2923:                  <div className="flex-1">
+2924:                    <table className="w-full text-left max-w-sm">
+2926:                        <tr><td className="w-16">Nomor</td><td className="w-4">:</td><td>{getNomorSurat(printData)}/{printType.includes('arrears') || printType === 'tunggakan' ? 'P.10' : 'E.12'}/{currentRomanMonth}/{currentYear}</td></tr>
+2932:                  <div className="text-left w-64 pt-0">
+2933:                    <p className="text-right mb-0">Sihabonghabong, {today}</p>
+2934:                    <div className="mt-6">
+2935:                      <p className="mb-0">Kepada, Yth.</p>
+2938:                          <p className="font-extrabold italic mb-0">{printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bpk/Ibu/Sdr/i')} {printData.nama}</p>
+2939:                          <p className="mb-0">-</p>
+2943:                          <p className="font-extrabold italic mb-0">Majelis Jemaat {printData.nama.startsWith('GKLI') ? '' : 'GKLI '}{printData.nama}</p>
+2944:                          <p className="mb-0">Resort {printData.resort}</p>
+2951:                <div className="text-justify leading-relaxed">
+2962:                    <p className="mt-4">
+2963:                      Melalui surat ini kami juga mengucapkan banyak terima kasih kepada {printData.type === 'perorangan' ? (printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'bapak/ibu Majelis Jemaat/Resort'} yang telah setia memberikan persembahan ke Kantor Pusat, pada tanggal {today} telah diterima sebanyak <span className="font-bold">Rp. {formatRupiah(printData.total || printData.jumlah || 0)},-</span> <span className="font-bold italic">({terbilang(printData.total || printData.jumlah || 0).trim().replace(/\s+/g, ' ')} Rupiah)</span> dengan rincian, sebagai berikut:
+2968:                <div className="pl-8 pr-12 my-6">
+2970:                    <div className="space-y-4">
+2971:                      <p className="font-bold underline mb-2">❖ <u>Daftar Item Belum Terbayar:</u></p>
+2975:                          <div key={cat} className="ml-4 mb-3">
+2976:                            <h4 className="font-bold text-[14px] uppercase mb-1">{CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS] || cat}:</h4>
+2977:                            <ul className="list-disc pl-5 text-[15px]">
+2987:                    <table className="w-full border-collapse">
+3016:                                    <td className="w-5 align-top text-left text-sm">{count}.</td>
+3017:                                    <td className="text-[15px]">{getFormattedPaymentName(cat, f)}</td>
+3018:                                    <td className="w-12 text-left text-[15px]">Rp.</td>
+3019:                                    <td className="w-32 text-right text-[15px]">{formatRupiah(val)},-</td>
+3031:                                <td className="w-5 align-top text-left text-sm">{idx + 1}.</td>
+3032:                                <td className="text-[15px]">{getFormattedPaymentName(printData.kategori, col)}</td>
+3033:                                <td className="w-12 text-left text-[15px]">Rp.</td>
+3034:                                <td className="w-32 text-right text-[15px]">{formatRupiah(val)},-</td>
+3040:                          <tr className="border-t border-black">
+3041:                            <td className="font-bold pt-1 text-center tracking-widest uppercase">Jumlah</td>
+3043:                            <td className="font-bold pt-1 text-left text-[16px]">Rp.</td>
+3044:                            <td className="font-bold pt-1 text-right text-[16px] tracking-tight">{formatRupiah(printData.total || printData.jumlah || 0)},-</td>
+3052:                <p className="text-justify leading-relaxed mt-4">
+3059:                <div className="flex justify-end mt-2 print:mt-2 relative w-full mb-12">
+3060:                  <div className="text-left w-72 relative z-10">
+3061:                    <p className="mb-0 text-[14px]">Teriring Salam dan Doa</p>
+3062:                    <p className="mb-0 leading-tight text-[14px]">Pucuk Pimpinan GKLI</p>
+3063:                    <p className="mb-0 leading-tight text-[14px]">A.n. Bishop</p>
+3064:                    <div className="relative h-4 my-1 pointer-events-none -ml-16">
+3070:                            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-40 w-auto max-w-none object-contain mix-blend-multiply opacity-90 scale-125 pt-2"
+3078:                            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-40 w-auto max-w-none object-contain mix-blend-multiply opacity-90 scale-125 pt-2"
+3083:                    <p className="font-bold underline text-center relative z-20 leading-tight text-[15px] mt-6">Pdt. Lamris Malau, M.Th.</p>
+3084:                    <p className="text-center relative z-20 leading-none text-[13px]">Sekretaris Jenderal</p>
+3089:                  <div className="mt-16 text-sm leading-tight pb-8">
+3091:                    <ol className="list-decimal pl-5">
+3098:                <div className="fixed bottom-0 left-0 w-full text-center text-[8.5px] pb-4 leading-tight hidden print:block">
+3111:    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800">
+3115:          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] lg:hidden"
+3121:      <aside className={`w-64 bg-slate-900 text-white flex flex-col fixed h-full z-[100] shadow-2xl no-print border-r border-white/5 transition-transform duration-300 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+3122:        <div className="p-6 flex flex-col border-b border-white/5 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
+3123:          <div className="flex justify-between items-center lg:block">
+3124:            <div className="flex items-center space-x-4 mb-0 lg:mb-2 group cursor-pointer">
+3125:              <div className="bg-emerald-600 p-1 rounded-full shadow-lg shadow-emerald-900/40 flex items-center justify-center w-14 h-14 flex-shrink-0 group-hover:scale-110 transition-transform border-4 border-slate-800">
+3127:                  <img src={appSettings.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-full" />
+3129:                  <div className="bg-white rounded-full p-2">
+3130:                    <ShieldCheck size={24} className="text-emerald-600" />
+3134:              <div className="overflow-hidden">
+3135:                <h1 className="text-lg font-extrabold leading-tight tracking-tight text-white group-hover:text-gold-400 transition-colors uppercase">Keuangan GKLI</h1>
+3136:                <div className="flex items-center space-x-1.5">
+3137:                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+3138:                  <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest truncate">
+3144:            <button className="lg:hidden p-2 text-white/50 hover:text-white" onClick={() => setMobileSidebarOpen(false)}>
+3150:        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+3174:              <NavItem active={activeTab === 'renungan'} onClick={() => { setActiveTab('renungan'); setMobileSidebarOpen(false); }} icon={<BookOpen size={20} className="text-yellow-500" />} label="Renungan Harian" className="text-yellow-500" />
+3175:              <NavItem active={activeTab === 'templates'} onClick={() => { setActiveTab('templates'); setMobileSidebarOpen(false); }} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
+3176:              <NavItem active={false} onClick={() => { setFormSettings(appSettings); setShowSettingsModal(true); setMobileSidebarOpen(false); }} icon={<Settings size={20} className="text-yellow-500" />} label="Edit Tampilan" className="text-yellow-500" />
+3177:              <NavItem active={activeTab === 'akun'} onClick={() => { setActiveTab('akun'); setMobileSidebarOpen(false); }} icon={<UserPlus size={20} className="text-yellow-500" />} label="Manajemen Akun" className="text-yellow-500" />
+3182:        <div className="p-4 border-t border-slate-800">
+3184:            <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-red-400 hover:bg-slate-800 transition-colors">
+3186:              <span className="text-sm font-semibold">Keluar ({currentUserProfile.role})</span>
+3189:            <button onClick={() => setShowLoginModal(true)} className="w-full flex items-center space-x-3 px-4 py-2 rounded-lg text-green-400 hover:bg-slate-800 transition-colors bg-slate-800/50">
+3191:              <span className="text-sm font-semibold">Login Admin</span>
+3198:      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col w-full overflow-hidden">
+3199:        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-10 no-print">
+3200:          <div className="flex items-center space-x-3 lg:space-x-6">
+3202:              className="lg:hidden p-2 text-slate-800 hover:bg-slate-100 rounded-lg"
+3207:            <div className="flex flex-col">
+3208:              <h2 className="judul-h2 uppercase !text-sm lg:!text-xl truncate max-w-[150px] lg:max-w-none">{activeTab.toUpperCase()}</h2>
+3209:              <div className="flex items-center space-x-1.5 mt-0.5">
+3210:                <div className="w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full bg-gold-500 animate-pulse"></div>
+3211:                <p className="text-[7px] lg:text-[9px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">Online</p>
+3214:            <div className="hidden lg:block h-8 w-px bg-slate-200"></div>
+3215:            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+3223:          <div className="flex items-center space-x-2 lg:space-x-4">
+3225:              <div className="hidden lg:flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 lg:px-3 py-1 lg:py-1.5 shadow-sm">
+3226:                <span className="text-[10px] lg:text-xs text-slate-500 font-bold mr-2 uppercase">Tema:</span>
+3230:                  className="bg-transparent text-[10px] lg:text-sm font-bold text-indigo-600 outline-none cursor-pointer"
+3239:            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 lg:px-3 py-1 lg:py-1.5">
+3240:              <span className="hidden sm:inline text-[10px] lg:text-xs text-slate-500 font-bold mr-2 uppercase">Periode:</span>
+3252:                className="bg-transparent text-[10px] lg:text-sm font-bold text-gold-700 outline-none cursor-pointer"
+3260:        <div className="p-8 flex-1">
+3270:                <div className="space-y-6">
+3271:                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+3272:                    <div className="flex justify-between items-center mb-6">
+3274:                        <h3 className="judul-h3">Pusat Terima Kasih & Konfirmasi</h3>
+3275:                        <p className="subjudul mt-1">Kirim ucapan terima kasih untuk setoran yang sudah masuk pada periode {periodeAktif}.</p>
+3279:                    <div className="grid grid-cols-1 gap-6">
+3290:                          <div key={church.id} className="border border-green-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-green-50/10">
+3291:                            <div className="bg-green-50 p-4 border-b border-green-100 flex justify-between items-center">
+3293:                                <h4 className="font-bold text-slate-800">
+3294:                                  {church.type === 'resort' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">Resort</span>}
+3297:                                <p className="text-[10px] text-slate-500">Resort {church.resort}</p>
+3299:                              <div className="flex items-center gap-2">
+3300:                                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+3316:                                    className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+3324:                            <div className="p-4 flex flex-col md:flex-row gap-4">
+3325:                              <div className="flex-1 bg-white p-3 rounded-lg border border-green-50">
+3326:                                <div className="space-y-4">
+3329:                                      <div className="flex justify-between items-center mb-1">
+3330:                                        <span className="font-bold text-slate-700 text-sm">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+3331:                                        <span className="angka-keuangan text-green-600 text-sm">Rp {formatRupiah(p.jumlah)}</span>
+3333:                                      <div className="pl-4 space-y-1 mt-2">
+3336:                                            <div key={key} className="flex justify-between text-slate-500 text-xs">
+3344:                                        <div className="mt-3 ml-4 p-2 bg-slate-50 border border-slate-200 rounded text-[10px]">
+3345:                                          {p.buktiTransfer && <p className="text-slate-600 font-medium whitespace-pre-wrap"><span className="font-bold">Catatan:</span> {p.buktiTransfer}</p>}
+3352:                                              className="mt-2 text-indigo-600 font-bold underline hover:text-indigo-800"
+3363:                              <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
+3404:                                  className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+3422:                                  className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-black hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+3436:                <div className="space-y-6">
+3437:                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+3438:                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+3440:                        <h3 className="judul-h3">Arsip Tanda Terima</h3>
+3441:                        <p className="subjudul mt-1">Daftar ucapan terima kasih yang sudah dikirim atau dipindahkan ke arsip pada periode {periodeAktif}.</p>
+3443:                      <div className="relative w-full md:w-64">
+3444:                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+3450:                          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-gold-500 focus:bg-white transition-all"
+3455:                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+3463:                    <div className="grid grid-cols-1 gap-6">
+3473:                          <div key={church.id} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-slate-50">
+3474:                            <div className="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center">
+3476:                                <h4 className="font-bold text-slate-800">
+3477:                                  {church.type === 'resort' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">Resort</span>}
+3480:                                <p className="text-xs text-slate-500">Resort {church.resort}</p>
+3482:                              <div className="flex items-center gap-2">
+3483:                                <div className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1">
+3499:                                    className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+3507:                            <div className="p-4 flex flex-col md:flex-row gap-4">
+3508:                              <div className="flex-1 bg-white p-3 rounded-lg border border-slate-100">
+3509:                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Histori Setoran:</p>
+3510:                                <div className="space-y-2">
+3512:                                    <div key={p.id} className="text-xs border-b border-slate-50 pb-2 mb-2 last:border-0 last:mb-0 last:pb-0">
+3513:                                      <div className="flex justify-between items-center mb-1">
+3514:                                        <div className="flex items-center space-x-2">
+3515:                                          <span className="font-bold text-slate-700">{(CATEGORY_LABELS[p.kategori as keyof typeof CATEGORY_LABELS] || p.kategori).toUpperCase()}</span>
+3516:                                          <button onClick={() => handleDeletePayment(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-0.5 rounded" title="Hapus Data">
+3525:                                              className="text-indigo-500 hover:text-indigo-700 font-bold ml-2 underline text-[9px]"
+3531:                                        <span className="text-slate-500 italic text-[10px] ml-2">Dikirim: {p.receiptSentAt ? new Date(p.receiptSentAt).toLocaleDateString('id-ID') : '-'}</span>
+3532:                                        <span className="text-green-600 font-bold ml-auto">Rp {formatRupiah(p.jumlah)}</span>
+3538:                              <div className="flex flex-col justify-center space-y-2 min-w-[200px]">
+3575:                                  className="flex items-center justify-center space-x-2 bg-slate-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors"
+3594:                                  className="flex items-center justify-center space-x-2 bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-amber-700 transition-colors"
+3613:                                  className="text-[10px] text-slate-400 hover:text-red-500 transition-colors font-bold uppercase mt-1 text-center"
+3627:                <div className="space-y-6">
+3628:                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+3629:                    <div className="flex justify-between items-start mb-6">
+3631:                        <h3 className="font-bold text-lg">Pusat Penagihan Tunggakan</h3>
+3632:                        <p className="text-sm text-slate-500">Daftar jemaat yang memiliki tunggakan (belum lunas) pada periode {periodeAktif}. Anda dapat memilih item mana yang ingin ditagih.</p>
+3634:                      <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-700 min-w-[300px]">
+3635:                        <div className="flex items-center justify-between mb-2">
+3636:                           <h4 className="text-xs font-bold text-green-400 uppercase tracking-widest flex items-center">
+3637:                              <Calendar size={14} className="mr-1" /> Penagihan Otomatis
+3639:                           <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-xs">AKTIF</span>
+3641:                        <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+3733:                           className="w-full bg-green-600 hover:bg-green-700 text-white py-1.5 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"
+3740:                    <div className="grid grid-cols-1 gap-6">
+3757:                          <div key={church.id} className="border border-red-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-red-50/5">
+3758:                            <div className="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
+3760:                                <h4 className="font-bold text-slate-800">{church.nama}</h4>
+3761:                                <p className="text-xs text-slate-500">Resort {church.resort}</p>
+3763:                              <div className="flex items-center gap-2">
+3764:                                {!church.hasActive && <span className="text-[10px] text-red-500 italic font-bold">Item Tagihan Kosong</span>}
+3765:                                <div className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+3770:                            <div className="p-4 flex flex-col lg:flex-row gap-6">
+3771:                              <div className="flex-1">
+3772:                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
+3774:                                  <span className="text-slate-300 normal-case font-normal">(Centang yang ingin dimasukkan ke pesan WA)</span>
+3776:                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+3778:                                    <div key={cat} className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+3779:                                      <h5 className="text-[11px] font-bold text-slate-800 border-b border-slate-50 pb-1 mb-2">{(CATEGORY_LABELS[cat] || cat).toUpperCase()}</h5>
+3780:                                      <div className="flex flex-wrap gap-2">
+3798:                                              className={`text-[10px] px-2 py-1 rounded-md border transition-all flex items-center gap-1.5 ${
+3804:                                              <div className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center ${isSelected ? 'bg-white border-white' : 'bg-slate-50 border-slate-300'}`}>
+3805:                                                {isSelected && <div className="w-1.5 h-1.5 bg-red-600 rounded-px" />}
+3817:                              <div className="flex flex-col justify-center space-y-3 min-w-[200px] border-t lg:border-t-0 lg:border-l border-slate-100 pt-4 lg:pt-0 lg:pl-6">
+3818:                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+3819:                                   <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Status Penagihan:</p>
+3820:                                   <p className="text-[11px] text-slate-700">
+3842:                                  className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-lg ${
+3862:                                  className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"
+3876:                <div className="space-y-8">
+3877:                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center no-print">
+3878:                    <div className="flex flex-wrap gap-4 items-center">
+3879:                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-200 pr-4">Filter Dashboard:</span>
+3880:                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+3881:                        <span className="text-[9px] font-bold text-gold-600 uppercase">Resort</span>
+3882:                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+3886:                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+3887:                        <span className="text-[9px] font-bold text-gold-600 uppercase">Wilayah</span>
+3888:                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+3900:                      className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold text-xs hover:bg-indigo-100 transition-colors border border-indigo-200"
+3905:                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+3936:                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+3962:                  <div className="bg-gold-50 border border-gold-200 rounded-xl p-6 flex items-start space-x-4">
+3963:                    <div className="bg-gold-100 p-3 rounded-full">
+3964:                      <AlertTriangle className="text-gold-600" size={24} />
+3967:                      <h3 className="judul-h2 text-gold-800 mb-1">
+3970:                      <p className="subjudul !text-gold-700 leading-relaxed">
+3981:                <div className="space-y-8">
+3982:                  <div className="relative overflow-hidden bg-slate-900 rounded-3xl p-8 text-white shadow-2xl">
+3983:                    <div className="absolute top-0 right-0 w-64 h-64 bg-gold-600/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+3984:                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-600/10 rounded-full blur-3xl -ml-32 -mb-32"></div>
+3986:                    <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+3987:                      <div className="flex items-center space-x-6">
+3988:                        <div className="bg-gradient-to-br from-gold-300 to-gold-600 p-4 rounded-2xl shadow-xl shadow-gold-500/20">
+3989:                          <Award size={40} className="text-white" />
+3992:                          <h2 className="judul-h1 text-white uppercase tracking-tighter">Prestasi Administrasi</h2>
+3993:                          <p className="text-slate-400 font-medium text-sm lg:text-base">Penghargaan untuk Jemaat dengan kedisiplinan setoran 100% pada periode {periodeAktif}</p>
+3996:                      <div className="hidden lg:block text-right">
+3997:                        <p className="text-4xl font-black text-white/10 italic">GKLI PRESTIGE</p>
+4002:                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+4003:                    <div className="p-6 border-b border-slate-100">
+4004:                      <h3 className="judul-h3">Jemaat Berprestasi (Lunas Seluruhnya)</h3>
+4006:                    <div className="p-6">
+4008:                        <div className="text-center py-12">
+4009:                          <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+4010:                            <Award size={32} className="text-slate-300" />
+4012:                          <p className="text-slate-500">Belum ada jemaat yang lunas seluruhnya untuk periode ini.</p>
+4015:                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+4017:                            <div key={church.id} className="border border-slate-200 rounded-xl p-5 hover:border-yellow-400 hover:shadow-md transition-all group">
+4018:                              <div className="flex justify-between items-start mb-4">
+4019:                                <div className="bg-yellow-50 p-2 rounded-lg text-yellow-600">
+4022:                                <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">Lunas 100%</span>
+4024:                              <h4 className="font-bold text-slate-800 mb-1">{church.nama}</h4>
+4025:                              <p className="text-xs text-slate-500 mb-4">Resort {church.resort}</p>
+4031:                                className="w-full flex items-center justify-center space-x-2 bg-slate-900 text-white py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors"
+4046:                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+4047:                  <div className="p-6 border-b border-slate-100 space-y-4">
+4048:                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+4049:                      <h3 className="font-bold text-lg">Daftar Jemaat</h3>
+4050:                      <div className="flex flex-wrap items-center gap-3">
+4052:                          <div className="flex gap-2">
+4054:                              <div className="flex gap-2">
+4057:                                  className="flex items-center space-x-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-lg shadow-slate-500/10"
+4064:                                  className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/10"
+4071:                            <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10">
+4074:                            <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '', wilayah: '', wa: '', order: churches.length + 1, type: 'jemaat' }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/10">
+4082:                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+4083:                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+4084:                        <span className="text-[9px] font-bold text-slate-400 uppercase">Sort:</span>
+4085:                        <select value={sortType} onChange={(e) => setSortType(e.target.value as any)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
+4093:                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+4094:                        <span className="text-[9px] font-bold text-slate-400 uppercase">Resort:</span>
+4095:                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
+4099:                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+4100:                        <span className="text-[9px] font-bold text-slate-400 uppercase">Wil:</span>
+4101:                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full">
+4105:                      <div className="col-span-2 md:col-span-1 flex items-center justify-center space-x-2 bg-gold-50 text-gold-700 border border-gold-200 rounded-lg px-3 py-2 text-[10px] font-bold">
+4111:                    <div className="relative">
+4112:                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+4118:                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-gold-500 focus:bg-white transition-all"
+4123:                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+4131:                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-6 bg-slate-50 border-b border-slate-100">
+4159:                  <div className="overflow-x-auto custom-scrollbar max-h-[70vh]">
+4160:                    <table className="w-full text-sm text-left border-collapse">
+4161:                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-bold tracking-wider sticky top-0 z-50 border-b border-slate-700">
+4164:                            <th className="px-2 py-4 border-b border-slate-700 w-8"></th>
+4166:                          <th className="px-6 py-4 border-b border-slate-700 w-16 text-center">No</th>
+4167:                          <th className="px-6 py-4 border-b border-slate-700">Nama Jemaat</th>
+4168:                          <th className="px-6 py-4 border-b border-slate-700">Resort</th>
+4169:                          <th className="px-6 py-4 border-b border-slate-700">Wilayah</th>
+4170:                          {currentUserProfile?.role === 'superadmin' && <th className="px-6 py-4 border-b border-slate-700">WhatsApp</th>}
+4171:                          {currentUserProfile && <th className="px-6 py-4 border-b border-slate-700 text-center">Aksi</th>}
+4179:                        className="divide-y divide-slate-100"
+4186:                                <tr key={item.id} className="bg-slate-800 text-white font-bold border-b border-slate-700 sticky top-[48px] z-10 shadow-sm">
+4187:                                  {canDragOrder && <td className="px-2 py-3"></td>}
+4188:                                  <td className="px-6 py-2.5 text-center text-[10px] font-mono text-slate-400"></td>
+4189:                                  <td colSpan={5} className="px-6 py-2.5 uppercase tracking-[0.2em] text-[10px] font-black">
+4201:                                <tr key={church.id} className="bg-slate-100 font-bold border-b border-slate-200">
+4202:                                  {canDragOrder && <td className="px-2 py-3"></td>}
+4203:                                  <td className="px-6 py-2 text-center"></td>
+4204:                                  <td colSpan={5} className="px-6 py-2 text-[11px] font-black text-slate-700 uppercase tracking-wider">
+4217:                                className="hover:bg-slate-50 transition-colors group cursor-move"
+4221:                                  <td className="px-2 py-4">
+4223:                                      className="text-slate-300 hover:text-gold-500 transition-all ml-2"
+4230:                                <td className="px-6 py-4 text-slate-400 font-mono text-xs text-center">{rowCounterGereja}</td>
+4231:                                <td className="px-6 py-4 font-bold text-slate-800">
+4232:                                  {String(church.type) === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
+4235:                                <td className="px-6 py-4 text-slate-600 font-medium">
+4236:                                  <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
+4238:                                <td className="px-6 py-4 text-slate-600 font-medium">
+4239:                                  <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
+4241:                                {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
+4243:                                  <td className="px-6 py-4 text-center">
+4244:                                    <div className="flex justify-center flex-wrap gap-1">
+4245:                                      <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
+4249:                                        <button onClick={() => handleDeleteChurch(church.id)} className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50" title="Hapus">
+4267:                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+4268:                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+4269:                    <h3 className="font-bold text-lg mb-6">Tambah Periode Baru</h3>
+4270:                    <div className="space-y-4">
+4276:                        className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500" 
+4282:                        className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 disabled:opacity-50 transition-colors shadow-lg shadow-gold-500/10"
+4288:                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+4289:                    <h3 className="font-bold text-lg mb-6">Daftar Periode</h3>
+4290:                    <div className="space-y-3">
+4292:                        <div key={p} className="flex justify-between items-center p-4 bg-slate-50 rounded-lg border border-slate-100">
+4293:                          <span className="font-bold text-slate-700">{p}</span>
+4295:                            <span className="text-[10px] bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold border border-green-200">AKTIF</span>
+4297:                            <button onClick={() => setPeriodeAktif(p)} className="text-xs text-blue-600 font-bold hover:underline">Aktifkan</button>
+4307:                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+4308:                  <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+4310:                      <h3 className="font-bold text-lg">Distribusi Literatur</h3>
+4311:                      <p className="text-xs text-slate-500">Catatan jumlah pengiriman Almanak, Kalender, dan Buku ({periodeAktif})</p>
+4317:                        className="mt-2 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1 px-3 rounded flex items-center gap-1 transition-colors"
+4322:                    <div className="flex gap-3">
+4323:                       <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+4324:                        <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
+4325:                        <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+4329:                      <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+4330:                        <span className="text-[9px] font-bold text-slate-400 capitalize">Wilayah:</span>
+4331:                        <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+4335:                      <div className="relative">
+4336:                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+4342:                          className="pl-7 pr-4 py-1 bg-white border border-slate-200 rounded-lg text-[10px] outline-none focus:ring-1 focus:ring-gold-500 min-w-[150px]"
+4347:                  <div className="overflow-auto custom-scrollbar max-h-[70vh]">
+4348:                    <p className="p-4 bg-slate-50 text-[10px] text-slate-500 italic font-medium">INFO: Kolom ini untuk angka (Jumlah Barang). Pembayaran diatur di menu Literatur.</p>
+4349:                    <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
+4350:                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-black tracking-widest sticky top-0 z-50 border-b border-slate-700">
+4353:                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-[60] w-8"></th>
+4355:                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-50 w-12 text-center" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '32px' : '0' }}>No</th>
+4356:                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-50 w-48" style={{ left: sortType === 'order' && filterResort === 'Semua Resort' && filterWilayah === 'Semua Wilayah' && !searchTerm ? '80px' : '48px' }}>Nama Jemaat</th>
+4357:                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
+4359:                            <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
+4361:                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24 bg-gold-600 text-white font-black tracking-normal">TOTAL QTY</th>
+4401:                        className="divide-y divide-slate-100"
+4456:                                  className={`hover:bg-slate-50 transition-colors group ${item.romanPrefix ? 'bg-slate-50/80 font-black' : ''}`}
+4460:                                    <td className="px-1 py-3 sticky left-0 bg-inherit z-20 border-r border-slate-100 cursor-move">
+4461:                                      <GripVertical size={14} className="text-slate-300" />
+4464:                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+4467:                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.romanPrefix ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
+4468:                                    <div className={`flex items-center gap-2 ${item.romanPrefix ? 'font-black text-indigo-950 uppercase text-[10px] tracking-widest' : 'font-medium text-slate-700'}`}>
+4472:                                  <td className={`px-4 py-3 text-center text-[10px] ${item.romanPrefix ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
+4476:                                      <td key={col} className={`p-0 border-r border-slate-100 relative z-10 hover:z-20 ${item.romanPrefix ? 'bg-indigo-50/30' : ''}`}>
+4487:                                          <div className={`w-full py-3 text-center font-mono ${!val ? 'text-slate-300' : 'text-gold-700 font-bold'}`}>
+4494:                                  <td className={`px-4 py-3 text-center !font-black !font-mono text-slate-900 min-w-[100px] ${item.romanPrefix ? 'bg-indigo-50/50' : 'bg-slate-50'}`}>{formatInput(totalQty as number)}</td>
+4506:                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+4507:                  <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+4508:                        <h3 className="judul-h3">{activeTab === 'perorangan' ? 'Pembelian Perorangan' : appSettings[`menu${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}` as keyof AppSettings]}</h3>
+4509:                    <div className="flex flex-wrap items-center gap-3">
+4511:                         <button onClick={() => { setFormChurch({ id: '', nama: '', resort: '-', wilayah: '-', wa: '', jenisKelamin: 'Laki-laki', order: churches.length + 1, type: 'perorangan' }); setShowChurchModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-gold-700 transition-colors shadow-sm shadow-gold-500/20">
+4516:                         <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+4517:                          <span className="text-[9px] font-bold text-slate-400 capitalize">Resort:</span>
+4518:                          <select value={filterResort} onChange={(e) => setFilterResort(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+4524:                         <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+4525:                          <span className="text-[9px] font-bold text-slate-400 capitalize">Wilayah:</span>
+4526:                          <select value={filterWilayah} onChange={(e) => setFilterWilayah(e.target.value)} className="bg-transparent text-[10px] font-bold text-slate-700 outline-none">
+4531:                      <div className="relative">
+4532:                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+4538:                          className="pl-7 pr-4 py-1 bg-white border border-slate-200 rounded-lg text-[10px] outline-none focus:ring-1 focus:ring-gold-500 min-w-[150px]"
+4543:                  <div className="overflow-auto custom-scrollbar max-h-[70vh]">
+4544:                    <table className="w-full text-xs text-left border-collapse min-w-[1200px]">
+4545:                      <thead className="bg-[#1e293b] text-white uppercase text-[10px] font-black tracking-[0.2em] sticky top-0 z-50 border-b border-slate-700">
+4548:                            <th className="px-1 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-[60] w-8"></th>
+4550:                          <th className="px-4 py-4 border-b border-slate-700 sticky left-0 bg-[#1e293b] z-50 w-12 text-center" style={{ left: canDragOrder ? '32px' : '0' }}>No</th>
+4551:                          <th className="px-4 py-4 border-b border-slate-700 sticky left-12 bg-[#1e293b] z-50 w-48" style={{ left: canDragOrder ? '80px' : '48px' }}>Nama Jemaat</th>
+4552:                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Resort</th>
+4553:                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Wilayah</th>
+4554:                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">Status</th>
+4556:                            <th key={col} className="px-2 py-4 border-b border-slate-700 text-center w-24 tracking-tighter leading-tight italic font-serif opacity-80">{col}</th>
+4558:                          <th className="px-4 py-4 border-b border-slate-700 text-right bg-gold-600 text-white w-32 font-black tracking-tighter">TOTAL (RP)</th>
+4559:                          <th className="px-4 py-4 border-b border-slate-700 text-center w-24">AKSI</th>
+4627:                        className="divide-y divide-slate-100"
+4700:                                  <tr key={item.id} className="bg-slate-800 text-white font-bold border-b border-slate-700 sticky top-0 z-40 shadow-sm">
+4701:                                    {canDragOrder && <td className="px-1 py-4 sticky left-0 bg-slate-800 z-50"></td>}
+4702:                                    <td className="px-4 py-4 sticky left-0 bg-slate-800 z-50 text-center" style={{ left: canDragOrder ? '32px' : '0' }}></td>
+4703:                                    <td colSpan={6 + SPREADSHEET_COLUMNS[activeTab as keyof typeof SPREADSHEET_COLUMNS].length} className="px-4 py-4 uppercase tracking-[0.2em] text-[10px] font-black">
+4715:                                  className={`hover:bg-slate-50 transition-colors group ${item.type === 'resort' ? 'bg-slate-50/90 font-black border-b border-slate-200' : ''}`}
+4719:                                    <td className="px-1 py-3 sticky left-0 bg-inherit z-20 border-r border-slate-100 cursor-move">
+4720:                                      <GripVertical size={14} className="text-slate-300" />
+4723:                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+4726:                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
+4727:                                    <div className={`flex items-center gap-2 ${item.type === 'resort' ? 'font-black text-indigo-950 uppercase text-[10px] tracking-widest' : ''}`}>
+4731:                                  <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
+4732:                                  <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-gold-700 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.wilayah || '-'}</td>
+4733:                                  <td className={`px-4 py-3 text-center ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`}>
+4735:                                      <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : item.status === 'Proses' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+4744:                                      <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px] z-10 hover:z-20">
+4745:                                        <div className="flex items-center h-full px-2">
+4747:                                            <div className="mr-1">
+4752:                                                className="w-3 h-3 cursor-pointer text-gold-600 focus:ring-gold-500 rounded"
+4757:                                          <div className="flex-1 relative flex items-center">
+4766:                                              <div className={`w-full py-3 text-right font-mono data-value ${!val ? (item.type === 'resort' || item.type === 'agg-perorangan' ? 'text-slate-300' : 'text-red-300') : 'text-slate-700 font-bold'}`}>
+4775:                                                className="ml-2 p-1 rounded-full text-slate-300 hover:text-green-600 hover:bg-green-50 transition-colors"
+4786:                                  <td className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
+4787:                                  <td className="px-4 py-3 text-center">
+4789:                                      <div className="flex flex-col items-center space-y-1">
+4790:                                      <div className="flex justify-center space-x-1">
+4793:                                          className="text-green-600 hover:bg-green-50 p-1 rounded-lg"
+4800:                                          className="text-slate-600 hover:bg-slate-100 p-1 rounded-lg"
+4807:                                        <div className="flex space-x-1">
+4810:                                            className="bg-emerald-600 text-white p-1 rounded text-[9px] font-bold"
+4817:                                            className="bg-gold-600 text-white p-1 rounded text-[9px] font-bold"
+4826:                                        className="text-[9px] text-red-600 font-bold hover:underline"
+4844:                <div className="max-w-4xl mx-auto space-y-8">
+4845:                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+4846:                    <h3 className="font-bold text-lg mb-6">Ekspor Laporan Keuangan</h3>
+4847:                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+4848:                      <div className="space-y-4">
+4849:                        <label className="block text-sm font-bold text-slate-700">Pilih Kategori Laporan:</label>
+4853:                          className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500 bg-slate-50 font-bold"
+4860:                      <div className="flex flex-col gap-3">
+4861:                        <button onClick={() => { setPrintData({ kategori: downloadKategori }); setPrintType('rekap'); }} className="flex items-center justify-center space-x-3 bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 transition-transform hover:scale-[1.02] shadow-lg shadow-gold-500/20">
+4864:                        <button onClick={() => alert('Fitur download CSV sedang disiapkan')} className="flex items-center justify-center space-x-3 bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-transform hover:scale-[1.02] shadow-lg shadow-emerald-500/20">
+4867:                        <div className="grid grid-cols-2 gap-3">
+4868:                          <button onClick={syncToGoogleSheets} className="flex items-center justify-center space-x-3 bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition-transform hover:scale-[1.02]">
+4869:                            <Database size={20} className="text-green-400" /> <span>Sinkron via Script</span>
+4871:                          <button onClick={pullFromGoogleSheets} className="flex items-center justify-center space-x-3 bg-red-900 text-white py-3 rounded-lg font-bold hover:bg-red-800 transition-transform hover:scale-[1.02]">
+4872:                            <Download size={20} className="text-red-400" /> <span>Tarik via Script</span>
+4876:                        <div className="mt-6 border-t border-slate-200 pt-6">
+4877:                            <h4 className="font-bold text-blue-800 mb-2 flex items-center"><Database size={18} className="mr-2" /> Sinkronisasi Google Drive Langsung (Otomatis)</h4>
+4878:                            <p className="text-sm text-slate-600 mb-4">
+4881:                            <div className="grid grid-cols-2 gap-3">
+4882:                              <button onClick={handleDirectSync} className="flex items-center justify-center space-x-3 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-transform hover:scale-[1.02] shadow-lg shadow-blue-500/20">
+4885:                              <button onClick={handleDirectPull} className="flex items-center justify-center space-x-3 bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 transition-transform hover:scale-[1.02] shadow-lg shadow-orange-500/20">
+4894:                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl">
+4895:                    <h4 className="font-bold text-amber-800 mb-2 flex items-center"><AlertTriangle size={18} className="mr-2" /> Petunjuk Cetak PDF</h4>
+4896:                    <p className="text-sm text-amber-700 leading-relaxed">
+4901:                  <div className="bg-slate-900 p-8 rounded-xl text-white">
+4902:                    <h4 className="font-bold text-lg mb-4 flex items-center"><Database size={20} className="mr-2 text-green-400" /> Cara Menggunakan Google Sheets sebagai Database</h4>
+4903:                    <div className="space-y-4 text-slate-300 text-sm">
+4907:                      <pre className="bg-slate-800 p-4 rounded text-xs overflow-x-auto text-green-400">
+5010:                      <p className="text-amber-400 italic text-[11px]">* Jika Anda mengupdate kode script, Anda wajib melakukan 'Deploy &gt; New Deployment' lagi.</p>
+5017:                <div className="space-y-8">
+5018:                  <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 rounded-2xl shadow-xl overflow-hidden text-white relative">
+5019:                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+5020:                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl -ml-32 -mb-32"></div>
+5021:                    <div className="p-6 md:p-8 relative z-10">
+5022:                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+5024:                          <h3 className="font-bold text-xl flex items-center gap-2"><BookOpen className="text-indigo-400" /> Pusat Renungan Pastoral</h3>
+5025:                          <p className="text-indigo-200 pl-8 mt-1 text-sm">Hasil generate renungan untuk hari ini yang akan/sudah dikirim otomatis.</p>
+5027:                        <div className="flex gap-2">
+5029:                            className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+5044:                            className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-green-500/30"
+5080:                            className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+5149:                      <div className="bg-slate-900/60 backdrop-blur-md p-6 md:p-8 rounded-xl border border-white/10 mt-4 custom-scrollbar overflow-y-auto max-h-[60vh] text-base leading-relaxed whitespace-pre-wrap font-serif text-slate-100 shadow-inner">
+5151:                          <div className="text-indigo-300 italic text-center py-16">
+5158:                        <div className="text-xs text-indigo-300 mt-4 flex items-center justify-between">
+5169:                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+5170:                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+5171:                    <h3 className="font-bold text-lg">Manajemen Akun Cloud</h3>
+5172:                    <button onClick={() => { setFormUser({ username: '', password: '', role: 'staff' }); setShowUserModal(true); }} className="flex items-center space-x-2 bg-gold-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/10">
+5176:                  <table className="w-full text-sm text-left">
+5177:                    <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-bold">
+5179:                        <th className="px-6 py-4">Username (Email)</th>
+5180:                        <th className="px-6 py-4">Role</th>
+5181:                        <th className="px-6 py-4 text-center">Aksi</th>
+5184:                    <tbody className="divide-y divide-slate-100">
+5187:                          <td className="px-6 py-4 font-bold">{user.username}</td>
+5188:                          <td className="px-6 py-4">
+5189:                            <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${user.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+5193:                          <td className="px-6 py-4 text-center">
+5195:                              <button onClick={() => handleDeleteUser(user.username)} className="text-red-500 hover:bg-red-50 p-2 rounded-full">
+5208:                <div className="space-y-8">
+5209:                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+5210:                    <h3 className="font-bold text-lg mb-6">Manajemen Template Surat</h3>
+5212:                    <div className="space-y-6">
+5214:                        <label className="block text-sm font-bold text-slate-700 mb-2">Upload Kop Surat (Gambar)</label>
+5215:                        <div className="flex items-center space-x-4">
+5229:                            className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gold-50 file:text-gold-700 hover:file:bg-gold-100"
+5232:                            <button onClick={() => setTemplates({ ...templates, kopSurat: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus Kop</button>
+5236:                          <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-slate-50">
+5237:                            <p className="text-[10px] text-slate-400 mb-1">Pratinjau Kop:</p>
+5238:                            <img src={templates.kopSurat} alt="Kop Surat" className="max-h-20" />
+5243:                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+5245:                          <label className="block text-sm font-bold text-slate-700 mb-2">Format Resmi (Stempel/TTD) Terima Kasih</label>
+5246:                          <div className="flex items-center space-x-4">
+5260:                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+5263:                              <button onClick={() => setTemplates({ ...templates, stempelTerimaKasih: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus</button>
+5267:                            <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-slate-50">
+5268:                              <img src={templates.stempelTerimaKasih} alt="Stempel Terima Kasih" className="max-h-20" />
+5274:                          <label className="block text-sm font-bold text-slate-700 mb-2">Format Resmi (Stempel/TTD) Tunggakan</label>
+5275:                          <div className="flex items-center space-x-4">
+5289:                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+5292:                              <button onClick={() => setTemplates({ ...templates, stempelTunggakan: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus</button>
+5296:                            <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-slate-50">
+5297:                              <img src={templates.stempelTunggakan} alt="Stempel Tunggakan" className="max-h-20" />
+5303:                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+5304:                        <div className="space-y-2">
+5305:                          <label className="block text-sm font-bold text-slate-700">Template Surat Terima Kasih</label>
+5309:                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-gold-500 font-serif"
+5312:                        <div className="space-y-2">
+5313:                          <label className="block text-sm font-bold text-slate-700">Template Surat Tunggakan</label>
+5317:                            className="w-full h-64 border border-slate-200 rounded-lg p-4 text-sm outline-none focus:ring-2 focus:ring-gold-500 font-serif"
+5322:                      <div className="bg-gold-50 p-4 rounded-lg border border-gold-100">
+5323:                        <h4 className="font-bold text-gold-800 text-xs mb-2 uppercase">Daftar Placeholder (Kode Otomatis)</h4>
+5324:                        <p className="text-[11px] text-gold-700 leading-relaxed">
+5345:        <div className="space-y-4">
+5347:            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username Admin</label>
+5352:              className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500" 
+5356:            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password Admin</label>
+5361:              className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500" 
+5365:          <button onClick={handleLogin} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">
+5372:        <div className="space-y-4">
+5374:            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipe Entitas</label>
+5378:              className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 bg-white"
+5386:            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{formChurch.type === 'resort' ? 'Nama Resort' : formChurch.type === 'perorangan' ? 'Nama Perorangan / Pribadi' : 'Nama Jemaat'}</label>
+5387:            <input type="text" value={formChurch.nama} onChange={e => setFormChurch({...formChurch, nama: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder={formChurch.type === 'resort' ? 'Contoh: RESORT MEDAN' : formChurch.type === 'perorangan' ? 'Nama Orang' : 'Nama Jemaat'} />
+5391:              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Jenis Kelamin</label>
+5395:                className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 bg-white"
+5402:          <div className="grid grid-cols-2 gap-4">
+5404:              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Resort</label>
+5405:              <input type="text" value={formChurch.resort} onChange={e => setFormChurch({...formChurch, resort: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Resort" />
+5408:              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Wilayah</label>
+5409:              <input type="text" value={formChurch.wilayah} onChange={e => setFormChurch({...formChurch, wilayah: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Wilayah" />
+5412:          <div className="grid grid-cols-2 gap-4">
+5414:              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No. WA (628...)</label>
+5415:              <input type="text" value={formChurch.wa} onChange={e => setFormChurch({...formChurch, wa: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="WA Bendahara/Gereja" />
+5418:              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No. WA Pendeta (Opsional)</label>
+5419:              <input type="text" value={formChurch.waPendeta || ''} onChange={e => setFormChurch({...formChurch, waPendeta: e.target.value})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="WA Pendeta" />
+5422:          <div className="grid grid-cols-2 gap-4 mt-4">
+5424:              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Posisi Urutan</label>
+5425:              <input type="number" value={formChurch.order} onChange={e => setFormChurch({...formChurch, order: parseInt(e.target.value) || 0})} className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Posisi" />
+5429:          <button onClick={handleSaveChurch} className="w-full mt-4 bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all">Simpan Data Jemaat</button>
+5434:        <div className="space-y-4">
+5435:          <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-[10px] text-amber-800 leading-relaxed font-medium">
+5436:            <p className="font-bold mb-1 uppercase tracking-wider">Format Import (Tab-Delimited):</p>
+5438:            <p className="mt-1">* Copy data dari Excel mulai dari kolom Nama sampai WA.</p>
+5444:            className="w-full h-48 border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-gold-500 text-sm font-mono"
+5446:          <button onClick={handleBulkImport} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-xl shadow-gold-500/10 transition-all">Import Sekarang</button>
+5451:        <div className="space-y-4">
+5453:            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
+5454:            <input type="text" value={formUser.username} onChange={e => setFormUser({...formUser, username: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Username" />
+5457:            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+5458:            <input type="text" value={formUser.password} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500" placeholder="Password" />
+5461:            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pilih Peran (Role)</label>
+5465:              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 bg-white"
+5470:            <p className="text-[10px] text-slate-400 mt-1">
+5475:          <button onClick={handleSaveUser} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 transition-colors shadow-lg shadow-gold-500/20">Buat Akun Sekarang</button>
+5480:        <div className="space-y-6 max-h-[70vh] overflow-y-auto p-1 custom-scrollbar">
+5481:          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+5482:            <label className="block text-sm font-bold text-slate-700 mb-2">Ganti Logo Aplikasi</label>
+5483:            <div className="flex items-center space-x-4">
+5497:                              className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gold-50 file:text-gold-700 hover:file:bg-gold-100"
+5500:                <button onClick={() => setFormSettings({ ...formSettings, logoUrl: '' })} className="text-red-600 text-xs font-bold hover:underline">Hapus Logo</button>
+5504:              <div className="mt-4 p-2 border border-slate-100 rounded-lg bg-white w-20 h-20 flex items-center justify-center overflow-hidden">
+5505:                <img src={formSettings.logoUrl} alt="Pratinjau Logo" className="max-w-full max-h-full object-contain" />
+5510:          <div className="grid grid-cols-2 gap-4">
+5513:            <div className="flex flex-col mb-4">
+5514:              <label className="block text-sm font-bold text-slate-700 mb-2">Tema Aplikasi</label>
+5518:                className="w-full border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-gold-500 py-3 px-4 bg-slate-50 text-sm font-bold text-slate-800"
+5536:          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+5537:            <h4 className="font-bold text-green-400 mb-4 flex items-center"><MessageCircle size={18} className="mr-2" /> Integrasi Penagihan Otomatis (Watzap.id)</h4>
+5538:            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+5562:            <p className="text-[10px] text-slate-400 leading-relaxed italic">
+5567:          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+5568:            <h4 className="font-bold text-green-400 mb-4 flex items-center"><Database size={18} className="mr-2" /> Integrasi Database Cloud</h4>
+5570:            <div className="space-y-4">
+5571:              <div className="bg-blue-900/30 p-4 rounded-lg border border-blue-800/50">
+5572:                 <h5 className="text-blue-400 font-bold mb-2 flex items-center text-sm">Sinkronisasi Google Drive Otomatis (Baru)</h5>
+5573:                 <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+5576:                 <div className="bg-amber-900/40 p-3 rounded border border-amber-800/50 mb-3 space-y-3">
+5578:                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error 400: redirect_uri_mismatch</p>
+5579:                     <p className="text-xs text-amber-200">
+5582:                     <code className="text-[10px] text-green-400 select-all p-1 bg-black/50 rounded block mt-2 mb-1">https://keuangan-pusat-gkli.vercel.app</code>
+5583:                     <code className="text-[10px] text-green-400 select-all p-1 bg-black/50 rounded block">{window.location.origin}</code>
+5585:                   <div className="border-t border-amber-800/50 pt-3">
+5586:                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error 403: access_denied</p>
+5587:                     <p className="text-xs text-amber-200">
+5590:                       Berdasarkan gambar tampilan Google yang baru Anda kirimkan, silakan perhatikan menu di sebelah kiri, klik menu <b>Audience</b> (tepat di bawah tulisan Branding). Di halaman tersebut, cari bagian <b>Test users</b>, klik <b>ADD USERS</b> dan masukkan email Anda (<span className="font-bold">lutheranchurch.priangaol@gmail.com</span>).
+5595:                   <div className="border-t border-amber-800/50 pt-3">
+5596:                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Peringatan: "Google belum memverifikasi aplikasi ini"</p>
+5597:                     <p className="text-xs text-amber-200">
+5606:                   <div className="border-t border-amber-800/50 pt-3">
+5607:                     <p className="text-xs text-amber-400 font-bold mb-1">⚠️ Solusi Error API Belum Aktif (Drive / Sheets API)</p>
+5608:                     <p className="text-xs text-amber-200">
+5612:                       1. <b>Salin (Copy) link tautan</b> yang berawalan <code className="text-[10px] bg-black/30 p-0.5 rounded">https://console.developers.google.com/...</code> yang tertera di dalam pesan error tersebut.<br/>
+5619:                 <p className="text-xs text-amber-500 font-bold italic mb-3">
+5623:                   <div className="mt-3 bg-slate-800/80 p-3 rounded border border-slate-700/50 flex flex-col space-y-2">
+5624:                     <p className="text-[10px] text-slate-400">Sheet ID Tertaut:</p>
+5625:                     <code className="text-xs text-blue-300 break-all">{formSettings.googleSpreadsheetId}</code>
+5629:                       className="text-white bg-red-600/80 hover:bg-red-600 px-3 py-1.5 rounded text-[10px] font-bold w-max"
+5636:              <div className="border-t border-slate-800 pt-4">
+5637:                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Opsional: URL Google Sheets Apps Script (Cara Lama)</label>
+5638:                <div className="flex space-x-2">
+5644:                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-green-500 outline-none font-mono text-green-400"
+5653:                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg text-xs font-bold transition-colors"
+5660:              <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+5661:                <p className="text-[10px] text-slate-400 leading-relaxed">
+5662:                  <span className="text-green-500 font-bold">CARA TES:</span> Klik tombol <b>Cek Koneksi</b>. Jika muncul tulisan "API Aktif", berarti link sudah benar. Jika muncul "doGet not found", berarti Anda salah melakukan Deploy.
+5668:          <button onClick={handleSaveSettings} className="w-full bg-gold-600 text-white py-3 rounded-lg font-bold hover:bg-gold-700 shadow-lg shadow-gold-500/20 transition-all transform hover:scale-[1.01]">Simpan Pengaturan</button>
+5681:      className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group relative ${
+5687:      <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-gold-400'} transition-colors`}>
+5690:      <span className="text-sm font-medium tracking-tight">{label}</span>
+5694:          className="absolute left-0 w-1 h-6 bg-white rounded-r-full" 
+5698:      {active && <ChevronRight size={14} className="ml-auto opacity-50" />}
+5704:  return <p className="text-[10px] text-slate-500 uppercase font-black mt-8 mb-2 px-4 tracking-[0.15em] opacity-80">{label}</p>;
+5711:      className={`flex items-center space-x-1 hover:bg-white px-2 py-1.5 rounded-md text-[10px] font-bold transition-all ${color} hover:shadow-sm`}
+5736:    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+5737:      <div className="p-6">
+5738:        <div className="flex justify-between items-start mb-4">
+5739:          <div className={`p-3 rounded-xl ${textColor} ${bgColor}`}>
+5743:            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-full uppercase tracking-wider">
+5748:        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1 opacity-80">{title}</p>
+5749:        <p className="text-2xl angka-keuangan text-slate-900">
+5753:      <div className={`h-1 bg-gradient-to-r ${gradient}`}></div>
+5761:    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+5765:        className={`bg-white rounded-2xl shadow-2xl w-full ${size} overflow-hidden`}
+5767:        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+5768:          <h3 className="font-bold text-lg text-slate-800">{title}</h3>
+5769:          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+5773:        <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+5784:      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{label}</label>
+5789:        className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-gold-500" 
