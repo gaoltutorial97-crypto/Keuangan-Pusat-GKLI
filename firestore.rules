@@ -86,10 +86,9 @@ service cloud.firestore {
 
     // Distributions
     match /distributions/{distId} {
-      allow read: if isSignedIn();
-      allow create: if isStaff() && isValidDistribution(incoming()) && 
-                    (isVirtualId(incoming().gerejaId) || exists(/databases/$(database)/documents/churches/$(incoming().gerejaId)));
-      allow update: if isStaff() && isValidDistribution(incoming());
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
       allow delete: if isSuperAdmin();
     }
 

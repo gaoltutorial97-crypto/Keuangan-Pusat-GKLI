@@ -3435,15 +3435,34 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
               {activeTab === 'arsip' && (
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                       <div>
                         <h3 className="judul-h3">Arsip Tanda Terima</h3>
                         <p className="subjudul mt-1">Daftar ucapan terima kasih yang sudah dikirim atau dipindahkan ke arsip pada periode {periodeAktif}.</p>
+                      </div>
+                      <div className="relative w-full md:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="Cari arsip..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-gold-500 focus:bg-white transition-all"
+                        />
+                        {searchTerm && (
+                          <button 
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 gap-6">
                       {[...churches]
+                        .filter(c => !searchTerm || c.nama.toLowerCase().includes(searchTerm.toLowerCase()) || c.resort.toLowerCase().includes(searchTerm.toLowerCase()))
                         .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
                         .map(church => {
                         const aliases = churchAliasesMap[church.id] || [church.id];
@@ -4290,6 +4309,15 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     <div>
                       <h3 className="font-bold text-lg">Distribusi Literatur</h3>
                       <p className="text-xs text-slate-500">Catatan jumlah pengiriman Almanak, Kalender, dan Buku ({periodeAktif})</p>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(window.location.origin + window.location.pathname + '?staff=distribusi');
+                          alert('Link staff berhasil disalin ke clipboard!');
+                        }}
+                        className="mt-2 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1 px-3 rounded flex items-center gap-1 transition-colors"
+                      >
+                        <FileText size={12} /> Salin Link Form Staff
+                      </button>
                     </div>
                     <div className="flex gap-3">
                        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
