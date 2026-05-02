@@ -183,35 +183,28 @@ const StaffDistribusi = () => {
     }
   };
 
-  const handleSaveAndKirimWA = async () => {
-    if (!selectedChurch) return;
-    const success = await handleSave(false);
-    if (!success) return;
-
+  const constructWaMessage = (church: Church, formDataParam: Record<string, number>): string => {
     let rincian = '';
     let totalItems = 0;
     SPREADSHEET_COLUMNS.alaman.forEach(col => {
-      const val = formData[col] || 0;
+      const val = formDataParam[col] || 0;
       if (val > 0) {
         rincian += `\n- *${col}* : ${val} eks`;
         totalItems += val;
       }
     });
 
-    if (totalItems === 0) {
-      alert('Tanda terima tidak dapat dikirim karena nilai distribusi kosong.');
-      return;
-    }
+    if (totalItems === 0) return '';
 
-    const typeLabel = selectedChurch.type === 'resort' ? 'Pusat/Resort' : selectedChurch.type === 'perorangan' ? 'Bapak/Ibu/Sdr/i' : 'Majelis Jemaat GKLI';
-    const cleanChurchName = selectedChurch.nama.replace(/^GKLI\s*/i, '');
+    const typeLabel = church.type === 'resort' ? 'Pusat/Resort' : church.type === 'perorangan' ? 'Bapak/Ibu/Sdr/i' : 'Majelis Jemaat GKLI';
+    const cleanChurchName = church.nama.replace(/^GKLI\s*/i, '');
     let locationSuffix = '';
     
-    if (selectedChurch.type !== 'resort' && selectedChurch.type !== 'perorangan' && selectedChurch.type !== 'agg-perorangan' && selectedChurch.resort) {
-      locationSuffix = ` Resort *${selectedChurch.resort}*`;
+    if (church.type !== 'resort' && church.type !== 'perorangan' && church.type !== 'agg-perorangan' && church.resort) {
+      locationSuffix = ` Resort *${church.resort}*`;
     }
 
-    const waMessage = `Shalom ${typeLabel} *${cleanChurchName}*${locationSuffix},
+    return `Shalom ${typeLabel} *${cleanChurchName}*${locationSuffix},
 
 Puji Syukur kepada Tuhan, kami dari tim Pusat Distribusi GKLI menyampaikan bahwa literatur untuk periode *${periodeAktif}* telah diterima dan didistribusikan dengan rincian sebagai berikut:
 ${rincian}
@@ -224,24 +217,39 @@ Tuhan Yesus Kristus, Kepala Gereja memberkati kita sekalian.
 
 Salam kami,
 *Staf Pengiriman Literatur GKLI*`;
+  };
 
-    if (selectedChurch.wa || selectedChurch.waPendeta) {
-      if (selectedChurch.wa) {
-        let waNum1 = selectedChurch.wa.replace(/[^0-9]/g, '');
+  const handleKirimWAReceipt = (church: Church, formDataParam: Record<string, number>) => {
+    const waMessage = constructWaMessage(church, formDataParam);
+    if (!waMessage) {
+       alert('Tanda terima tidak dapat dikirim karena nilai distribusi kosong.');
+       return;
+    }
+
+    if (church.wa || church.waPendeta) {
+      if (church.wa) {
+        let waNum1 = church.wa.replace(/[^0-9]/g, '');
         if (waNum1.startsWith('0')) waNum1 = '62' + waNum1.substring(1);
         window.open(`https://wa.me/${waNum1}?text=${encodeURIComponent(waMessage)}`, '_blank');
       }
-      if (selectedChurch.waPendeta) {
-        let waNum2 = selectedChurch.waPendeta.replace(/[^0-9]/g, '');
+      if (church.waPendeta) {
+        let waNum2 = church.waPendeta.replace(/[^0-9]/g, '');
         if (waNum2.startsWith('0')) waNum2 = '62' + waNum2.substring(1);
         window.open(`https://wa.me/${waNum2}?text=${encodeURIComponent(waMessage)}`, '_blank');
       }
-      setSuccessMsg('Tersimpan & Membuka WhatsApp...');
+      setSuccessMsg('Membuka WhatsApp...');
+      setTimeout(() => setSuccessMsg(''), 3000);
     } else {
-      alert('Data tersimpan. Namun nomor WhatsApp tidak tersedia. Pesan:\n\n' + waMessage);
-      setSuccessMsg('Data distribusi berhasil disimpan!');
+      alert('Nomor WhatsApp tidak tersedia. Pesan:\n\n' + waMessage);
     }
-    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const handleSaveAndKirimWA = async () => {
+    if (!selectedChurch) return;
+    const success = await handleSave(false);
+    if (!success) return;
+
+    handleKirimWAReceipt(selectedChurch, formData);
   };
 
   const handleDownloadLaporan = (format: 'excel' | 'word') => {
@@ -424,6 +432,7 @@ Salam kami,
                           {SPREADSHEET_COLUMNS.alaman.map(col => (
                             <th key={col} className="px-4 py-3 font-bold text-slate-700 text-center whitespace-nowrap">{col}</th>
                           ))}
+                          <th className="px-4 py-3 font-bold text-slate-700 text-center">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -456,6 +465,14 @@ Salam kami,
                                   {dist.details[col] || '-'}
                                 </td>
                               ))}
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  onClick={() => handleKirimWAReceipt(c, dist.details)}
+                                  className="text-white bg-green-500 hover:bg-green-600 px-3 py-1.5 rounded-lg font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-all"
+                                >
+                                  <Send size={12} /> Kirim Resi WA
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
