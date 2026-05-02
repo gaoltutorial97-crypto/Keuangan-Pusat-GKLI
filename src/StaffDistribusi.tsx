@@ -187,10 +187,12 @@ const StaffDistribusi = () => {
       .filter(c => {
         if (!searchTerm) return true;
         const s = searchTerm.toLowerCase();
-        return c.nama.toLowerCase().includes(s) || c.resort.toLowerCase().includes(s);
+        return (c.nama || '').toLowerCase().includes(s) || 
+               (c.resort || '').toLowerCase().includes(s) || 
+               (c.wilayah || '').toLowerCase().includes(s);
       })
       .sort((a, b) => {
-        return a.nama.localeCompare(b.nama);
+        return (a.nama || '').localeCompare(b.nama || '');
       });
   }, [synthesizedChurches, searchTerm, selectedTab]);
 
@@ -286,23 +288,27 @@ Salam kami,
     if (!selectedChurch) return;
     
     // Check if there are any quantities in the formData to make a receipt.
-    let hasAnyValue = false;
+    const changedItems: Record<string, number> = {};
+    let hasChanges = false;
     SPREADSHEET_COLUMNS.alaman.forEach(col => {
       const current = formData[col] || 0;
-      if (current > 0) {
-        hasAnyValue = true;
+      const initial = initialFormData[col] || 0;
+      if (current !== initial) {
+        // Here we just use the CURRENT value, but only for items that the user edited
+        changedItems[col] = current;
+        hasChanges = true;
       }
     });
 
-    if (!hasAnyValue) {
-      alert('Tidak bisa membuat resi karena tidak ada data literatur (semua 0). Isi dulu nilainya.');
+    if (!hasChanges) {
+      alert('Tidak bisa membuat resi karena tidak ada angka yang Anda ketik/ubah kali ini. Silakan ubah angka terlebih dahulu.');
       return;
     }
 
     const success = await handleSave(false);
     if (!success) return;
 
-    handleKirimWAReceipt(selectedChurch, formData);
+    handleKirimWAReceipt(selectedChurch, changedItems);
   };
 
   const handleDownloadLaporan = (format: 'excel' | 'word') => {
@@ -680,11 +686,11 @@ Salam kami,
                 <tbody>
                   {SPREADSHEET_COLUMNS.alaman.map(col => {
                     const val = receiptRenderData.formData[col] || 0;
-                    if (val !== 0) {
+                    if (val > 0) {
                       return (
                         <tr key={col}>
                           <td className="border border-slate-800 p-3">{col}</td>
-                          <td className="border border-slate-800 p-3 text-center font-bold">{val > 0 ? '+' : ''}{val}</td>
+                          <td className="border border-slate-800 p-3 text-center font-bold">{val}</td>
                         </tr>
                       );
                     }
@@ -693,10 +699,7 @@ Salam kami,
                    <tr className="bg-slate-100">
                       <td className="border border-slate-800 p-3 font-bold text-right text-base">TOTAL</td>
                       <td className="border border-slate-800 p-3 text-center font-bold text-base">
-                        {(() => {
-                           const sum = SPREADSHEET_COLUMNS.alaman.reduce((acc, col) => acc + (receiptRenderData.formData[col] || 0), 0);
-                           return sum > 0 ? `+${sum}` : sum;
-                        })()}
+                        {SPREADSHEET_COLUMNS.alaman.reduce((acc, col) => acc + (receiptRenderData.formData[col] || 0), 0)}
                       </td>
                    </tr>
                 </tbody>
