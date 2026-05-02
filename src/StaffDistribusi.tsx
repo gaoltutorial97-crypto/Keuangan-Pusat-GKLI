@@ -237,17 +237,16 @@ const StaffDistribusi = () => {
 
   const constructWaMessage = (church: Church, formDataParam: Record<string, number>): string => {
     let rincian = '';
-    let hasChanges = false;
+    let totalItems = 0;
     SPREADSHEET_COLUMNS.alaman.forEach(col => {
       const val = formDataParam[col] || 0;
-      if (val !== 0) {
-        const sign = val > 0 ? '+' : '';
-        rincian += `\n- *${col}* : ${sign}${val} eks`;
-        hasChanges = true;
+      if (val > 0) {
+        rincian += `\n- *${col}* : ${val} eks`;
+        totalItems += val;
       }
     });
 
-    if (!hasChanges) return '';
+    if (totalItems === 0) return '';
 
     const typeLabel = church.type === 'resort' ? 'Pusat/Resort' : church.type === 'perorangan' ? 'Bapak/Ibu/Sdr/i' : 'Majelis Jemaat GKLI';
     const cleanChurchName = church.nama.replace(/^GKLI\s*/i, '');
@@ -286,26 +285,24 @@ Salam kami,
   const handleSaveAndKirimWA = async () => {
     if (!selectedChurch) return;
     
-    // Capture delta BEFORE save, to track the newly added or reduced data
-    const deltaData: Record<string, number> = {};
-    let hasChanges = false;
+    // Check if there are any quantities in the formData to make a receipt.
+    let hasAnyValue = false;
     SPREADSHEET_COLUMNS.alaman.forEach(col => {
       const current = formData[col] || 0;
-      const initial = initialFormData[col] || 0;
-      if (current !== initial) {
-        deltaData[col] = current - initial;
-        hasChanges = true;
+      if (current > 0) {
+        hasAnyValue = true;
       }
     });
+
+    if (!hasAnyValue) {
+      alert('Tidak bisa membuat resi karena tidak ada data literatur (semua 0). Isi dulu nilainya.');
+      return;
+    }
 
     const success = await handleSave(false);
     if (!success) return;
 
-    if (hasChanges) {
-      handleKirimWAReceipt(selectedChurch, deltaData);
-    } else {
-      alert('Tidak ada resi WA yang dikirim karena tidak ada perubahan informasi.');
-    }
+    handleKirimWAReceipt(selectedChurch, formData);
   };
 
   const handleDownloadLaporan = (format: 'excel' | 'word') => {
@@ -555,7 +552,7 @@ Salam kami,
                   </div>
                   
                   <div className="max-h-96 overflow-y-auto space-y-2 mt-4 custom-scrollbar pr-2">
-                    {filteredChurches.map(c => (
+                    {filteredChurches.slice(0, 100).map(c => (
                       <button 
                         key={c.id} 
                         onClick={() => setSelectedChurch(c)}
@@ -573,6 +570,11 @@ Salam kami,
                         <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-500" />
                       </button>
                     ))}
+                    {filteredChurches.length > 100 && (
+                      <div className="text-center p-4 text-xs text-slate-500 italic">
+                        Menampilkan 100 dari {filteredChurches.length} data. Gunakan pencarian untuk hasil spesifik.
+                      </div>
+                    )}
                     {filteredChurches.length === 0 && (
                       <div className="text-center p-8 text-slate-400 italic">
                         Tidak ada {selectedTab} yang cocok dengan pencarian.
