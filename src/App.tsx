@@ -5088,26 +5088,29 @@ function doPost(e) {
                                   const todayRaw = new Date();
                                   const dayOfYear = Math.floor((todayRaw.getTime() - new Date(todayRaw.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
 
-                                  const promptText = `Tuliskan pesan renungan pastoral singkat siap saji dan luar biasa untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
-PENTING: Gaya bahasa harus SANGAT NATURAL, luwes, selayaknya bahasa manusia dan bahasa Indonesia yang baik dan benar (tidak kaku seperti terjemahan mesin).
-DILARANG KERAS menggunakan kata-kata kaku bot/AI seperti "kesimpulannya", "pada dasarnya", "adapun", atau list berupa poin-poin (bullet). Mengalir saja seperti pendeta yang sedang menulis pesan otentik.
-DILARANG KERAS menggunakan satupun emoji/emoticon dalam teks.
-DILARANG KERAS menggunakan tanda baca asteris/bintang (*) atau format markdown (seperti **, _, #). Biarkan tulisan apa adanya berupa teks biasa namun berkualitas dan profesional.
-PASTIKAN PENGGUNAAN KATA SELALU BERVARIASI DAN TIDAK IDENTIK DENGAN RENUNGAN SEBELUMNYA. Jangan menggunakan pola kalimat yang repetitif setiap kali generate.
+                                  const promptText = `Tuliskan pesan renungan pastoral singkat siap saji untuk dikirim ke jemaat Gereja (Lutheran) melalui grup WhatsApp.
+PENTING: Tafsiran dan tulisan Anda HARUS SELALU BERKEMBANG, BERVARIASI, dan TIDAK SAMA dengan gaya/pola kalimat renungan sebelumnya. Gunakan pendekatan/topik baru setiap kali generate agar selalu segar.
+
+GAYA BAHASA:
+- Luar biasa profesional, tata bahasa Indonesia baku yang baik dan benar, akademis, logis, historis, dan sistematis.
+- Tidak kaku, penyampaian bersahabat, luwes, selayaknya bahasa pendeta otentik (bukan terjemahan bot), mengalir, dan pastoral (benar-benar menyentuh hati dan perasaan terdalam pendengar).
+- DILARANG KERAS menggunakan kata kaku/robotik seperti "kesimpulannya", "pada dasarnya", "intinya", atau format poin-poin/bullet.
+- DILARANG KERAS menggunakan satupun emoji/emoticon dalam teks.
+- DILARANG KERAS menggunakan format markdown tebal/miring/asteris (*, _, #).
 
 URUTAN PEMBACAAN ALKITAB:
-Hari ini adalah hari ke-${dayOfYear} dari 365. Berdasarkan jadwal pembacaan Alkitab kronologis satu tahun (mulai berurut dari Kejadian sampai Wahyu), tentukan SATU perikop/pasal yang jatuh pada hari ini, dan ambil 1 ayat bagian dari perikop tersebut sebagai teks renungan utama.
+Hari ini adalah hari ke-${dayOfYear} dari 365. Berdasarkan jadwal pembacaan Alkitab kronologis satu tahun, tentukan SATU perikop/pasal yang jatuh secara organik pada hari ini, dan ambil 1 atau 2 ayat bagian dari perikop tersebut sebagai teks utama. Jangan gunakan ayat populer yang sama terus menerus.
 
-Kriteria Khusus Theologi:
-1. Konteks: Tafsiran tidak boleh keluar dari konteks teks, historis, teologis, logis, dan penerapan hermeneutik dekat maupun jauh.
-2. Teologi & Doktrin: Sepenuhnya berlandaskan Doktrin Lutheran Konservatif (Book of Concord), Apologetika Lutheran, biblis, dan memegang teguh pembedaan tajam antara Hukum Taurat (Law - yang menegur dosa) dan Injil (Gospel - yang menghidupkan dan memberi pengampunan Kristus).
-3. Akademis Namun Praktis: Mengandung struktur yang jelas dan dalam (mengambil pandangan pakar ahli Lutheran tentang homiletika/khotbah), namun disajikan dengan bahasa pastoral yang mudah dan nyaman dipahami oleh pendeta dan jemaat awam.
-4. Topikal & Solutif: Singgung fenomena viral/topik yang selalu menarik di masyarakat saat ini, gunakan sebagai titik temu untuk memberikan solusi dan penguatan bagi pergumulan konkrit jemaat.
+KRITERIA THEOLOGI LUTHERAN KONSERVATIF & HERMENEUTIK:
+1. Konteks Historis & Masa Kini: Analisa tajam secara historis (apa yang terjadi di masa lalu pada ayat itu) dan secara cerdas hubungkan menjadi topik yang sangat relevan dengan realita pergumulan hidup dan masyarakat masa kini (zaman sekarang).
+2. Doktrin (Law and Gospel): Wajib mengandung theologi Lutheran yang dalam (Book of Concord) dan apologetika Lutheran. Secara tegas, Anda harus memulai dari penarikan Hukum Taurat yang telanjang (membongkar dosa, realita kelemahan manusia, mengajak kepada PERTOBATAN yang sejati), dan kemudian membawanya kepada Injil yang memberi pengharapan dan kuasa pengampunan Kristus Yesus semata.
+3. Tafsiran Dalam & Biblis: Jangan memberikan tafsiran klise. Keluarkan tafsiran hermeneutik yang solid, biblis dengan dasar alkitab yang kuat dan menyatu dengan doktrin Lutheran.
 
-Struktur (Gabungkan menjadi 1 tulisan utuh 3-4 paragraf yang mengalir tanpa sub-judul atau penomoran angka):
-- Salam pembuka "Syalom Bapak/Ibu terkasih..." lalu cantumkan 1 ayat Alkitab yang terpilih hari ini.
-- Refleksi mendalam yang menjawab tantangan masa kini berdasarkan Hukum Taurat dan Injil.
-- Doa penutup yang sangat singkat menyatu di akhir tulisan (misal: "Mari kita berdoa... Amin.")`;
+STRUKTUR PENULISAN:
+Tuliskan menjadi 3-5 paragraf yang padat, kohesif, tanpa sub-judul:
+- Awali dengan salam hangat dan kutipan ayat firman Tuhan tersebut.
+- Uraikan dengan kedalaman akademis dan pastoral.
+- Akhiri langsung dengan doa penutup pastoral singkat yang tulus (misal: "Mari berdoa... Amin").`;
 
                                   const payload = {
                                     contents: [{ parts: [{ text: promptText }] }],
