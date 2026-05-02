@@ -3,7 +3,7 @@ import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firesto
 import { db } from './firebase';
 import { Church, Distribution, AppSettings } from './types';
 import { SPREADSHEET_COLUMNS } from './constants';
-import { Search, Save, CheckCircle2, ChevronRight, X, Building, Users, User, FileText, Printer, FileDown } from 'lucide-react';
+import { Search, Save, CheckCircle2, ChevronRight, X, Building, Users, User, FileText, Printer, FileDown, Send } from 'lucide-react';
 import { normalizeResortName } from './utils';
 
 const StaffDistribusi = () => {
@@ -135,8 +135,8 @@ const StaffDistribusi = () => {
     setFormData(prev => ({ ...prev, [col]: isNaN(num) ? 0 : num }));
   };
 
-  const handleSave = async () => {
-    if (!selectedChurch) return;
+  const handleSave = async (showSuccessAlert = true): Promise<boolean> => {
+    if (!selectedChurch) return false;
     setIsSaving(true);
     try {
       const existingDist = distributions.find(d => 
@@ -158,14 +158,78 @@ const StaffDistribusi = () => {
           tanggal: new Date().toISOString().split('T')[0]
         });
       }
-      setSuccessMsg('Data distribusi berhasil disimpan!');
-      setTimeout(() => setSuccessMsg(''), 3000);
-      
+      if (showSuccessAlert) {
+        setSuccessMsg('Data distribusi berhasil disimpan!');
+        setTimeout(() => setSuccessMsg(''), 3000);
+      }
+      return true;
     } catch (e: any) {
       alert('Gagal menyimpan: ' + e.message);
+      return false;
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSaveAndKirimWA = async () => {
+    if (!selectedChurch) return;
+    const success = await handleSave(false);
+    if (!success) return;
+
+    let rincian = '';
+    let totalItems = 0;
+    SPREADSHEET_COLUMNS.alaman.forEach(col => {
+      const val = formData[col] || 0;
+      if (val > 0) {
+        rincian += `\n- *${col}* : ${val} eks`;
+        totalItems += val;
+      }
+    });
+
+    if (totalItems === 0) {
+      alert('Tanda terima tidak dapat dikirim karena nilai distribusi kosong.');
+      return;
+    }
+
+    const typeLabel = selectedChurch.type === 'resort' ? 'Pusat/Resort' : selectedChurch.type === 'perorangan' ? 'Bapak/Ibu/Sdr/i' : 'Majelis Jemaat GKLI';
+    const cleanChurchName = selectedChurch.nama.replace(/^GKLI\s*/i, '');
+    let locationSuffix = '';
+    
+    if (selectedChurch.type !== 'resort' && selectedChurch.type !== 'perorangan' && selectedChurch.type !== 'agg-perorangan' && selectedChurch.resort) {
+      locationSuffix = ` Resort *${selectedChurch.resort}*`;
+    }
+
+    const waMessage = `Shalom ${typeLabel} *${cleanChurchName}*${locationSuffix},
+
+Puji Syukur kepada Tuhan, kami dari tim Pusat Distribusi GKLI menyampaikan bahwa literatur untuk periode *${periodeAktif}* telah diterima dan didistribusikan dengan rincian sebagai berikut:
+${rincian}
+
+*Total: ${totalItems} eksemplar*
+
+Demikian tanda bukti penerimaan literatur ini kami sampaikan. Kiranya literatur ini dapat diberkati dan menjadi wadah berkat untuk pertumbuhan dan kemuliaan nama Tuhan.
+
+Tuhan Yesus Kristus, Kepala Gereja memberkati kita sekalian.
+
+Salam kami,
+*Staf Pengiriman Literatur GKLI*`;
+
+    if (selectedChurch.wa || selectedChurch.waPendeta) {
+      if (selectedChurch.wa) {
+        let waNum1 = selectedChurch.wa.replace(/[^0-9]/g, '');
+        if (waNum1.startsWith('0')) waNum1 = '62' + waNum1.substring(1);
+        window.open(`https://wa.me/${waNum1}?text=${encodeURIComponent(waMessage)}`, '_blank');
+      }
+      if (selectedChurch.waPendeta) {
+        let waNum2 = selectedChurch.waPendeta.replace(/[^0-9]/g, '');
+        if (waNum2.startsWith('0')) waNum2 = '62' + waNum2.substring(1);
+        window.open(`https://wa.me/${waNum2}?text=${encodeURIComponent(waMessage)}`, '_blank');
+      }
+      setSuccessMsg('Tersimpan & Membuka WhatsApp...');
+    } else {
+      alert('Data tersimpan. Namun nomor WhatsApp tidak tersedia. Pesan:\n\n' + waMessage);
+      setSuccessMsg('Data distribusi berhasil disimpan!');
+    }
+    setTimeout(() => setSuccessMsg(''), 3000);
   };
 
   const handleDownloadLaporan = (format: 'excel' | 'word') => {
@@ -319,8 +383,8 @@ const StaffDistribusi = () => {
                     </div>
                   </div>
 
-                  <div className="overflow-auto max-h-[60vh] border border-slate-200 rounded-xl print:max-h-none print:border-none">
-                    <table className="w-full text-sm text-left">
+                  <div className="overflow-x-auto max-h-[60vh] border border-slate-200 rounded-xl print:max-h-none print:border-none">
+                    <table className="w-full text-sm text-left min-w-[700px]">
                       <thead className="bg-slate-100 sticky top-0">
                         <tr>
                           <th className="px-4 py-3 font-bold text-slate-700">Nama Lengkap</th>
@@ -447,14 +511,24 @@ const StaffDistribusi = () => {
                 </div>
               )}
 
-              <button 
-                onClick={handleSave}
-                disabled={isSaving}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50"
-              >
-                <Save size={20} />
-                {isSaving ? 'Menyimpan...' : 'Simpan Data Distribusi'}
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button 
+                  onClick={() => handleSave(true)}
+                  disabled={isSaving}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-4 rounded-xl shadow-sm transition-all flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  <Save size={20} />
+                  {isSaving ? 'Menyimpan...' : 'Simpan Saja'}
+                </button>
+                <button 
+                  onClick={handleSaveAndKirimWA}
+                  disabled={isSaving}
+                  className="flex-[2] bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-600/20 transition-all flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  <Send size={20} />
+                  {isSaving ? 'Menyimpan...' : 'Simpan & Kirim WA'}
+                </button>
+              </div>
             </div>
           )}
         </div>

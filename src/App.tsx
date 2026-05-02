@@ -5778,7 +5778,7 @@ function Modal({ show, onClose, title, children, size = "max-w-md" }: { show: bo
   );
 }
 
-function SettingInput({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) {
+function SettingInput({ label, value, onChange, placeholder }: { label: string, value: string, onChange: (v: string) => void, placeholder?: string }) {
   return (
     <div>
       <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{label}</label>
@@ -5786,6 +5786,7 @@ function SettingInput({ label, value, onChange }: { label: string, value: string
         type="text" 
         value={value} 
         onChange={e => onChange(e.target.value)} 
+        placeholder={placeholder}
         className="w-full border border-slate-200 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-gold-500" 
       />
     </div>
