@@ -20,6 +20,7 @@ const StaffDistribusi = () => {
   
   // Form state
   const [formData, setFormData] = useState<Record<string, number>>({});
+  const [initialFormData, setInitialFormData] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   
@@ -112,8 +113,10 @@ const StaffDistribusi = () => {
       
       if (existingDist && existingDist.details) {
         setFormData(existingDist.details);
+        setInitialFormData(existingDist.details);
       } else {
         setFormData({});
+        setInitialFormData({});
       }
       setSuccessMsg('');
     }
@@ -281,10 +284,27 @@ Salam kami,
 
   const handleSaveAndKirimWA = async () => {
     if (!selectedChurch) return;
+    
+    // Capture delta BEFORE save, to track the newly added data
+    const deltaData: Record<string, number> = {};
+    let hasNewItems = false;
+    SPREADSHEET_COLUMNS.alaman.forEach(col => {
+      const current = formData[col] || 0;
+      const initial = initialFormData[col] || 0;
+      if (current > initial) {
+        deltaData[col] = current - initial;
+        hasNewItems = true;
+      }
+    });
+
     const success = await handleSave(false);
     if (!success) return;
 
-    handleKirimWAReceipt(selectedChurch, formData);
+    if (hasNewItems) {
+      handleKirimWAReceipt(selectedChurch, deltaData);
+    } else {
+      alert('Tidak ada resi WA yang dikirim karena tidak ada penambahan distribusi data (hanya perubahan informasi yang sudah ada).');
+    }
   };
 
   const handleDownloadLaporan = (format: 'excel' | 'word') => {
