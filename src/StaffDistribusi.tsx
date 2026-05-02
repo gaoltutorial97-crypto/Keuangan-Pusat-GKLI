@@ -237,16 +237,17 @@ const StaffDistribusi = () => {
 
   const constructWaMessage = (church: Church, formDataParam: Record<string, number>): string => {
     let rincian = '';
-    let totalItems = 0;
+    let hasChanges = false;
     SPREADSHEET_COLUMNS.alaman.forEach(col => {
       const val = formDataParam[col] || 0;
-      if (val > 0) {
-        rincian += `\n- *${col}* : ${val} eks`;
-        totalItems += val;
+      if (val !== 0) {
+        const sign = val > 0 ? '+' : '';
+        rincian += `\n- *${col}* : ${sign}${val} eks`;
+        hasChanges = true;
       }
     });
 
-    if (totalItems === 0) return '';
+    if (!hasChanges) return '';
 
     const typeLabel = church.type === 'resort' ? 'Pusat/Resort' : church.type === 'perorangan' ? 'Bapak/Ibu/Sdr/i' : 'Majelis Jemaat GKLI';
     const cleanChurchName = church.nama.replace(/^GKLI\s*/i, '');
@@ -285,25 +286,25 @@ Salam kami,
   const handleSaveAndKirimWA = async () => {
     if (!selectedChurch) return;
     
-    // Capture delta BEFORE save, to track the newly added data
+    // Capture delta BEFORE save, to track the newly added or reduced data
     const deltaData: Record<string, number> = {};
-    let hasNewItems = false;
+    let hasChanges = false;
     SPREADSHEET_COLUMNS.alaman.forEach(col => {
       const current = formData[col] || 0;
       const initial = initialFormData[col] || 0;
-      if (current > initial) {
+      if (current !== initial) {
         deltaData[col] = current - initial;
-        hasNewItems = true;
+        hasChanges = true;
       }
     });
 
     const success = await handleSave(false);
     if (!success) return;
 
-    if (hasNewItems) {
+    if (hasChanges) {
       handleKirimWAReceipt(selectedChurch, deltaData);
     } else {
-      alert('Tidak ada resi WA yang dikirim karena tidak ada penambahan distribusi data (hanya perubahan informasi yang sudah ada).');
+      alert('Tidak ada resi WA yang dikirim karena tidak ada perubahan informasi.');
     }
   };
 
@@ -677,11 +678,11 @@ Salam kami,
                 <tbody>
                   {SPREADSHEET_COLUMNS.alaman.map(col => {
                     const val = receiptRenderData.formData[col] || 0;
-                    if (val > 0) {
+                    if (val !== 0) {
                       return (
                         <tr key={col}>
                           <td className="border border-slate-800 p-3">{col}</td>
-                          <td className="border border-slate-800 p-3 text-center font-bold">{val}</td>
+                          <td className="border border-slate-800 p-3 text-center font-bold">{val > 0 ? '+' : ''}{val}</td>
                         </tr>
                       );
                     }
@@ -690,7 +691,10 @@ Salam kami,
                    <tr className="bg-slate-100">
                       <td className="border border-slate-800 p-3 font-bold text-right text-base">TOTAL</td>
                       <td className="border border-slate-800 p-3 text-center font-bold text-base">
-                        {SPREADSHEET_COLUMNS.alaman.reduce((acc, col) => acc + (receiptRenderData.formData[col] || 0), 0)}
+                        {(() => {
+                           const sum = SPREADSHEET_COLUMNS.alaman.reduce((acc, col) => acc + (receiptRenderData.formData[col] || 0), 0);
+                           return sum > 0 ? `+${sum}` : sum;
+                        })()}
                       </td>
                    </tr>
                 </tbody>
