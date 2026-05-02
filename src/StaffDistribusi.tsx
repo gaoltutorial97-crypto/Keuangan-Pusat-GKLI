@@ -14,6 +14,7 @@ const StaffDistribusi = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTab, setSelectedTab] = useState<'jemaat'|'resort'|'perorangan'|'laporan'>('jemaat');
+  const [laporanSubTab, setLaporanSubTab] = useState<'jemaat_resort'|'perorangan'>('jemaat_resort');
   const [selectedChurch, setSelectedChurch] = useState<Church | null>(null);
   
   // Form state
@@ -71,13 +72,24 @@ const StaffDistribusi = () => {
 
   const synthesizedChurches = useMemo(() => {
     let base = [...churches];
-    base = base.map(c => ({ ...c, resort: normalizeResortName(c.resort) }));
-    const existingResorts = new Set(base.filter(c => c.type === 'resort').map(c => c.resort));
-    const uniqueResortNames = Array.from(new Set(base.map(c => c.resort).filter(r => r && r !== '-')));
     
-    uniqueResortNames.forEach(resName => {
-      if (!existingResorts.has(resName)) {
-        const members = base.filter(c => c.resort === resName && c.type !== 'resort' && c.wilayah);
+    // Find already defined 'resort' types (case-insensitive)
+    const existingResorts = new Set(base.filter(c => c.type === 'resort').map(c => (c.resort || '').trim().toUpperCase()));
+    
+    // Find all unique resort names from any church's resort field
+    const uniqueResortNamesMap = new Map<string, string>(); // UpperCase -> Original Name
+    base.forEach(c => {
+      if (c.resort && c.resort !== '-') {
+        const u = c.resort.trim().toUpperCase();
+        if (!uniqueResortNamesMap.has(u)) {
+          uniqueResortNamesMap.set(u, c.resort.trim());
+        }
+      }
+    });
+
+    uniqueResortNamesMap.forEach((originalName, upperName) => {
+      if (!existingResorts.has(upperName)) {
+        const members = base.filter(c => (c.resort || '').trim().toUpperCase() === upperName && c.type !== 'resort' && c.wilayah);
         const wilayahCounts: Record<string, number> = {};
         members.forEach(m => {
           wilayahCounts[m.wilayah] = (wilayahCounts[m.wilayah] || 0) + 1;
@@ -85,9 +97,9 @@ const StaffDistribusi = () => {
         const bestWilayah = Object.entries(wilayahCounts).sort((a,b) => b[1] - a[1])[0]?.[0] || '';
 
         base.push({
-          id: `virtual_resort_${resName.replace(/\s+/g, '_')}`,
-          nama: `RESORT ${resName.replace(/^resort\s+/i, '').toUpperCase()}`,
-          resort: resName,
+          id: `virtual_resort_${upperName.replace(/\s+/g, '_')}`,
+          nama: `RESORT ${originalName.replace(/^resort\s+/i, '').toUpperCase()}`,
+          resort: originalName,
           wilayah: bestWilayah,
           wa: '',
           type: 'resort',
@@ -97,13 +109,13 @@ const StaffDistribusi = () => {
       }
     });
 
-    // Handle duplicates
+    // Remove duplicates safely by grouping
     const finalBase: Church[] = [];
     const seenResortHeaders = new Set<string>();
     base.forEach(item => {
       if (item.type === 'resort') {
-        const rName = normalizeResortName(item.resort);
-        if (seenResortHeaders.has(rName)) return; // Skip duplicates
+        const rName = (item.resort || '').trim().toUpperCase();
+        if (seenResortHeaders.has(rName)) return; 
         seenResortHeaders.add(rName);
       }
       finalBase.push(item);
@@ -238,6 +250,11 @@ Salam kami,
     const date = new Date().toLocaleDateString('id-ID');
     const filename = `GKLI_Distribusi_${periodeAktif}.${format === 'excel' ? 'csv' : 'doc'}`;
 
+    const filteredList = synthesizedChurches.filter(c => {
+      if (laporanSubTab === 'jemaat_resort') return c.type === 'jemaat' || c.type === 'resort' || c.type === 'agg-perorangan';
+      return c.type === 'perorangan'; // 'perorangan'
+    });
+
     if (format === 'word') {
       let htmlContent = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -253,7 +270,7 @@ Salam kami,
         <body>
           <div class="header">
             <h3>${title}</h3>
-            <h4>LAPORAN: ${menuName}</h4>
+            <h4>LAPORAN: ${menuName} (${laporanSubTab === 'jemaat_resort' ? 'Jemaat & Resort' : 'Perorangan'})</h4>
             <p>Periode: ${periodeAktif} | Tanggal Unduh: ${date}</p>
           </div>
           <table>
@@ -261,7 +278,7 @@ Salam kami,
       `;
 
       let idx = 1;
-      synthesizedChurches.forEach(c => {
+      filteredList.forEach(c => {
         const dist = distributions.find(d => d.gerejaId === c.id && d.periode.trim().toLowerCase() === periodeAktif.trim().toLowerCase());
         if (!dist || !dist.details || Object.keys(dist.details).length === 0) return;
         const hasValue = SPREADSHEET_COLUMNS.alaman.some(col => dist.details[col] > 0);
@@ -289,7 +306,7 @@ Salam kami,
     } else {
       let csvContent = "NO,NAMA LENGKAP,TIPE," + SPREADSHEET_COLUMNS.alaman.join(',') + "\n";
       let idx = 1;
-      synthesizedChurches.forEach(c => {
+      filteredList.forEach(c => {
         const dist = distributions.find(d => d.gerejaId === c.id && d.periode.trim().toLowerCase() === periodeAktif.trim().toLowerCase());
         if (!dist || !dist.details || Object.keys(dist.details).length === 0) return;
         const hasValue = SPREADSHEET_COLUMNS.alaman.some(col => dist.details[col] > 0);
@@ -367,8 +384,8 @@ Salam kami,
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-indigo-50 border border-indigo-100 rounded-xl mb-4 gap-4">
                     <div>
-                      <h3 className="font-bold text-indigo-900">Laporan Keseluruhan</h3>
-                      <p className="text-sm text-indigo-700 mt-1">Data distribusi literatur periode {periodeAktif}</p>
+                      <h3 className="font-bold text-indigo-900">Riwayat & Laporan Distribusi</h3>
+                      <p className="text-sm text-indigo-700 mt-1">Data distribusi literatur yang berhasil diinput / dientri.</p>
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                       <button onClick={() => handleDownloadLaporan('word')} className="flex items-center justify-center gap-2 bg-white text-indigo-600 px-3 py-2 border border-indigo-200 rounded-lg font-bold hover:bg-indigo-50 shadow-sm transition-all text-xs">
@@ -383,6 +400,21 @@ Salam kami,
                     </div>
                   </div>
 
+                  <div className="flex p-1 gap-1 bg-slate-100 rounded-xl max-w-sm mb-4">
+                    <button 
+                      onClick={() => setLaporanSubTab('jemaat_resort')}
+                      className={`flex-1 py-1.5 text-xs font-bold flex bg-transparent items-center justify-center gap-2 rounded-lg transition-all ${laporanSubTab === 'jemaat_resort' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      <Building size={14} /> Jemaat & Resort
+                    </button>
+                    <button 
+                      onClick={() => setLaporanSubTab('perorangan')}
+                      className={`flex-1 py-1.5 text-xs font-bold flex bg-transparent items-center justify-center gap-2 rounded-lg transition-all ${laporanSubTab === 'perorangan' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      <User size={14} /> Perorangan
+                    </button>
+                  </div>
+
                   <div className="overflow-x-auto max-h-[60vh] border border-slate-200 rounded-xl print:max-h-none print:border-none">
                     <table className="w-full text-sm text-left min-w-[700px]">
                       <thead className="bg-slate-100 sticky top-0">
@@ -395,7 +427,10 @@ Salam kami,
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {synthesizedChurches.map(c => {
+                        {synthesizedChurches.filter(c => {
+                          if (laporanSubTab === 'jemaat_resort') return c.type === 'jemaat' || c.type === 'resort' || c.type === 'agg-perorangan';
+                          return c.type === 'perorangan';
+                        }).map(c => {
                           const dist = distributions.find(d => d.gerejaId === c.id && d.periode.trim().toLowerCase() === periodeAktif.trim().toLowerCase());
                           if (!dist || !dist.details || Object.keys(dist.details).length === 0) return null;
                           
