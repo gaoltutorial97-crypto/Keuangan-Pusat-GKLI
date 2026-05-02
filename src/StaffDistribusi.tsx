@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { Church, Distribution, AppSettings } from './types';
 import { SPREADSHEET_COLUMNS } from './constants';
 import { Search, Save, CheckCircle2, ChevronRight, X, Building, Users, User, FileText, Printer, FileDown, Send } from 'lucide-react';
 import { normalizeResortName } from './utils';
+import { toJpeg } from 'html-to-image';
 
 const StaffDistribusi = () => {
   const [churches, setChurches] = useState<Church[]>([]);
@@ -21,6 +22,54 @@ const StaffDistribusi = () => {
   const [formData, setFormData] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [receiptRenderData, setReceiptRenderData] = useState<{ church: Church; formData: Record<string, number>, typeAction?: 'download' | 'share' } | null>(null);
+
+  useEffect(() => {
+    if (receiptRenderData && receiptRef.current) {
+      const processReceipt = async () => {
+        try {
+          const el = receiptRef.current;
+          if (!el) return;
+          const dataUrl = await toJpeg(el, { quality: 1, backgroundColor: '#ffffff', pixelRatio: 2 });
+          
+          const filename = `Resi_Distribusi_${receiptRenderData.church.nama.replace(/\s+/g, '_')}_${periodeAktif}.jpg`;
+          
+          // trigger download
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = dataUrl;
+          link.click();
+          
+          const waMessage = constructWaMessage(receiptRenderData.church, receiptRenderData.formData);
+          if (receiptRenderData.church.wa || receiptRenderData.church.waPendeta) {
+            if (receiptRenderData.church.wa) {
+              let waNum1 = receiptRenderData.church.wa.replace(/[^0-9]/g, '');
+              if (waNum1.startsWith('0')) waNum1 = '62' + waNum1.substring(1);
+              window.open(`https://wa.me/${waNum1}?text=${encodeURIComponent(waMessage)}`, '_blank');
+            }
+            if (receiptRenderData.church.waPendeta) {
+              let waNum2 = receiptRenderData.church.waPendeta.replace(/[^0-9]/g, '');
+              if (waNum2.startsWith('0')) waNum2 = '62' + waNum2.substring(1);
+              window.open(`https://wa.me/${waNum2}?text=${encodeURIComponent(waMessage)}`, '_blank');
+            }
+            setSuccessMsg('Resi diunduh & Membuka WhatsApp...');
+            setTimeout(() => setSuccessMsg(''), 3000);
+          } else {
+            alert('Resi berhasil diunduh (silakan cek folder Download). Namun nomor WhatsApp tidak tersedia. Pesan:\\n\\n' + waMessage);
+          }
+        } catch (e) {
+          console.error(e);
+          alert('Gagal membuat gambar resi');
+        } finally {
+          setReceiptRenderData(null);
+        }
+      };
+      // small timeout to ensure React DOM is updated and fonts are loaded
+      setTimeout(processReceipt, 500); 
+    }
+  }, [receiptRenderData, periodeAktif]);
 
   useEffect(() => {
     // Fetch settings
@@ -225,23 +274,9 @@ Salam kami,
        alert('Tanda terima tidak dapat dikirim karena nilai distribusi kosong.');
        return;
     }
-
-    if (church.wa || church.waPendeta) {
-      if (church.wa) {
-        let waNum1 = church.wa.replace(/[^0-9]/g, '');
-        if (waNum1.startsWith('0')) waNum1 = '62' + waNum1.substring(1);
-        window.open(`https://wa.me/${waNum1}?text=${encodeURIComponent(waMessage)}`, '_blank');
-      }
-      if (church.waPendeta) {
-        let waNum2 = church.waPendeta.replace(/[^0-9]/g, '');
-        if (waNum2.startsWith('0')) waNum2 = '62' + waNum2.substring(1);
-        window.open(`https://wa.me/${waNum2}?text=${encodeURIComponent(waMessage)}`, '_blank');
-      }
-      setSuccessMsg('Membuka WhatsApp...');
-      setTimeout(() => setSuccessMsg(''), 3000);
-    } else {
-      alert('Nomor WhatsApp tidak tersedia. Pesan:\n\n' + waMessage);
-    }
+    
+    // This triggers the useEffect that generates JPG + triggers download + opens WA
+    setReceiptRenderData({ church, formData: formDataParam });
   };
 
   const handleSaveAndKirimWA = async () => {
@@ -585,6 +620,75 @@ Salam kami,
           )}
         </div>
 
+      </div>
+
+      <div style={{ position: 'fixed', left: '-9999px', top: 0 }}>
+        <div ref={receiptRef} className="bg-white text-slate-800 pt-8 pb-12 px-8 w-[600px] border border-gray-100 flex flex-col font-serif">
+          {receiptRenderData && (
+            <>
+              {settings?.kopSurat ? (
+                <div className="border-b-[3px] border-black pb-4 mb-6 text-center w-full">
+                  <img src={settings.kopSurat} alt="KOP" className="max-w-[450px] w-auto h-auto mx-auto object-contain object-top" />
+                </div>
+              ) : (
+                <div className="text-center border-b-2 border-slate-300 pb-4 mb-6 pt-6">
+                  <h2 className="text-2xl font-bold uppercase">{settings?.title || 'GKLI'}</h2>
+                  <p className="text-sm font-semibold">{settings?.subtitle || 'Pusat Distribusi'}</p>
+                </div>
+              )}
+              <h3 className="text-center font-bold text-xl mb-6 mt-4">RESI DISTRIBUSI LITERATUR</h3>
+              
+              <div className="space-y-4 mb-8 text-[15px]">
+                <div className="flex"><div className="w-32 font-bold">Periode</div><div>: {periodeAktif}</div></div>
+                <div className="flex"><div className="w-32 font-bold">Penerima</div><div>: {receiptRenderData.church.type === 'resort' ? `PUSAT/RESORT: ${receiptRenderData.church.nama}` : receiptRenderData.church.nama}</div></div>
+                {receiptRenderData.church.type !== 'perorangan' && receiptRenderData.church.type !== 'agg-perorangan' && receiptRenderData.church.resort && (
+                  <div className="flex"><div className="w-32 font-bold">Resort</div><div>: {receiptRenderData.church.resort}</div></div>
+                )}
+                <div className="flex"><div className="w-32 font-bold">Tanggal</div><div>: {new Date().toLocaleDateString('id-ID')}</div></div>
+              </div>
+
+              <table className="w-full border-collapse border border-slate-800 text-[15px] mb-8">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-800 p-3 text-left">Literatur</th>
+                    <th className="border border-slate-800 p-3 text-center">Jumlah (Eks)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SPREADSHEET_COLUMNS.alaman.map(col => {
+                    const val = receiptRenderData.formData[col] || 0;
+                    if (val > 0) {
+                      return (
+                        <tr key={col}>
+                          <td className="border border-slate-800 p-3">{col}</td>
+                          <td className="border border-slate-800 p-3 text-center font-bold">{val}</td>
+                        </tr>
+                      );
+                    }
+                    return null;
+                  })}
+                   <tr className="bg-slate-100">
+                      <td className="border border-slate-800 p-3 font-bold text-right text-base">TOTAL</td>
+                      <td className="border border-slate-800 p-3 text-center font-bold text-base">
+                        {SPREADSHEET_COLUMNS.alaman.reduce((acc, col) => acc + (receiptRenderData.formData[col] || 0), 0)}
+                      </td>
+                   </tr>
+                </tbody>
+              </table>
+
+              <div className="text-center italic text-sm text-slate-600 mb-12 px-8">
+                Kiranya literatur ini dapat diberkati dan menjadi wadah berkat untuk pertumbuhan dan kemuliaan nama Tuhan.
+              </div>
+              
+              <div className="flex justify-end pr-8">
+                <div className="text-center">
+                  <p className="mb-[100px]">Staf Distribusi,</p>
+                  <p className="font-bold border-b border-black inline-block min-w-[180px]"></p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
