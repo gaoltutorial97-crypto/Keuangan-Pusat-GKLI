@@ -2032,7 +2032,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
   const handleKirimWASpesifik = (item: any, colName: string) => {
     const val = item.details[colName] || 0;
     const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
-    const formattedName = getFormattedPaymentName(item.kategori, colName);
+    const formattedName = getFormattedPaymentName(item.kategori, colName, item.periode);
     let text = "";
     const greetingTitle = item.type === 'perorangan' ? (item.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (item.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'Bapak/Ibu Majelis Jemaat';
     if (val > 0) {
@@ -2060,7 +2060,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     if (selected.length === 0) return;
 
     const catLabel = CATEGORY_LABELS[item.kategori] || item.kategori;
-    const details = selected.map(col => `- *${getFormattedPaymentName(item.kategori, col).toUpperCase()}*: Rp ${formatRupiah(item.details[col])}`).join('\n');
+    const details = selected.map(col => `- *${getFormattedPaymentName(item.kategori, col, item.periode).toUpperCase()}*: Rp ${formatRupiah(item.details[col])}`).join('\n');
     const total = selected.reduce((sum, col) => sum + (item.details[col] || 0), 0);
     
     const greetingTitle = item.type === 'perorangan' ? (item.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (item.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bapak/Ibu/Sdr/i')) : 'Bapak/Ibu Majelis Jemaat';
@@ -2548,7 +2548,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     });
   };
 
-  const getFormattedPaymentName = (cat: string, field: string) => {
+  const getFormattedPaymentName = (cat: string, field: string, itemPeriode?: string) => {
     const monthMap: Record<string, string> = {
       'Jan': 'Januari', 'Feb': 'Februari', 'Mar': 'Maret', 'Apr': 'April',
       'Mei': 'Mei', 'Jun': 'Juni', 'Jul': 'Juli', 'Agu': 'Agustus',
@@ -2557,11 +2557,13 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     const nCat = cat.toLowerCase();
     const nField = field.toLowerCase();
+    
+    const yearUsed = itemPeriode?.match(/\d{4}/)?.[0] || settings?.periodeAktif?.match(/\d{4}/)?.[0] || currentYear;
 
     // PERSEMBAHAN II (LAPORAN)
     if (nCat === 'laporan' || nCat === 'ii') {
       const month = monthMap[field] || field;
-      return `Persembahan II bulan ${month} ${currentYear}`;
+      return `Persembahan II bulan ${month} ${yearUsed}`;
     }
 
     // PERSEMBAHAN KHUSUS (PELEAN)
@@ -2764,7 +2766,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                         sortPaymentDetailsEntries(cat, fields.map((f: string) => [f, null])).forEach(([f]) => {
                           const val = printData.allDetails?.[cat]?.[f];
                           if (val > 0) {
-                            rincianItems += `\n* ${getFormattedPaymentName(cat, f)} : Rp ${formatRupiah(val)}`;
+                            rincianItems += `\n* ${getFormattedPaymentName(cat, f, printData.periode)} : Rp ${formatRupiah(val)}`;
                           }
                         });
                       }
@@ -2780,7 +2782,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       sortPaymentDetailsEntries(printData.kategori, printData.items.map((col: string) => [col, null])).forEach(([col]) => {
                         const val = printData.details?.[col] || 0;
                         if (val > 0) {
-                          rincianItems += `\n* ${getFormattedPaymentName(printData.kategori, col)} : Rp ${formatRupiah(val)}`;
+                          rincianItems += `\n* ${getFormattedPaymentName(printData.kategori, col, printData.periode)} : Rp ${formatRupiah(val)}`;
                         }
                       });
                     }
@@ -3014,7 +3016,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                 return (
                                   <tr key={cat+f}>
                                     <td className="w-5 align-top text-left text-sm">{count}.</td>
-                                    <td className="text-[15px]">{getFormattedPaymentName(cat, f)}</td>
+                                    <td className="text-[15px]">{getFormattedPaymentName(cat, f, printData.periode)}</td>
                                     <td className="w-12 text-left text-[15px]">Rp.</td>
                                     <td className="w-32 text-right text-[15px]">{formatRupiah(val)},-</td>
                                   </tr>
@@ -3029,7 +3031,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                             return (
                               <tr key={col}>
                                 <td className="w-5 align-top text-left text-sm">{idx + 1}.</td>
-                                <td className="text-[15px]">{getFormattedPaymentName(printData.kategori, col)}</td>
+                                <td className="text-[15px]">{getFormattedPaymentName(printData.kategori, col, printData.periode)}</td>
                                 <td className="w-12 text-left text-[15px]">Rp.</td>
                                 <td className="w-32 text-right text-[15px]">{formatRupiah(val)},-</td>
                                </tr>
@@ -3334,7 +3336,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                         {sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).map(([key, val]) => (
                                           (val as number) > 0 && (
                                             <div key={key} className="flex justify-between text-slate-500 text-xs">
-                                              <span>- {getFormattedPaymentName(p.kategori, key)}</span>
+                                              <span>- {getFormattedPaymentName(p.kategori, key, p.periode)}</span>
                                               <span>Rp {formatRupiah(val as number)}</span>
                                             </div>
                                           )
@@ -3374,7 +3376,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                         rincian += `\n${catName} (Rp ${formatRupiah(catSum)}):`;
                                         sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
                                           if ((val as number) > 0) {
-                                            rincian += `\n* ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
+                                            rincian += `\n* ${getFormattedPaymentName(p.kategori, key, p.periode)} : Rp ${formatRupiah(val as number)}`;
                                           }
                                         });
                                       }
@@ -3550,7 +3552,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                                         rincian += `\n${catName} (Rp ${formatRupiah(catSum)}):`;
                                         sortPaymentDetailsEntries(p.kategori, Object.entries(p.details || {})).forEach(([key, val]) => {
                                           if ((val as number) > 0) {
-                                            rincian += `\n* ${getFormattedPaymentName(p.kategori, key)} : Rp ${formatRupiah(val as number)}`;
+                                            rincian += `\n* ${getFormattedPaymentName(p.kategori, key, p.periode)} : Rp ${formatRupiah(val as number)}`;
                                           }
                                         });
                                       }
