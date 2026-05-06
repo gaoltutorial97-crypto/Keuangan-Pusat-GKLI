@@ -35,8 +35,13 @@ import {
   MapPin,
   Home,
   BookOpen,
+  PieChart as PieChartIcon,
   Gift
 } from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area, LineChart, Line
+} from 'recharts';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
 import { Church, Payment, User, AppSettings, TabType, Distribution } from './types';
@@ -204,6 +209,8 @@ export default function App() {
   // STATE NAVIGASI
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showLiteraturDetails, setShowLiteraturDetails] = useState(false);
+  const [showPeleanDetails, setShowPeleanDetails] = useState(false);
   
   // STATE USER & LOGIN
   const [users, setUsers] = useState<User[]>([]);
@@ -1121,6 +1128,7 @@ export default function App() {
   const [sortType, setSortType] = useState<'id' | 'nama' | 'resort' | 'wilayah' | 'order' | 'pos_pi'>('order');
   const [filterResort, setFilterResort] = useState('Semua Resort');
   const [filterWilayah, setFilterWilayah] = useState('Semua Wilayah');
+  const [chartInterval, setChartInterval] = useState<'harian' | 'bulanan' | 'tahunan'>('harian');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCells, setSelectedCells] = useState<Record<string, string[]>>({}); // { gerejaId: [colName1, colName2] }
   const [billingSelections, setBillingSelections] = useState<Record<string, Record<string, string[]>>>({}); // { churchId: { category: [colNames] } }
@@ -1607,6 +1615,72 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     return { pemasukanLaporan: lap, pemasukanPelean: pel, pemasukanAlaman: al, breakdownAlaman: breakdownAL, breakdownPelean: breakdownP };
   }, [payments, allChurches, periodeAktif, filterResort, filterWilayah]);
   
+const chartData = useMemo(() => {
+    const trendMap: Record<string, { periode: string, label?: string, Laporan: number, Pelean: number, Alaman: number, total: number }> = {};
+    
+    payments.forEach(p => {
+      const church = allChurches.find(c => c.id === p.gerejaId);
+      if (!church) return;
+      const matchResort = filterResort === 'Semua Resort' || normalizeResortName(church.resort) === normalizeResortName(filterResort);
+      const matchWilayah = filterWilayah === 'Semua Wilayah' || church.wilayah === filterWilayah;
+      
+      if (matchResort && matchWilayah && p.jumlah > 0) {
+        let groupKey = p.periode; // default bulanan
+        if (chartInterval === 'harian') {
+          groupKey = (p.tanggal ? p.tanggal.split('T')[0] : `${p.periode.replace('/', '-')}-01`); 
+        } else if (chartInterval === 'tahunan') {
+          groupKey = p.periode.split('/')[0]; // "2026"
+        }
+
+        if (!trendMap[groupKey]) {
+          let label = groupKey;
+          if (chartInterval === 'harian') {
+            // "2026-01-15" => "15 Jan"
+            const parts = groupKey.split('-');
+            if (parts.length === 3) {
+              const dateObj = new Date(groupKey);
+              if (!isNaN(dateObj.getTime())) {
+                label = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+              }
+            }
+          } else if (chartInterval === 'bulanan') {
+            // "2026/01" => "Jan 2026"
+            const parts = groupKey.split('/');
+            if (parts.length === 2) {
+              const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+              label = `${monthNames[parseInt(parts[1])-1]} ${parts[0]}`;
+            }
+          }
+          trendMap[groupKey] = { periode: groupKey, label, Laporan: 0, Pelean: 0, Alaman: 0, total: 0 };
+        }
+        if (p.kategori === 'laporan') trendMap[groupKey].Laporan += p.jumlah;
+        else if (p.kategori === 'pelean') trendMap[groupKey].Pelean += p.jumlah;
+        else if (p.kategori === 'alaman') trendMap[groupKey].Alaman += p.jumlah;
+        trendMap[groupKey].total += p.jumlah;
+      }
+    });
+
+    let trendData = Object.values(trendMap).sort((a, b) => {
+      return a.periode.localeCompare(b.periode);
+    });
+    
+    if (chartInterval === 'harian') {
+      trendData = trendData.slice(-30); // Last 30 days
+    } else if (chartInterval === 'bulanan') {
+      trendData = trendData.slice(-12); // Last 12 months
+    } else {
+      trendData = trendData.slice(-5); // Last 5 years
+    }
+
+    const categoryData = [
+      { name: 'Laporan', value: pemasukanLaporan, color: '#10b981' },
+      { name: 'Pelean', value: pemasukanPelean, color: '#3b82f6' },
+      { name: 'Alaman', value: pemasukanAlaman, color: '#6366f1' },
+    ].filter(d => d.value > 0);
+
+    return { trendData, categoryData };
+  }, [payments, allChurches, filterResort, filterWilayah, pemasukanLaporan, pemasukanPelean, pemasukanAlaman, chartInterval]);
+
   const stats = useMemo(() => {
     let totalMenunggak = 0;
     let totalLunas = 0;
@@ -3945,15 +4019,88 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                       value={`Rp ${formatRupiah(pemasukanPelean)}`} 
                       icon={<Award size={24} />} 
                       color="blue" 
-                      subtitle="PEMASUKAN KHUSUS"
+                      subtitle={showPeleanDetails ? "SEMBUNYIKAN RINCIAN" : "KLIK UNTUK RINCIAN"}
+                      onClick={() => setShowPeleanDetails(!showPeleanDetails)}
                     />
                     <StatCard 
                       title="Alaman (Literatur)" 
                       value={`Rp ${formatRupiah(pemasukanAlaman)}`} 
                       icon={<BookOpen size={24} />} 
                       color="indigo" 
-                      subtitle="PEMASUKAN LITERATUR"
+                      subtitle={showLiteraturDetails ? "SEMBUNYIKAN RINCIAN" : "KLIK UNTUK RINCIAN"}
+                      onClick={() => setShowLiteraturDetails(!showLiteraturDetails)}
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6 no-print">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                          <TrendingUp size={20} className="text-blue-500" /> Tren Pemasukan
+                        </h3>
+                        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                          <select value={chartInterval} onChange={(e) => setChartInterval(e.target.value as any)} className="bg-transparent text-[11px] font-bold text-slate-700 outline-none">
+                            <option value="harian">Harian (30 Hari)</option>
+                            <option value="bulanan">Bulanan (12 Bulan)</option>
+                            <option value="tahunan">Tahunan (5 Tahun)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData.trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                            <XAxis dataKey="label" tick={{fontSize: 12}} />
+                            <YAxis width={100} tickFormatter={(val) => `Rp ${formatRupiah(val)}`} tick={{fontSize: 10}} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <RechartsTooltip formatter={(value) => `Rp ${formatRupiah(value as number)}`} wrapperClassName="rounded-xl shadow-lg border-none" />
+                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                            <Line type="monotone" dataKey="Laporan" name="Laporan (II)" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} dot={{ r: 4 }} />
+                            <Line type="monotone" dataKey="Pelean" name="Pelean (Khusus)" stroke="#3b82f6" strokeWidth={3} activeDot={{ r: 8 }} dot={{ r: 4 }} />
+                            <Line type="monotone" dataKey="Alaman" name="Alaman (Literatur)" stroke="#6366f1" strokeWidth={3} activeDot={{ r: 8 }} dot={{ r: 4 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 no-print">
+                      <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                        <PieChartIcon size={20} className="text-emerald-500" /> Proporsi Pemasukan {periodeAktif}
+                      </h3>
+                      <div className="h-[300px] w-full flex flex-col items-center justify-center">
+                        {chartData.categoryData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="80%">
+                            <PieChart>
+                              <Pie
+                                data={chartData.categoryData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                              >
+                                {chartData.categoryData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <RechartsTooltip formatter={(value) => `Rp ${formatRupiah(value as number)}`} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-slate-400">Belum ada data pemasukan di periode ini.</div>
+                        )}
+                        {chartData.categoryData.length > 0 && (
+                          <div className="w-full flex justify-center gap-4 mt-2">
+                            {chartData.categoryData.map((entry, index) => (
+                              <div key={index} className="flex items-center gap-1 text-xs font-medium text-slate-600">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                                {entry.name}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -3980,7 +4127,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     />
                   </div>
 
-                  {Object.keys(breakdownAlaman).length > 0 && (
+                  {showLiteraturDetails && Object.keys(breakdownAlaman).length > 0 && (
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 no-print">
                       <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
                         <BookOpen size={20} className="text-indigo-500" /> Rincian Pemasukan Literatur (Alaman)
@@ -3998,7 +4145,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     </div>
                   )}
 
-                  {Object.keys(breakdownPelean).length > 0 && (
+                  {showPeleanDetails && Object.keys(breakdownPelean).length > 0 && (
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 no-print">
                       <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
                         <Gift size={20} className="text-blue-500" /> Rincian Persembahan Khusus (Pelean)
@@ -5777,7 +5924,7 @@ function HeaderDownloadBtn({ onClick, icon, label, color }: { onClick: () => voi
   );
 }
 
-function StatCard({ title, value, icon, color, subtitle }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' | 'gold' | 'indigo' | 'emerald' | 'violet', subtitle?: string }) {
+function StatCard({ title, value, icon, color, subtitle, onClick }: { title: string, value: string, icon: React.ReactNode, color: 'green' | 'red' | 'blue' | 'gold' | 'indigo' | 'emerald' | 'violet', subtitle?: string, onClick?: () => void }) {
   const themes = {
     green: 'from-emerald-500 to-teal-600 shadow-emerald-200/50 text-emerald-600 bg-emerald-50',
     red: 'from-orange-500 to-red-600 shadow-red-200/50 text-red-600 bg-red-50',
@@ -5794,7 +5941,10 @@ function StatCard({ title, value, icon, color, subtitle }: { title: string, valu
   const bgColor = theme.split(' bg')[1] || '';
   
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+    <div 
+      className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all ${onClick ? 'cursor-pointer hover:-translate-y-1' : ''}`}
+      onClick={onClick}
+    >
       <div className="p-6">
         <div className="flex justify-between items-start mb-4">
           <div className={`p-3 rounded-xl ${textColor} ${bgColor}`}>
