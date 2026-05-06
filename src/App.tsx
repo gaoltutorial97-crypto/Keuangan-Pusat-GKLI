@@ -34,7 +34,8 @@ import {
   Building,
   MapPin,
   Home,
-  BookOpen
+  BookOpen,
+  Gift
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { toJpeg } from 'html-to-image';
@@ -1569,8 +1570,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       .reduce((sum, item) => sum + item.jumlah, 0);
   }, [payments, allChurches, periodeAktif, filterResort, filterWilayah]);
 
-  const { pemasukanLaporan, pemasukanPelean, pemasukanAlaman } = useMemo(() => {
+  const { pemasukanLaporan, pemasukanPelean, pemasukanAlaman, breakdownAlaman, breakdownPelean } = useMemo(() => {
     let lap = 0, pel = 0, al = 0;
+    const breakdownAL: Record<string, number> = {};
+    const breakdownP: Record<string, number> = {};
     payments.forEach(p => {
       const church = allChurches.find(c => c.id === p.gerejaId);
       if (!church) return;
@@ -1579,11 +1582,29 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       
       if (normalizePeriode(p.periode) === normalizePeriode(periodeAktif) && p.jumlah > 0 && matchResort && matchWilayah) {
         if (p.kategori === 'laporan') lap += p.jumlah;
-        else if (p.kategori === 'pelean') pel += p.jumlah;
-        else if (p.kategori === 'alaman') al += p.jumlah;
+        else if (p.kategori === 'pelean') {
+          pel += p.jumlah;
+          if (p.details) {
+            Object.entries(p.details).forEach(([key, val]) => {
+              if (typeof val === 'number' && val > 0) {
+                breakdownP[key] = (breakdownP[key] || 0) + val;
+              }
+            });
+          }
+        }
+        else if (p.kategori === 'alaman') {
+          al += p.jumlah;
+          if (p.details) {
+            Object.entries(p.details).forEach(([key, val]) => {
+              if (typeof val === 'number' && val > 0) {
+                breakdownAL[key] = (breakdownAL[key] || 0) + val;
+              }
+            });
+          }
+        }
       }
     });
-    return { pemasukanLaporan: lap, pemasukanPelean: pel, pemasukanAlaman: al };
+    return { pemasukanLaporan: lap, pemasukanPelean: pel, pemasukanAlaman: al, breakdownAlaman: breakdownAL, breakdownPelean: breakdownP };
   }, [payments, allChurches, periodeAktif, filterResort, filterWilayah]);
   
   const stats = useMemo(() => {
@@ -2558,7 +2579,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     const nCat = cat.toLowerCase();
     const nField = field.toLowerCase();
     
-    const yearUsed = itemPeriode?.match(/\d{4}/)?.[0] || settings?.periodeAktif?.match(/\d{4}/)?.[0] || currentYear;
+    const yearUsed = itemPeriode?.match(/\d{4}/)?.[0] || appSettings?.periodeAktif?.match(/\d{4}/)?.[0] || currentYear;
 
     // PERSEMBAHAN II (LAPORAN)
     if (nCat === 'laporan' || nCat === 'ii') {
@@ -3959,6 +3980,41 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
                     />
                   </div>
 
+                  {Object.keys(breakdownAlaman).length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 no-print">
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
+                        <BookOpen size={20} className="text-indigo-500" /> Rincian Pemasukan Literatur (Alaman)
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {Object.entries(breakdownAlaman)
+                          .sort((a, b) => b[1] - a[1]) // Sort descending by amount
+                          .map(([key, val]) => (
+                            <div key={key} className="bg-slate-50 border border-slate-100 rounded-lg p-4 flex flex-col justify-between">
+                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{getFormattedPaymentName('alaman', key)}</span>
+                              <span className="text-lg font-black text-indigo-700">Rp {formatRupiah(val)}</span>
+                            </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {Object.keys(breakdownPelean).length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 no-print">
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
+                        <Gift size={20} className="text-blue-500" /> Rincian Persembahan Khusus (Pelean)
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {Object.entries(breakdownPelean)
+                          .sort((a, b) => b[1] - a[1]) // Sort descending by amount
+                          .map(([key, val]) => (
+                            <div key={key} className="bg-slate-50 border border-slate-100 rounded-lg p-4 flex flex-col justify-between">
+                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{getFormattedPaymentName('pelean', key)}</span>
+                              <span className="text-lg font-black text-blue-700">Rp {formatRupiah(val)}</span>
+                            </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   
                   <div className="bg-gold-50 border border-gold-200 rounded-xl p-6 flex items-start space-x-4">
