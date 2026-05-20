@@ -2500,9 +2500,9 @@ const chartData = useMemo(() => {
             .meta-table { font-size: 9.5pt; margin-bottom: 12px; width: auto; border: none; }
             .meta-table td { border: none !important; padding: 1px 10px 1px 0px; text-align: left; }
             
-            table { border-collapse: collapse; width: 100%; margin-top: 5px; table-layout: fixed; }
-            th { border: 1px solid #000000; padding: 6px 4px; font-size: 8pt; background-color: #e2e8f0; font-weight: bold; text-align: center; word-wrap: break-word; overflow: hidden; }
-            td { border: 1px solid #000000; padding: 5px 4px; font-size: 7.5pt; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
+            table { border-collapse: collapse; width: 100%; margin-top: 5px; table-layout: auto; }
+            th { border: 1px solid #000000; padding: 6px 4px; font-size: 8.5pt; background-color: #e2e8f0; font-weight: bold; text-align: center; word-break: break-word; overflow-wrap: anywhere; }
+            td { border: 1px solid #000000; padding: 5px 4px; font-size: 8pt; vertical-align: middle; word-break: break-word; overflow-wrap: anywhere; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             .font-bold { font-weight: bold; }
@@ -2780,8 +2780,8 @@ const chartData = useMemo(() => {
             .subtitle { font-size: 11pt; font-weight: bold; text-align: center; color: #475569; }
             .filter-info { font-size: 9pt; color: #64748b; margin-top: 15px; margin-bottom: 15px; }
             table { border-collapse: collapse; width: 100%; }
-            th { background-color: #1e293b; color: #ffffff; font-weight: bold; border: 0.5pt solid #475569; text-align: center; padding: 10px; font-size: 10pt; }
-            td { border: 0.5pt solid #cbd5e1; padding: 8px; font-size: 9pt; vertical-align: middle; }
+            th { background-color: #1e293b; color: #ffffff; font-weight: bold; border: 0.5pt solid #475569; text-align: center; padding: 10px; font-size: 10pt; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+            td { border: 0.5pt solid #cbd5e1; padding: 8px; font-size: 9pt; vertical-align: middle; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             .total-row td { background-color: #e2e8f0; font-weight: bold; border-top: 1.5pt solid #0f172a; border-bottom: 2pt double #0f172a; }
@@ -3407,7 +3407,7 @@ const chartData = useMemo(() => {
                 <p className="text-center text-xs font-semibold text-slate-700 mb-2">PERIODE: {periodeAktif.toUpperCase()}</p>
                 <div className="flex justify-between items-center text-[10px] text-slate-500 mb-2 px-1 italic"><span>Resort Filter: {filterResort || 'Semua Resort'} | Wilayah: {filterWilayah || 'Semua Wilayah'}</span><span>* Nilai dalam Rupiah (Rp)</span></div>
                 
-                <table className="w-full border-collapse border border-black text-[11px]" style={{ tableLayout: 'fixed' }}>
+                <table className="w-full border-collapse border border-black text-[11px]" style={{ tableLayout: 'auto' }}>
                   <thead>
                     <tr className="bg-gray-100">
                       {(() => {
