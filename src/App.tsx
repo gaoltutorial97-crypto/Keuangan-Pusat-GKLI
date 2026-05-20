@@ -2418,65 +2418,281 @@ const chartData = useMemo(() => {
   };
 
   const handleDownloadCurrentMenu = (format: 'excel' | 'word' | 'pdf') => {
+    const targetTab = activeTab === 'download' ? downloadKategori : activeTab;
+    
     if (format === 'pdf') {
-     if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(activeTab)) {
-        setPrintData({ kategori: activeTab });
+      if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab)) {
+        setPrintData({ kategori: targetTab });
         setPrintType('rekap');
       } else {
-        // Fallback to simple browser print with a small delay to ensure UI stability
+        // Fallback to simple browser print with a delay to ensure UI stability
         setTimeout(() => window.print(), 100);
       }
       return;
     }
 
     const title = appSettings.title.toUpperCase();
-    const menuName = activeTab.toUpperCase();
-    const date = new Date().toLocaleDateString('id-ID');
-    const filename = `GKLI_${activeTab}_${periodeAktif}.${format === 'excel' ? 'csv' : 'doc'}`;
+    const menuName = CATEGORY_LABELS[targetTab] || targetTab.toUpperCase();
+    const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    const filename = `GKLI_${targetTab}_${periodeAktif}_${new Date().getTime()}.${format === 'excel' ? 'xls' : 'doc'}`;
 
     if (format === 'word') {
+      const isWide = ['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab);
       let htmlContent = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><meta charset='utf-8'><title>${title}</title>
-        <style>
-          body { font-family: 'Times New Roman', serif; }
-          table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-          th, td { border: 1px solid black; padding: 8px; text-align: left; font-size: 10pt; }
-          th { background-color: #f2f2f2; font-weight: bold; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .footer { margin-top: 30px; }
-        </style>
+        <head>
+          <meta charset='utf-8'>
+          <title>${title}</title>
+          <style>
+            @page Section1 {
+              size: ${isWide ? '29.7cm 21cm' : '21cm 29.7cm'};
+              margin: 1.5cm;
+              ${isWide ? 'mso-page-orientation: landscape;' : ''}
+            }
+            div.Section1 { page: Section1; }
+            body { font-family: 'Times New Roman', Times, serif; color: #000000; line-height: 1.25; }
+            
+            /* Kop Surat Agung & Berwibawa */
+            .kop-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+            .kop-logo-box { width: 75px; height: 75px; border: 2.5px solid #111827; border-radius: 50%; background-color: #facc15; padding: 4px; text-align: center; vertical-align: middle; }
+            .kop-logo-text { font-size: 14pt; font-weight: bold; color: #1e3a8a; font-family: Arial, sans-serif; line-height: 60px; }
+            .kop-title-cell { text-align: center; font-family: 'Times New Roman', serif; }
+            .kop-h1 { font-size: 15pt; font-weight: bold; margin: 0; padding: 0; letter-spacing: 1.5px; }
+            .kop-h2 { font-size: 19pt; font-weight: bold; color: #1d4ed8; margin: 0; padding: 0; }
+            .kop-h3 { font-size: 11.5pt; font-style: italic; color: #dc2626; font-weight: bold; margin: 0; padding: 0; }
+            .kop-metadata { font-size: 8.5pt; font-weight: bold; color: #1e3a8a; margin: 0; padding: 0; text-align: center; }
+            .kop-address { font-size: 8.5pt; text-align: center; margin: 3px 0; border: none; }
+            .line-double { border-top: 3px double #000000; margin-top: 5px; margin-bottom: 12px; }
+            
+            .report-title { text-align: center; font-size: 13.5pt; font-weight: bold; text-decoration: underline; margin-bottom: 2px; text-transform: uppercase; }
+            .report-subtitle { text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 12px; }
+            
+            .meta-table { font-size: 9.5pt; margin-bottom: 12px; width: auto; border: none; }
+            .meta-table td { border: none !important; padding: 1px 10px 1px 0px; text-align: left; }
+            
+            table { border-collapse: collapse; width: 100%; margin-top: 5px; }
+            th { border: 1px solid #000000; padding: 6px 4px; font-size: 8.5pt; background-color: #e2e8f0; font-weight: bold; text-align: center; }
+            td { border: 1px solid #000000; padding: 5px 4px; font-size: 8pt; vertical-align: middle; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: bold; }
+            .total-row td { font-weight: bold; background-color: #f1f5f9; border-top: 1.5px solid #000000; border-bottom: 2px double #000000; }
+            
+            .signature-table { border: none !important; width: 100%; margin-top: 25px; page-break-inside: avoid; }
+            .signature-table td { border: none !important; }
+          </style>
         </head>
         <body>
-          <div class="header">
-            <h3>${title}</h3>
-            <h4>LAPORAN: ${menuName}</h4>
-            <p>Periode: ${periodeAktif} | Tanggal Unduh: ${date}</p>
-          </div>
-          <table>
+          <div class="Section1">
+            <!-- Kop Surat -->
+            <table class="kop-table" style="border: none;">
+              <tr style="border: none;">
+                <td style="border: none; width: 12%; text-align: center; vertical-align: middle;">
+                  <div class="kop-logo-box">
+                    <span class="kop-logo-text">GKLI</span>
+                  </div>
+                </td>
+                <td style="border: none; width: 88%;" class="kop-title-cell">
+                  <div class="kop-h1">KANTOR PUSAT</div>
+                  <div class="kop-h2">GEREJA KRISTEN LUTHER INDONESIA</div>
+                  <div class="kop-h3">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</div>
+                  <div class="kop-metadata">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</div>
+                  <div class="kop-metadata">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</div>
+                </td>
+              </tr>
+            </table>
+            <div class="kop-address">
+              Sihabonghabong, Kec. Parlilitan, Humbang Hasundutan, Sumatera Utara – e-mail: kpt_gkli@yahoo.com<br/>
+              Bank BNI KLN Doloksanggul, No. Rek: 0061254308 – BRI Parlilitan Rek: 7796-01-003362-53-4
+            </div>
+            <div class="line-double"></div>
+            
+            <!-- Judul Laporan -->
+            <div class="report-title">REKAPITULASI PENYETORAN KEUANGAN ${menuName.toUpperCase()}</div>
+            <div class="report-subtitle">PERIODE: ${periodeAktif.toUpperCase()}</div>
+            
+            <!-- Metadata Filter -->
+            <table class="meta-table" style="border: none;">
+              <tr style="border: none;"><td style="border: none; width: 100px;"><b>Resort Filter</b></td><td style="border: none; width: 10px;">:</td><td style="border: none;">${filterResort || 'Semua Resort'}</td></tr>
+              <tr style="border: none;"><td style="border: none;"><b>Wilayah Filter</b></td><td style="border: none; width: 10px;">:</td><td style="border: none;">${filterWilayah || 'Semua Wilayah'}</td></tr>
+              <tr style="border: none;"><td style="border: none;"><b>Tanggal Unduh</b></td><td style="border: none;">:</td><td style="border: none;">${dateStr}</td></tr>
+              ${searchTerm ? `<tr style="border: none;"><td style="border: none;"><b>Pencarian</b></td><td style="border: none;">:</td><td style="border: none;">"${searchTerm}"</td></tr>` : ''}
+            </table>
+            
+            <table>
       `;
 
-      if (activeTab === 'gereja') {
-        htmlContent += "<tr><th>NO</th><th>ID</th><th>NAMA JEMAAT</th><th>RESORT</th><th>WHATSAPP</th></tr>";
+      if (targetTab === 'gereja') {
+        htmlContent += `
+          <thead>
+            <tr>
+              <th style="width: 5%;">NO</th>
+              <th style="width: 15%;">ID JEMAAT</th>
+              <th style="width: 45%;">NAMA JEMAAT</th>
+              <th style="width: 20%;">RESORT</th>
+              <th style="width: 15%;">WHATSAPP</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
         churches.forEach((c, idx) => {
-          htmlContent += `<tr><td>${idx + 1}</td><td>${c.id}</td><td>${c.nama}</td><td>${c.resort}</td><td>${c.wa}</td></tr>`;
+          htmlContent += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td class="text-center">${c.id}</td>
+              <td class="font-bold">${c.nama}</td>
+              <td class="text-center">${c.resort || '-'}</td>
+              <td class="text-center">${c.wa || '-'}</td>
+            </tr>
+          `;
         });
-      } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(activeTab)) {
-        const columns = SPREADSHEET_COLUMNS[activeTab === 'perorangan' ? 'alaman' : activeTab as keyof typeof SPREADSHEET_COLUMNS];
-        const data = getLaporanData(activeTab as any);
-        htmlContent += `<tr><th>NO</th><th>NAMA JEMAAT</th><th>STATUS</th>${columns.map(c => `<th>${c}</th>`).join('')}<th>TOTAL</th></tr>`;
+        htmlContent += `</tbody>`;
+      } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab)) {
+        const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS];
+        const data = getLaporanData(targetTab as any);
+        
+        htmlContent += `
+          <thead>
+            <tr>
+              <th style="width: 4%;">NO</th>
+              <th style="width: 18%;">NAMA JEMAAT</th>
+              <th style="width: 10%;">RESORT</th>
+              <th style="width: 10%;">WILAYAH</th>
+              <th style="width: 8%;">STATUS</th>
+              ${columns.map(c => `<th style="width: 5%;">${c.toUpperCase()}</th>`).join('')}
+              <th style="width: 10%;">TOTAL (RP)</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        
         data.forEach((item, idx) => {
-          const detailCells = columns.map(col => `<td>Rp ${formatRupiah(item.details[col] || 0)}</td>`).join('');
-          htmlContent += `<tr><td>${idx + 1}</td><td>${item.nama}</td><td>${item.status}</td>${detailCells}<td>Rp ${formatRupiah(item.jumlah)}</td></tr>`;
+          const detailCells = columns.map(col => {
+            const val = item.details[col] || 0;
+            return `<td class="text-right">${val > 0 ? formatRupiah(val) : '-'}</td>`;
+          }).join('');
+          
+          htmlContent += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td class="font-bold">${item.nama}</td>
+              <td class="text-center">${item.resort || '-'}</td>
+              <td class="text-center">${item.wilayah || '-'}</td>
+              <td class="text-center font-bold">${item.status}</td>
+              ${detailCells}
+              <td class="text-right font-bold" style="background-color: #f8fafc;">Rp ${formatRupiah(item.jumlah)}</td>
+            </tr>
+          `;
         });
-      } else {
-        htmlContent += "<tr><td>Data untuk menu ini belum dikonfigurasi untuk format Word. Silakan gunakan format Excel.</td></tr>";
+
+        // Totals Footer Row
+        const colTotals: Record<string, number> = {};
+        columns.forEach(col => {
+          colTotals[col] = data.reduce((sum, item) => sum + (item.details[col] || 0), 0);
+        });
+        const grandTotal = data.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+        
+        const footerCells = columns.map(col => {
+          const val = colTotals[col] || 0;
+          return `<td class="text-right font-bold">${val > 0 ? formatRupiah(val) : '-'}</td>`;
+        }).join('');
+
+        htmlContent += `
+            <tr class="total-row">
+              <td colspan="5" class="text-center font-bold">TOTAL KESELURUHAN</td>
+              ${footerCells}
+              <td class="text-right font-bold">Rp ${formatRupiah(grandTotal)}</td>
+            </tr>
+          </tbody>
+        `;
+      } else if (targetTab === 'penagihan') {
+        htmlContent += `
+          <thead>
+            <tr>
+              <th style="width: 5%;">NO</th>
+              <th style="width: 25%;">NAMA JEMAAT</th>
+              <th style="width: 20%;">RESORT</th>
+              <th style="width: 15%;">WHATSAPP</th>
+              <th style="width: 15%;">KATEGORI</th>
+              <th style="width: 20%;">ITEM TUNGGAKAN</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        churchesWithArrears.forEach((c, idx) => {
+          Object.entries(c.arrears).forEach(([cat, fields]) => {
+            htmlContent += `
+              <tr>
+                <td class="text-center">${idx + 1}</td>
+                <td class="font-bold">${c.nama}</td>
+                <td class="text-center">${c.resort || '-'}</td>
+                <td class="text-center">${c.wa || '-'}</td>
+                <td class="text-center font-bold">${CATEGORY_LABELS[cat] || cat}</td>
+                <td>${(fields as string[]).join('; ')}</td>
+              </tr>
+            `;
+          });
+        });
+        htmlContent += `</tbody>`;
+      } else if (targetTab === 'sertifikat') {
+        htmlContent += `
+          <thead>
+            <tr>
+              <th style="width: 10%;">NO</th>
+              <th style="width: 40%;">NAMA JEMAAT</th>
+              <th style="width: 30%;">RESORT</th>
+              <th style="width: 20%;">STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        lunasChurches.forEach((c, idx) => {
+          htmlContent += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td class="font-bold">${c.nama}</td>
+              <td class="text-center">${c.resort || '-'}</td>
+              <td class="text-center font-bold" style="color: #10b981; background-color: #ecfdf5;">Lunas 100%</td>
+            </tr>
+          `;
+        });
+        htmlContent += `</tbody>`;
+      } else if (targetTab === 'dashboard') {
+        htmlContent += `
+          <thead>
+            <tr>
+              <th style="width: 50%;">KETERANGAN RINGKASAN</th>
+              <th style="width: 50%;">NILAI KEUANGAN</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Total Pemasukan ${periodeAktif}</td><td class="font-bold text-right">Rp ${formatRupiah(totalPemasukan)}</td></tr>
+            <tr><td>Total Jemaat Lunas</td><td class="font-bold text-center">${formatRupiah(stats.totalLunas)} Jemaat</td></tr>
+            <tr><td>Total Jemaat Menunggak</td><td class="font-bold text-center" style="color: #dc2626;">${formatRupiah(stats.totalMenunggak)} Jemaat</td></tr>
+          </tbody>
+        `;
       }
 
       htmlContent += `
           </table>
-          <div class="footer">
-            <p>Dicetak secara otomatis melalui Sistem Keuangan GKLI.</p>
+          
+          <!-- Signature Block Agung -->
+          <table class="signature-table" style="border: none;">
+            <tr style="border: none;">
+              <td style="border: none; width: 60%;"></td>
+              <td style="border: none; width: 40%; text-align: center; font-size: 10pt; line-height: 1.3;">
+                <p style="margin: 0;">Teriring Salam dan Doa,</p>
+                <p style="margin: 0; font-weight: bold;">Pucuk Pimpinan GKLI</p>
+                <p style="margin: 0; font-style: italic;">A.n. Bishop</p>
+                <br/><br/><br/><br/>
+                <p style="margin: 0; font-weight: bold; text-decoration: underline;">Pdt. Lamris Malau, M.Th.</p>
+                <p style="margin: 0; font-size: 9pt;">Sekretaris Jenderal</p>
+              </td>
+            </tr>
+          </table>
+          
+          <div style="margin-top: 30px; font-size: 8pt; color: #555555;">
+            Laporan ini dibuat dan ditransmisikan secara digital melalui Sistem Keuangan GKLI Resmi.
           </div>
         </body>
         </html>
@@ -2493,70 +2709,222 @@ const chartData = useMemo(() => {
       return;
     }
 
-    // EXCEL (CSV) SECTION
-    let csvContent = "\uFEFF"; // BOM
-    csvContent += `"${title}"\n`;
-    csvContent += `"MENU: ${menuName}"\n`;
-    csvContent += `"PERIODE: ${periodeAktif.toUpperCase()}"\n`;
-    csvContent += `"TANGGAL UNDUH: ${date}"\n\n`;
+    if (format === 'excel') {
+      let excelHtml = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8">
+          <!--[if gte mso 9]>
+          <xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>${menuName.slice(0, 30)}</x:Name>
+                  <x:WorksheetOptions>
+                    <x:DisplayGridlines/>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml>
+          <![endif]-->
+          <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
+            .title { font-size: 16pt; font-weight: bold; text-align: center; color: #1e3a8a; }
+            .subtitle { font-size: 11pt; font-weight: bold; text-align: center; color: #475569; }
+            .filter-info { font-size: 9pt; color: #64748b; margin-top: 15px; margin-bottom: 15px; }
+            table { border-collapse: collapse; width: 100%; }
+            th { background-color: #1e293b; color: #ffffff; font-weight: bold; border: 0.5pt solid #475569; text-align: center; padding: 10px; font-size: 10pt; }
+            td { border: 0.5pt solid #cbd5e1; padding: 8px; font-size: 9pt; vertical-align: middle; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .total-row td { background-color: #e2e8f0; font-weight: bold; border-top: 1.5pt solid #0f172a; border-bottom: 2pt double #0f172a; }
+            
+            /* Custom format mask so cells are formatted as Rp currency natively in Excel! */
+            .rupiah-cell { mso-number-format: "\\Rp\\#,\\#\\#0;\\(\\Rp\\#,\\#\\#0\\);\\-\\;@"; }
+          </style>
+        </head>
+        <body>
+          <div class="title">GEREJA KRISTEN LUTHER INDONESIA (GKLI)</div>
+          <div class="subtitle">REKAPITULASI PENYETORAN KEUANGAN ${menuName.toUpperCase()}</div>
+          <div class="subtitle">KP Sihabonghabong - Periode: ${periodeAktif}</div>
+          <br/>
+          <table class="filter-info" style="border: none;">
+            <tr style="border: none;"><td style="border: none;"><b>Tanggal Unduh:</b></td><td style="border: none;">${dateStr}</td></tr>
+            <tr style="border: none;"><td style="border: none;"><b>Filter Resort:</b></td><td style="border: none;">${filterResort || 'Semua Resort'}</td></tr>
+            <tr style="border: none;"><td style="border: none;"><b>Filter Wilayah:</b></td><td style="border: none;">${filterWilayah || 'Semua Wilayah'}</td></tr>
+            ${searchTerm ? `<tr style="border: none;"><td style="border: none;"><b>Pencarian:</b></td><td style="border: none;">"${searchTerm}"</td></tr>` : ''}
+          </table>
+          <br/>
+          <table>
+      `;
 
-    if (activeTab === 'gereja') {
-      csvContent += "NO,ID,NAMA JEMAAT,RESORT,WHATSAPP\n";
-      churches.forEach((c, idx) => {
-        csvContent += `${idx + 1},${c.id},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}","${c.wa}"\n`;
-      });
-    } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(activeTab)) {
-      const columns = SPREADSHEET_COLUMNS[activeTab === 'perorangan' ? 'alaman' : activeTab as keyof typeof SPREADSHEET_COLUMNS];
-      const data = getLaporanData(activeTab as any);
-      const colTotals: Record<string, number> = {};
-      columns.forEach(col => colTotals[col] = 0);
-      let grandTotal = 0;
-
-      csvContent += `NO,ID,NAMA JEMAAT,STATUS,${columns.join(',')},TOTAL (RP)\n`;
-      data.forEach((item, idx) => {
-        const detailValues = columns.map(col => {
-          const val = item.details[col] || 0;
-          colTotals[col] += val;
-          return val;
-        }).join(',');
-        grandTotal += item.jumlah;
-        csvContent += `${idx + 1},${item.id},"${item.nama.replace(/"/g, '""')}",${item.status},${detailValues},${item.jumlah}\n`;
-      });
-      const footerValues = columns.map(col => colTotals[col]).join(',');
-      csvContent += `\n,,TOTAL KESELURUHAN,,${footerValues},${grandTotal}\n`;
-    } else if (activeTab === 'penagihan') {
-      csvContent += "NO,NAMA JEMAAT,RESORT,WHATSAPP,KATEGORI,ITEM TUNGGAKAN\n";
-      churchesWithArrears.forEach((c, idx) => {
-        Object.entries(c.arrears).forEach(([cat, fields]) => {
-          csvContent += `${idx + 1},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}","${c.wa}","${CATEGORY_LABELS[cat] || cat}","${(fields as string[]).join('; ')}"\n`;
+      if (targetTab === 'gereja') {
+        excelHtml += `
+          <thead>
+            <tr>
+              <th>NO</th>
+              <th>ID JEMAAT</th>
+              <th>NAMA JEMAAT</th>
+              <th>RESORT</th>
+              <th>WHATSAPP</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        churches.forEach((c, idx) => {
+          excelHtml += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td class="text-center">${c.id}</td>
+              <td><b>${c.nama}</b></td>
+              <td class="text-center">${c.resort || '-'}</td>
+              <td class="text-center">${c.wa || '-'}</td>
+            </tr>
+          `;
         });
-      });
-    } else if (activeTab === 'sertifikat') {
-      csvContent += "NO,NAMA JEMAAT,RESORT,STATUS\n";
-      lunasChurches.forEach((c, idx) => {
-        csvContent += `${idx + 1},"${c.nama.replace(/"/g, '""')}","${c.resort.replace(/"/g, '""')}",Lunas 100%\n`;
-      });
-    } else if (activeTab === 'dashboard') {
-      csvContent += "RINGKASAN DASHBOARD\n";
-      csvContent += `KETERANGAN,NILAI\n`;
-      csvContent += `Total Pemasukan ${periodeAktif},Rp ${formatRupiah(totalPemasukan)}\n`;
-      csvContent += `Total Lunas,${formatRupiah(stats.totalLunas)} Jemaat\n`;
-      csvContent += `Total Menunggak,${formatRupiah(stats.totalMenunggak)} Jemaat\n`;
-      csvContent += `\nDAFTAR JEMAAT LUNAS SELURUHNYA\n`;
-      lunasChurches.forEach(c => csvContent += `"${c.nama}" (Resort ${c.resort})\n`);
-    } else {
-      alert(`Fitur download untuk menu ${activeTab} belum tersedia.`);
-      return;
-    }
+        excelHtml += `</tbody>`;
+      } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab)) {
+        const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS];
+        const data = getLaporanData(targetTab as any);
+        
+        excelHtml += `
+          <thead>
+            <tr>
+              <th>NO</th>
+              <th>NAMA JEMAAT</th>
+              <th>RESORT</th>
+              <th>WILAYAH</th>
+              <th>STATUS</th>
+              ${columns.map(c => `<th>${c.toUpperCase()}</th>`).join('')}
+              <th>TOTAL (RP)</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        
+        data.forEach((item, idx) => {
+          const detailCells = columns.map(col => {
+            const val = item.details[col] || 0;
+            return `<td class="text-right rupiah-cell" x:num="${val}">${val || ''}</td>`;
+          }).join('');
+          
+          excelHtml += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td><b>${item.nama}</b></td>
+              <td class="text-center">${item.resort || '-'}</td>
+              <td class="text-center">${item.wilayah || '-'}</td>
+              <td class="text-center"><b>${item.status}</b></td>
+              ${detailCells}
+              <td class="text-right rupiah-cell" style="font-weight: bold; background-color: #f8fafc;" x:num="${item.jumlah}">${item.jumlah || 0}</td>
+            </tr>
+          `;
+        });
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        // Totals excel row
+        const colTotals: Record<string, number> = {};
+        columns.forEach(col => {
+          colTotals[col] = data.reduce((sum, item) => sum + (item.details[col] || 0), 0);
+        });
+        const grandTotal = data.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+        
+        const footerCells = columns.map(col => {
+          return `<td class="text-right rupiah-cell" style="font-weight: bold;" x:num="${colTotals[col]}">${colTotals[col] || ''}</td>`;
+        }).join('');
+
+        excelHtml += `
+            <tr class="total-row">
+              <td colspan="5" class="text-center"><b>TOTAL KESELURUHAN</b></td>
+              ${footerCells}
+              <td class="text-right rupiah-cell" style="font-weight: bold;" x:num="${grandTotal}">${grandTotal || 0}</td>
+            </tr>
+          </tbody>
+        `;
+      } else if (targetTab === 'penagihan') {
+        excelHtml += `
+          <thead>
+            <tr>
+              <th>NO</th>
+              <th>NAMA JEMAAT</th>
+              <th>RESORT</th>
+              <th>WHATSAPP</th>
+              <th>KATEGORI</th>
+              <th>ITEM TUNGGAKAN</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        churchesWithArrears.forEach((c, idx) => {
+          Object.entries(c.arrears).forEach(([cat, fields]) => {
+            excelHtml += `
+              <tr>
+                <td class="text-center">${idx + 1}</td>
+                <td><b>${c.nama}</b></td>
+                <td class="text-center">${c.resort || '-'}</td>
+                <td class="text-center">${c.wa || '-'}</td>
+                <td class="text-center"><b>${CATEGORY_LABELS[cat] || cat}</b></td>
+                <td>${(fields as string[]).join('; ')}</td>
+              </tr>
+            `;
+          });
+        });
+        excelHtml += `</tbody>`;
+      } else if (targetTab === 'sertifikat') {
+        excelHtml += `
+          <thead>
+            <tr>
+              <th>NO</th>
+              <th>NAMA JEMAAT</th>
+              <th>RESORT</th>
+              <th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+        lunasChurches.forEach((c, idx) => {
+          excelHtml += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td><b>${c.nama}</b></td>
+              <td class="text-center">${c.resort || '-'}</td>
+              <td class="text-center text-center font-bold" style="color: #047857; background-color: #d1fae5;">Lunas 100%</td>
+            </tr>
+          `;
+        });
+        excelHtml += `</tbody>`;
+      }
+
+      excelHtml += `
+          </table>
+          
+          <br/><br/>
+          <table style="border: none; width: 100%;">
+            <tr style="border: none;">
+              <td style="border: none; width: 60%;"></td>
+              <td style="border: none; width: 40%; text-align: center; font-size: 10pt;">
+                <p>Teriring Salam dan Doa,</p>
+                <p><b>Pucuk Pimpinan GKLI</b></p>
+                <p><i>A.n Bishop</i></p>
+                <br/><br/><br/>
+                <p><b><u>Pdt. Lamris Malau, M.Th.</u></b></p>
+                <p>Sekretaris Jenderal</p>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleAddPeriod = async () => {
@@ -2754,7 +3122,10 @@ const chartData = useMemo(() => {
         <style>
           {`
             @media print {
-              @page { size: portrait; margin: 0; }
+              @page { 
+                size: ${printType === 'rekap' ? 'landscape' : 'portrait'}; 
+                margin: 0.5cm 1cm !important; 
+              }
               .no-print { display: none !important; }
               .print-preview-container {
                 padding: 0 !important;
@@ -2764,7 +3135,7 @@ const chartData = useMemo(() => {
               #printable-page { 
                 width: 100% !important; 
                 margin: 0 !important; 
-                padding: 1.5cm 2cm 1.5cm 2cm !important; 
+                padding: ${printType === 'rekap' ? '0.5cm' : '1.5cm 2cm'} !important; 
                 box-shadow: none !important;
                 border: none !important;
               }
@@ -2775,11 +3146,11 @@ const chartData = useMemo(() => {
               padding: 60px 0;
             }
             #printable-page {
-              width: 210mm;
-              min-height: 297mm;
+              width: ${printType === 'rekap' ? '297mm' : '210mm'};
+              min-height: ${printType === 'rekap' ? '210mm' : '297mm'};
               margin: 0 auto;
               background-color: white;
-              padding: 2cm 2.54cm 2.54cm 2.54cm;
+              padding: ${printType === 'rekap' ? '1cm 1.5cm' : '2cm 2.54cm 2.54cm 2.54cm'};
               box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
               position: relative;
             }
@@ -2790,7 +3161,7 @@ const chartData = useMemo(() => {
              <div className="bg-gold-500 p-2 rounded-lg">
                 <Printer size={20} className="text-slate-900" />
              </div>
-             <h3 className="font-bold text-lg tracking-tight">Mode Siap Cetak (Potret)</h3>
+             <h3 className="font-bold text-lg tracking-tight">Mode Siap Cetak (${printType === 'rekap' ? 'Lansekap - Pas Kertas A4' : 'Potret - Pas Kertas A4'})</h3>
           </div>
           <div className="flex gap-3">
             <button onClick={() => setPrintType(null)} className="px-5 py-2.5 bg-slate-700 rounded-xl font-bold hover:bg-slate-600 transition-all">Kembali</button>
@@ -2947,69 +3318,41 @@ const chartData = useMemo(() => {
         <div className="print-preview-container">
           <div id="printable-page" style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '12pt', paddingTop: '1.5cm', paddingBottom: '1.5cm', paddingLeft: '2cm', paddingRight: '2cm', color: 'black' }} ref={printRef}>
       <div className="print-section mt-0">
-         {/* Header */}
-         <div className="text-center mb-8 relative pt-0">
-            {templates.kopSurat ? (
-              <div className="border-b-[3px] border-black pb-4 text-center">
-                <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-w-4xl max-h-40 object-contain mx-auto" />
-              </div>
-            ) : (
-              <div className="w-full border-b-[3px] border-black pb-4">
-                <div className="flex items-center justify-between mb-2 gap-4">
-                  <div className="w-32 h-32 flex items-center justify-center shrink-0 relative">
-                     <div className="absolute inset-0 rounded-full border-[3px] border-blue-800 flex items-center justify-center bg-yellow-400 overflow-hidden shadow-sm">
-                        <div className="w-20 h-20 rounded-full border-2 border-red-600 flex items-center justify-center bg-white">
-                          <span className="text-2xl text-blue-800 font-serif font-black">GKLI</span>
-                        </div>
-                     </div>
-                  </div>
-                  <div className="flex-1 text-center font-serif leading-tight">
-                     <h1 className="text-2xl md:text-[26px] font-medium uppercase tracking-widest text-black mb-1">KANTOR PUSAT</h1>
-                     <h2 className="text-3xl md:text-[32px] font-bold text-blue-700 uppercase tracking-wider mb-1">GEREJA KRISTEN LUTHER INDONESIA</h2>
-                     <h3 className="text-xl md:text-2xl italic text-red-600 font-bold mb-1">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</h3>
-                     <p className="text-[12px] font-bold text-blue-800 tracking-wide mt-1">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
-                     <p className="text-[12px] font-bold text-blue-800 tracking-wide">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
-                  </div>
-                  <div className="w-32 shrink-0"></div>
-                </div>
-                <div className="text-center font-serif text-[12px] leading-tight mb-2 tracking-wide text-black">
-                  <p>Sihabonghabong, Kec. Parlilitan, Kab. Humbang Hasundutan, Prov. Sumatera Utara, 22456 e-mail : kpt_gkli@yahoo.com</p>
-                  <p>Bank BNI KLN Doloksanggul, No. Rek. :0061254308-BRI Parlilitan Rek.7796-01-003362-53-4</p>
-                </div>
-                <div className="border-t-[3px] border-black pb-[1px]"></div>
-                <div className="border-t-[1px] border-black pt-[3px] mb-6">
-                   <p className="text-center text-red-600 font-bold text-[16px] tracking-wider transform scale-y-110">ANGGOTA PERSEKUTUAN GEREJA-GEREJA DI INDONESIA (PGI)</p>
-                </div>
-              </div>
-            )}
-           </div>
-           
-           {printType === 'rekap' ? (
-             <div>
-               <h3 className="text-center text-xl font-bold underline mb-4">REKAPITULASI {(printData.kategori === 'perorangan' ? 'PEMBELIAN PERORANGAN' : CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
-               <p className="text-center mb-6">PERIODE: {periodeAktif}</p>
-               <table className="w-full border-collapse border border-black text-sm">
-                 <thead>
-                   <tr className="bg-gray-100">
-                     <th className="border border-black p-2">NO</th>
-                     <th className="border border-black p-2">NAMA JEMAAT</th>
-                     <th className="border border-black p-2">RESORT</th>
-                     <th className="border border-black p-2">STATUS</th>
-                     <th className="border border-black p-2">TOTAL (Rp)</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {getLaporanData(printData.kategori).map((item, idx) => (
-                     <tr key={item.id}>
-                       <td className="border border-black p-2 text-center">{idx + 1}</td>
-                       <td className="border border-black p-2 font-bold">{item.nama}</td>
-                       <td className="border border-black p-2">{item.resort}</td>
-                       <td className="border border-black p-2 text-center">{item.status}</td>
-                       <td className="border border-black p-2 text-right">{formatRupiah(item.jumlah)}</td>
-                     </tr>
-                   ))}
-                 </tbody>
+            {printType === 'rekap' ? (
+              <div>
+                <h3 className="text-center text-lg font-bold underline mb-1">REKAPITULASI {(printData.kategori === 'perorangan' ? 'PEMBELIAN PERORANGAN' : CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
+                <p className="text-center text-xs font-semibold text-slate-700 mb-2">PERIODE: {periodeAktif.toUpperCase()}</p>
+                <div className="flex justify-between items-center text-[10px] text-slate-500 mb-2 px-1 italic"><span>Resort Filter: {filterResort || 'Semua Resort'} | Wilayah: {filterWilayah || 'Semua Wilayah'}</span><span>* Nilai dalam Rupiah (Rp)</span></div>
+                
+                <table className="w-full border-collapse border border-black text-[11px]">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-black p-1 text-center font-bold" style={{ width: '4%' }}>NO</th>
+                      <th className="border border-black p-1 text-left font-bold" style={{ width: '18%' }}>NAMA JEMAAT</th>
+                      <th className="border border-black p-1 text-center font-bold" style={{ width: '10%' }}>RESORT</th>
+                      <th className="border border-black p-1 text-center font-bold" style={{ width: '8%' }}>STATUS</th>{(() => { const cols = SPREADSHEET_COLUMNS[printData.kategori === 'perorangan' ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || []; return cols.map(col => (<th key={col} className="border border-black p-1 text-center font-bold text-[9px] whitespace-nowrap">{col.toUpperCase()}</th>)); })()}
+                      <th className="border border-black p-1 text-right bg-slate-50 font-bold font-serif" style={{ width: '12%' }}>TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => { const cols = SPREADSHEET_COLUMNS[printData.kategori === 'perorangan' ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || []; const baseData = getLaporanData(printData.kategori); return (<>{baseData.map((item, idx) => (<tr key={item.id} className="text-[10px]"><td className="border border-black p-1.5 text-center">{idx + 1}</td><td className="border border-black p-1.5 font-bold text-slate-900">{item.nama}</td><td className="border border-black p-1.5 text-center text-slate-700">{item.resort || '-'}</td><td className="border border-black p-1.5 text-center font-semibold">{item.status}</td>{cols.map(col => { const val = item.details[col] || 0; return (<td key={col} className="border border-black p-1.5 text-right font-mono">{val > 0 ? formatRupiah(val) : '-'}</td>); })}<td className="border border-black p-1.5 text-right font-bold bg-slate-50 font-mono">Rp {formatRupiah(item.jumlah)}</td></tr>))}<tr className="bg-slate-100 font-bold border-t-2 border-black text-[10.5px]"><td colSpan={4} className="border border-black p-2 text-center font-bold text-slate-800">TOTAL KESELURUHAN</td>{cols.map(col => { const total = baseData.reduce((sum, item2) => sum + (item2.details[col] || 0), 0); return (<td key={col} className="border border-black p-2 text-right font-mono text-slate-800">{total > 0 ? formatRupiah(total) : '-'}</td>); })}<td className="border border-black p-2 text-right font-mono text-slate-950 bg-slate-200">Rp {formatRupiah(baseData.reduce((sum, item2) => sum + (item2.jumlah || 0), 0))}</td></tr></>); })()}
+                  </tbody>
                 </table>
+
+                {/* Signature bottom of printable page */}
+                <div className="mt-12 flex justify-between items-start" style={{ pageBreakInside: 'avoid' }}>
+                  <div className="w-[60%] text-[10px] text-slate-400 font-mono self-end">
+                    Laporan Resmi Keuangan GKLI Kantor Pusat Sihabonghabong.
+                  </div>
+                  <div className="w-64 text-center text-xs leading-relaxed text-slate-800">
+                    <p className="mb-0">Sihabonghabong, {today}</p>
+                    <p className="mb-0 font-bold text-black text-[13px]">Pucuk Pimpinan GKLI</p>
+                    <p className="mb-0 italic text-slate-600">A.n. Bishop</p>
+                    <div className="h-16"></div>
+                    <p className="mb-0 font-bold underline text-black text-[13px]">Pdt. Lamris Malau, M.Th.</p>
+                    <p className="mb-0 text-slate-500 text-[10px]">Sekretaris Jenderal</p>
+                  </div>
+                </div>
               </div>
             ) : (printType === 'penerimaan' || printType === 'tunggakan' || printType === 'global-receipt' || printType === 'global-arrears' || printType === 'terimakasih') ? (
               <div className="space-y-6 text-[15px]">
@@ -4131,11 +4474,11 @@ const chartData = useMemo(() => {
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {Object.entries(breakdownAlaman)
-                          .sort((a, b) => b[1] - a[1]) // Sort descending by amount
+                          .sort((a, b) => (b[1] as number) - (a[1] as number)) // Sort descending by amount
                           .map(([key, val]) => (
                             <div key={key} className="bg-slate-50 border border-slate-100 rounded-lg p-4 flex flex-col justify-between">
                               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{getFormattedPaymentName('alaman', key)}</span>
-                              <span className="text-lg font-black text-indigo-700">Rp {formatRupiah(val)}</span>
+                              <span className="text-lg font-black text-indigo-700">Rp {formatRupiah(val as number)}</span>
                             </div>
                         ))}
                       </div>
@@ -4149,11 +4492,11 @@ const chartData = useMemo(() => {
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {Object.entries(breakdownPelean)
-                          .sort((a, b) => b[1] - a[1]) // Sort descending by amount
+                          .sort((a, b) => (b[1] as number) - (a[1] as number)) // Sort descending by amount
                           .map(([key, val]) => (
                             <div key={key} className="bg-slate-50 border border-slate-100 rounded-lg p-4 flex flex-col justify-between">
                               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{getFormattedPaymentName('pelean', key)}</span>
-                              <span className="text-lg font-black text-blue-700">Rp {formatRupiah(val)}</span>
+                              <span className="text-lg font-black text-blue-700">Rp {formatRupiah(val as number)}</span>
                             </div>
                         ))}
                       </div>
