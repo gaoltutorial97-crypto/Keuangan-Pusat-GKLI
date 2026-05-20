@@ -2,5 +2,7 @@
   "name": "Forum Keuangan GKLI",
   "description": "A comprehensive financial management system for GKLI (Indonesian Christian Luther Church) featuring church data management, payment tracking, and automated reporting.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
