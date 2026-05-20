@@ -25,6 +25,7 @@ const StaffDistribusi = () => {
   const [successMsg, setSuccessMsg] = useState('');
   
   const receiptRef = useRef<HTMLDivElement>(null);
+  const lastStateRef = useRef({ churchId: '', period: '' });
   const [receiptRenderData, setReceiptRenderData] = useState<{ church: Church; formData: Record<string, number>, typeAction?: 'download' | 'share' } | null>(null);
 
   useEffect(() => {
@@ -103,7 +104,7 @@ const StaffDistribusi = () => {
     return () => unsubDist();
   }, [periodeAktif]);
 
-  // When church is selected, load existing distribution if any
+  // When church is selected or database distribution changes, load existing distribution if any
   useEffect(() => {
     if (selectedChurch && periodeAktif) {
       const existingDist = distributions.find(d => 
@@ -111,16 +112,20 @@ const StaffDistribusi = () => {
         d.periode.trim().toLowerCase() === periodeAktif.trim().toLowerCase()
       );
       
-      if (existingDist && existingDist.details) {
-        setFormData(existingDist.details);
-        setInitialFormData(existingDist.details);
-      } else {
-        setFormData({});
-        setInitialFormData({});
+      const details = existingDist?.details || {};
+      const isDifferentChurchOrPeriod = lastStateRef.current.churchId !== selectedChurch.id || lastStateRef.current.period !== periodeAktif;
+      
+      const dbDetailsString = JSON.stringify(details);
+      const initialDetailsString = JSON.stringify(initialFormData);
+      
+      if (isDifferentChurchOrPeriod || dbDetailsString !== initialDetailsString) {
+        setFormData(details);
+        setInitialFormData(details);
+        lastStateRef.current = { churchId: selectedChurch.id, period: periodeAktif };
       }
       setSuccessMsg('');
     }
-  }, [selectedChurch, periodeAktif, distributions]);
+  }, [selectedChurch, periodeAktif, distributions, initialFormData]);
 
   const synthesizedChurches = useMemo(() => {
     let base = [...churches];

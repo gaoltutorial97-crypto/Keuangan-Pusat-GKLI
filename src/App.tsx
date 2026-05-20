@@ -1372,14 +1372,12 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     let data = [...churches]; // Use base churches to avoid global sort interference
     
     // Apply filters matching the global ones
-    if (tabId !== 'perorangan') {
-      if (filterResort !== 'Semua Resort') {
-        const normFilter = normalizeResortName(filterResort);
-        data = data.filter(c => normalizeResortName(c.resort) === normFilter);
-      }
-      if (filterWilayah !== 'Semua Wilayah') {
-        data = data.filter(c => c.wilayah === filterWilayah);
-      }
+    if (filterResort !== 'Semua Resort') {
+      const normFilter = normalizeResortName(filterResort);
+      data = data.filter(c => normalizeResortName(c.resort) === normFilter);
+    }
+    if (filterWilayah !== 'Semua Wilayah') {
+      data = data.filter(c => c.wilayah === filterWilayah);
     }
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
@@ -2470,9 +2468,9 @@ const chartData = useMemo(() => {
             .meta-table { font-size: 9.5pt; margin-bottom: 12px; width: auto; border: none; }
             .meta-table td { border: none !important; padding: 1px 10px 1px 0px; text-align: left; }
             
-            table { border-collapse: collapse; width: 100%; margin-top: 5px; }
-            th { border: 1px solid #000000; padding: 6px 4px; font-size: 8.5pt; background-color: #e2e8f0; font-weight: bold; text-align: center; }
-            td { border: 1px solid #000000; padding: 5px 4px; font-size: 8pt; vertical-align: middle; }
+            table { border-collapse: collapse; width: 100%; margin-top: 5px; table-layout: fixed; }
+            th { border: 1px solid #000000; padding: 6px 4px; font-size: 8pt; background-color: #e2e8f0; font-weight: bold; text-align: center; word-wrap: break-word; overflow: hidden; }
+            td { border: 1px solid #000000; padding: 5px 4px; font-size: 7.5pt; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             .font-bold { font-weight: bold; }
@@ -2551,16 +2549,19 @@ const chartData = useMemo(() => {
         const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS];
         const data = getLaporanData(targetTab as any);
         
+        const staticWidths = { no: 3, nama: 18, resort: 8, wilayah: 8, status: 6, total: 10 };
+        const dynamicColWidth = (47 / columns.length).toFixed(2);
+        
         htmlContent += `
           <thead>
             <tr>
-              <th style="width: 4%;">NO</th>
-              <th style="width: 18%;">NAMA JEMAAT</th>
-              <th style="width: 10%;">RESORT</th>
-              <th style="width: 10%;">WILAYAH</th>
-              <th style="width: 8%;">STATUS</th>
-              ${columns.map(c => `<th style="width: 5%;">${c.toUpperCase()}</th>`).join('')}
-              <th style="width: 10%;">TOTAL (RP)</th>
+              <th style="width: ${staticWidths.no}%;">NO</th>
+              <th style="width: ${staticWidths.nama}%;">NAMA JEMAAT</th>
+              <th style="width: ${staticWidths.resort}%;">RESORT</th>
+              <th style="width: ${staticWidths.wilayah}%;">WILAYAH</th>
+              <th style="width: ${staticWidths.status}%;">STATUS</th>
+              ${columns.map(c => `<th style="width: ${dynamicColWidth}%;">${c.toUpperCase()}</th>`).join('')}
+              <th style="width: ${staticWidths.total}%;">TOTAL (RP)</th>
             </tr>
           </thead>
           <tbody>
@@ -3324,14 +3325,25 @@ const chartData = useMemo(() => {
                 <p className="text-center text-xs font-semibold text-slate-700 mb-2">PERIODE: {periodeAktif.toUpperCase()}</p>
                 <div className="flex justify-between items-center text-[10px] text-slate-500 mb-2 px-1 italic"><span>Resort Filter: {filterResort || 'Semua Resort'} | Wilayah: {filterWilayah || 'Semua Wilayah'}</span><span>* Nilai dalam Rupiah (Rp)</span></div>
                 
-                <table className="w-full border-collapse border border-black text-[11px]">
+                <table className="w-full border-collapse border border-black text-[11px]" style={{ tableLayout: 'fixed' }}>
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="border border-black p-1 text-center font-bold" style={{ width: '4%' }}>NO</th>
-                      <th className="border border-black p-1 text-left font-bold" style={{ width: '18%' }}>NAMA JEMAAT</th>
-                      <th className="border border-black p-1 text-center font-bold" style={{ width: '10%' }}>RESORT</th>
-                      <th className="border border-black p-1 text-center font-bold" style={{ width: '8%' }}>STATUS</th>{(() => { const cols = SPREADSHEET_COLUMNS[printData.kategori === 'perorangan' ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || []; return cols.map(col => (<th key={col} className="border border-black p-1 text-center font-bold text-[9px] whitespace-nowrap">{col.toUpperCase()}</th>)); })()}
-                      <th className="border border-black p-1 text-right bg-slate-50 font-bold font-serif" style={{ width: '12%' }}>TOTAL</th>
+                      {(() => {
+                        const cols = SPREADSHEET_COLUMNS[printData.kategori === 'perorangan' ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || [];
+                        const dynamicColWidth = (55 / cols.length).toFixed(2);
+                        return (
+                          <>
+                            <th className="border border-black p-1 text-center font-bold" style={{ width: '3%' }}>NO</th>
+                            <th className="border border-black p-1 text-left font-bold" style={{ width: '18%' }}>NAMA JEMAAT</th>
+                            <th className="border border-black p-1 text-center font-bold" style={{ width: '8%' }}>RESORT</th>
+                            <th className="border border-black p-1 text-center font-bold" style={{ width: '6%' }}>STATUS</th>
+                            {cols.map(col => (
+                              <th key={col} className="border border-black p-1 text-center font-bold text-[8.5px]" style={{ width: `${dynamicColWidth}%` }}>{col.toUpperCase()}</th>
+                            ))}
+                            <th className="border border-black p-1 text-right bg-slate-50 font-bold font-serif" style={{ width: '10%' }}>TOTAL</th>
+                          </>
+                        );
+                      })()}
                     </tr>
                   </thead>
                   <tbody>
@@ -4772,20 +4784,20 @@ const chartData = useMemo(() => {
                                     </div>
                                   </td>
                                 )}
-                                <td className="px-6 py-4 text-slate-400 font-mono text-xs text-center">{rowCounterGereja}</td>
-                                <td className="px-6 py-4 font-bold text-slate-800">
+                                <td onPointerDown={(e) => e.stopPropagation()} className="px-6 py-4 text-slate-400 font-mono text-xs text-center">{rowCounterGereja}</td>
+                                <td onPointerDown={(e) => e.stopPropagation()} className="px-6 py-4 font-bold text-slate-800">
                                   {String(church.type) === 'resort' && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded mr-2 align-middle uppercase tracking-tighter">RESORT</span>}
                                   {church.nama}
                                 </td>
-                                <td className="px-6 py-4 text-slate-600 font-medium">
+                                <td onPointerDown={(e) => e.stopPropagation()} className="px-6 py-4 text-slate-600 font-medium">
                                   <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px]">{church.resort}</span>
                                 </td>
-                                <td className="px-6 py-4 text-slate-600 font-medium">
+                                <td onPointerDown={(e) => e.stopPropagation()} className="px-6 py-4 text-slate-600 font-medium">
                                   <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md text-[10px] border border-amber-100">{church.wilayah || '-'}</span>
                                 </td>
-                                {currentUserProfile?.role === 'superadmin' && <td className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
+                                {currentUserProfile?.role === 'superadmin' && <td onPointerDown={(e) => e.stopPropagation()} className="px-6 py-4 text-slate-500 text-xs font-mono">{church.wa || '-'}</td>}
                                 {currentUserProfile && (
-                                  <td className="px-6 py-4 text-center">
+                                  <td onPointerDown={(e) => e.stopPropagation()} className="px-6 py-4 text-center">
                                     <div className="flex justify-center flex-wrap gap-1">
                                       <button onClick={() => { setFormChurch(church); setShowChurchModal(true); }} className="text-gold-600 hover:text-gold-800 p-2 rounded-lg hover:bg-gold-50" title="Edit">
                                         <Edit size={16} />
@@ -5006,19 +5018,19 @@ const chartData = useMemo(() => {
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.romanPrefix ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.romanPrefix ? '' : rowCounter}
                                   </td>
-                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.romanPrefix ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.romanPrefix ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className={`flex items-center gap-2 ${item.romanPrefix ? 'font-black text-indigo-950 uppercase text-[10px] tracking-widest' : 'font-medium text-slate-700'}`}>
                                       {item.romanPrefix ? `${item.romanPrefix}. ${item.nama}` : item.nama}
                                     </div>
                                   </td>
-                                  <td className={`px-4 py-3 text-center text-[10px] ${item.romanPrefix ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 text-center text-[10px] ${item.romanPrefix ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
                                   {SPREADSHEET_COLUMNS.alaman.map(col => {
                                     const val = item.details[col] || 0;
                                     return (
-                                      <td key={col} className={`p-0 border-r border-slate-100 relative z-10 hover:z-20 ${item.romanPrefix ? 'bg-indigo-50/30' : ''}`}>
+                                      <td key={col} onPointerDown={(e) => e.stopPropagation()} className={`p-0 border-r border-slate-100 relative z-10 hover:z-20 ${item.romanPrefix ? 'bg-indigo-50/30' : ''}`}>
                                         {currentUserProfile ? (
                                           <TableCellInput
                                             initialVal={val}
@@ -5036,7 +5048,7 @@ const chartData = useMemo(() => {
                                       </td>
                                     );
                                   })}
-                                  <td className={`px-4 py-3 text-center !font-black !font-mono text-slate-900 min-w-[100px] ${item.romanPrefix ? 'bg-indigo-50/50' : 'bg-slate-50'}`}>{formatInput(totalQty as number)}</td>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 text-center !font-black !font-mono text-slate-900 min-w-[100px] ${item.romanPrefix ? 'bg-indigo-50/50' : 'bg-slate-50'}`}>{formatInput(totalQty as number)}</td>
                                 </Reorder.Item>
                               );
                             });
@@ -5265,17 +5277,17 @@ const chartData = useMemo(() => {
                                       <GripVertical size={14} className="text-slate-300" />
                                     </td>
                                   )}
-                                  <td className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 sticky z-20 text-center border-r border-slate-100 ${item.type === 'resort' ? 'font-black text-slate-500 text-xs bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '32px' : '0' }}>
                                     {item.type === 'resort' ? '' : rowCounterFin}
                                   </td>
-                                  <td className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 sticky z-20 border-r border-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`} style={{ left: canDragOrder ? '80px' : '48px' }}>
                                     <div className={`flex items-center gap-2 ${item.type === 'resort' ? 'font-black text-indigo-950 uppercase text-[10px] tracking-widest' : ''}`}>
                                       {item.type === 'resort' ? `${item.romanPrefix}. ${item.nama}` : item.nama}
                                     </div>
                                   </td>
-                                  <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
-                                  <td className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-gold-700 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.wilayah || '-'}</td>
-                                  <td className={`px-4 py-3 text-center ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`}>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-indigo-900 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.resort}</td>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 text-center text-[10px] ${item.type === 'resort' ? 'font-black text-gold-700 bg-slate-50/90' : 'text-slate-500 bg-white group-hover:bg-slate-50'}`}>{item.wilayah || '-'}</td>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className={`px-4 py-3 text-center ${item.type === 'resort' ? 'bg-slate-50/90' : 'bg-white group-hover:bg-slate-50'}`}>
                                     {item.type !== 'resort' && item.status && (
                                       <span className={`px-2 py-1 rounded-full text-[9px] font-bold ${item.status === 'Lunas' ? 'bg-green-100 text-green-700' : item.status === 'Proses' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                                         {item.status.toUpperCase()}
@@ -5286,7 +5298,7 @@ const chartData = useMemo(() => {
                                     const val = item.details[col] || 0;
                                     const isSelected = (selectedCells[item.id] || []).includes(col);
                                     return (
-                                      <td key={col} className="p-0 border-r border-slate-100 relative group min-w-[120px] z-10 hover:z-20">
+                                      <td key={col} onPointerDown={(e) => e.stopPropagation()} className="p-0 border-r border-slate-100 relative group min-w-[120px] z-10 hover:z-20">
                                         <div className="flex items-center h-full px-2">
                                           {val > 0 && item.type !== 'agg-perorangan' && (
                                             <div className="mr-1">
@@ -5328,8 +5340,8 @@ const chartData = useMemo(() => {
                                       </td>
                                     );
                                   })}
-                                  <td className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
-                                  <td className="px-4 py-3 text-center">
+                                  <td onPointerDown={(e) => e.stopPropagation()} className="px-4 py-3 text-right font-bold font-mono text-gold-900 bg-gold-50/20 border-l border-gold-100 min-w-[140px]">{formatRupiah(item.jumlah)}</td>
+                                  <td onPointerDown={(e) => e.stopPropagation()} className="px-4 py-3 text-center">
                                     {item.type !== 'resort' && item.type !== 'agg-perorangan' && (
                                       <div className="flex flex-col items-center space-y-1">
                                       <div className="flex justify-center space-x-1">
