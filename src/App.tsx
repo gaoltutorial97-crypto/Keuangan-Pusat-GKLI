@@ -114,7 +114,7 @@ const TableCellInput = ({
   const isZero = !localVal || localVal === '0';
 
   let defaultColorClasses = isZero 
-    ? (itemType === 'resort' ? 'text-slate-400 font-bold' : 'text-red-400 font-medium') 
+    ? (itemType === 'resort' ? 'text-slate-400 font-bold placeholder:text-slate-400' : 'text-red-400 font-medium placeholder:text-red-200') 
     : (itemType === 'resort' ? 'text-indigo-700 font-bold' : 'text-slate-700 font-bold');
 
   return (
@@ -1391,7 +1391,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
     // Filter based on tabId
     if (tabId === 'laporan') {
-      data = data.filter(c => c.type !== 'resort' && c.type !== 'perorangan');
+      data = data.filter(c => c.type !== 'perorangan');
     } else if (tabId === 'pelean') {
       data = data.filter(c => c.type !== 'perorangan');
     } else if (tabId === 'alaman') {
@@ -1723,9 +1723,6 @@ const chartData = useMemo(() => {
         let hasPotential = false;
 
         Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
-          // Resort entities only follow Pelean (Special Offerings) and Alaman (Literature)
-          if (church.type === 'resort' && cat === 'laporan') return;
-
           const aliases = churchAliasesMap[church.id] || [church.id];
           const pembayaranList = payments.filter(p => 
             aliases.includes(p.gerejaId) && 
