@@ -660,9 +660,9 @@ Salam kami,
         <div ref={receiptRef} className="bg-white text-slate-800 pt-8 pb-12 px-8 w-[600px] border border-gray-100 flex flex-col font-serif">
           {receiptRenderData && (
             <>
-              {settings?.kopSurat ? (
-                <div className="border-b-[3px] border-black pb-4 mb-6 text-center w-full">
-                  <img src={settings.kopSurat} alt="KOP" className="max-w-[450px] w-auto h-auto mx-auto object-contain object-top" />
+              {(settings?.kopSurat || settings?.templates?.kopSurat) ? (
+                <div className="border-b-[3px] border-black pb-2 mb-4 text-center w-full">
+                  <img src={settings.kopSurat || settings.templates?.kopSurat} alt="KOP" className="w-full max-h-[170px] object-contain mx-auto object-top" />
                 </div>
               ) : (
                 <div className="text-center border-b-2 border-slate-300 pb-4 mb-6 pt-6">

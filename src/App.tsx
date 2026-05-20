@@ -1168,6 +1168,38 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
 
   useEffect(() => { localStorage.setItem('gkli_templates', JSON.stringify(templates)); }, [templates]);
 
+  // Synchronize templates from Firebase config if present (making it global across devices)
+  useEffect(() => {
+    if (appSettings && appSettings.templates) {
+      setTemplates(prev => {
+        const cloudTemplates = appSettings.templates!;
+        const keys: (keyof typeof prev)[] = ['kopSurat', 'stempelTerimaKasih', 'stempelTunggakan', 'suratTerimaKasih', 'suratTunggakan'];
+        const isDifferent = keys.some(key => prev[key] !== cloudTemplates[key]);
+        if (isDifferent) {
+          return { ...prev, ...cloudTemplates };
+        }
+        return prev;
+      });
+    }
+  }, [appSettings]);
+
+  const handleSaveTemplatesToFirebase = async (latestTemplates = templates) => {
+    if (currentUserProfile?.role !== 'superadmin') {
+      alert("Hanya admin yang dapat menyimpan template!");
+      return;
+    }
+    try {
+      const updatedSettings = {
+        ...appSettings,
+        templates: latestTemplates
+      };
+      await setDoc(doc(db, 'settings', 'config'), updatedSettings);
+      alert("🎉 Template berhasil disimpan ke Cloud!");
+    } catch (err: any) {
+      alert("Gagal menyimpan ke cloud: " + err.message);
+    }
+  };
+
   // APPLY THEME
   useEffect(() => {
     if (appSettings.theme) {
@@ -2483,27 +2515,33 @@ const chartData = useMemo(() => {
         <body>
           <div class="Section1">
             <!-- Kop Surat -->
-            <table class="kop-table" style="border: none;">
-              <tr style="border: none;">
-                <td style="border: none; width: 12%; text-align: center; vertical-align: middle;">
-                  <div class="kop-logo-box">
-                    <span class="kop-logo-text">GKLI</span>
-                  </div>
-                </td>
-                <td style="border: none; width: 88%;" class="kop-title-cell">
-                  <div class="kop-h1">KANTOR PUSAT</div>
-                  <div class="kop-h2">GEREJA KRISTEN LUTHER INDONESIA</div>
-                  <div class="kop-h3">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</div>
-                  <div class="kop-metadata">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</div>
-                  <div class="kop-metadata">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</div>
-                </td>
-              </tr>
-            </table>
-            <div class="kop-address">
-              Sihabonghabong, Kec. Parlilitan, Humbang Hasundutan, Sumatera Utara – e-mail: kpt_gkli@yahoo.com<br/>
-              Bank BNI KLN Doloksanggul, No. Rek: 0061254308 – BRI Parlilitan Rek: 7796-01-003362-53-4
-            </div>
-            <div class="line-double"></div>
+            ${templates.kopSurat ? `
+              <div style="text-align: center; margin-bottom: 15px; border-bottom: 3.5px double #000000; padding-bottom: 6px; width: 100%;">
+                <img src="${templates.kopSurat}" style="width: 100%; max-height: 190px; object-fit: contain;" alt="Kop Surat" />
+              </div>
+            ` : `
+              <table class="kop-table" style="border: none;">
+                <tr style="border: none;">
+                  <td style="border: none; width: 12%; text-align: center; vertical-align: middle;">
+                    <div class="kop-logo-box">
+                      <span class="kop-logo-text">GKLI</span>
+                    </div>
+                  </td>
+                  <td style="border: none; width: 88%;" class="kop-title-cell">
+                    <div class="kop-h1">KANTOR PUSAT</div>
+                    <div class="kop-h2">GEREJA KRISTEN LUTHER INDONESIA</div>
+                    <div class="kop-h3">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</div>
+                    <div class="kop-metadata">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</div>
+                    <div class="kop-metadata">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</div>
+                  </td>
+                </tr>
+              </table>
+              <div class="kop-address">
+                Sihabonghabong, Kec. Parlilitan, Humbang Hasundutan, Sumatera Utara – e-mail: kpt_gkli@yahoo.com<br/>
+                Bank BNI KLN Doloksanggul, No. Rek: 0061254308 – BRI Parlilitan Rek: 7796-01-003362-53-4
+              </div>
+              <div class="line-double"></div>
+            `}
             
             <!-- Judul Laporan -->
             <div class="report-title">REKAPITULASI PENYETORAN KEUANGAN ${menuName.toUpperCase()}</div>
@@ -2678,16 +2716,23 @@ const chartData = useMemo(() => {
           </table>
           
           <!-- Signature Block Agung -->
-          <table class="signature-table" style="border: none;">
+          <table class="signature-table" style="border: none; width: 100%;">
             <tr style="border: none;">
               <td style="border: none; width: 60%;"></td>
-              <td style="border: none; width: 40%; text-align: center; font-size: 10pt; line-height: 1.3;">
+              <td style="border: none; width: 40%; text-align: center; font-size: 10pt; line-height: 1.3; position: relative;">
                 <p style="margin: 0;">Teriring Salam dan Doa,</p>
                 <p style="margin: 0; font-weight: bold;">Pucuk Pimpinan GKLI</p>
                 <p style="margin: 0; font-style: italic;">A.n. Bishop</p>
+                <div style="height: 15px; position: relative; text-align: center;">
+                  ${templates.stempelTerimaKasih ? `
+                    <img src="${templates.stempelTerimaKasih}" style="position: absolute; top: -35px; left: 50%; margin-left: -80px; height: 110px; width: auto; opacity: 0.9; mix-blend-mode: multiply;" />
+                  ` : (templates.stempelTunggakan ? `
+                    <img src="${templates.stempelTunggakan}" style="position: absolute; top: -35px; left: 50%; margin-left: -80px; height: 110px; width: auto; opacity: 0.9; mix-blend-mode: multiply;" />
+                  ` : '')}
+                </div>
                 <br/><br/><br/><br/>
-                <p style="margin: 0; font-weight: bold; text-decoration: underline;">Pdt. Lamris Malau, M.Th.</p>
-                <p style="margin: 0; font-size: 9pt;">Sekretaris Jenderal</p>
+                <p style="margin: 0; font-weight: bold; text-decoration: underline; position: relative; z-index: 10;">Pdt. Lamris Malau, M.Th.</p>
+                <p style="margin: 0; font-size: 9pt; position: relative; z-index: 10;">Sekretaris Jenderal</p>
               </td>
             </tr>
           </table>
@@ -3136,7 +3181,7 @@ const chartData = useMemo(() => {
               #printable-page { 
                 width: 100% !important; 
                 margin: 0 !important; 
-                padding: ${printType === 'rekap' ? '0.5cm' : '1.5cm 2cm'} !important; 
+                padding: ${printType === 'rekap' ? '0.5cm' : '0.5cm 2cm 1.5cm 2cm'} !important; 
                 box-shadow: none !important;
                 border: none !important;
               }
@@ -3151,7 +3196,7 @@ const chartData = useMemo(() => {
               min-height: ${printType === 'rekap' ? '210mm' : '297mm'};
               margin: 0 auto;
               background-color: white;
-              padding: ${printType === 'rekap' ? '1cm 1.5cm' : '2cm 2.54cm 2.54cm 2.54cm'};
+              padding: ${printType === 'rekap' ? '1cm 1.5cm' : '0.5cm 2cm 1.5cm 2cm'};
               box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
               position: relative;
             }
@@ -3317,10 +3362,47 @@ const chartData = useMemo(() => {
         </div>
 
         <div className="print-preview-container">
-          <div id="printable-page" style={{ fontFamily: '"Times New Roman", Times, serif', fontSize: '12pt', paddingTop: '1.5cm', paddingBottom: '1.5cm', paddingLeft: '2cm', paddingRight: '2cm', color: 'black' }} ref={printRef}>
+          <div id="printable-page" style={{ 
+            fontFamily: '"Times New Roman", Times, serif', 
+            fontSize: '12pt', 
+            paddingTop: '0.5cm', 
+            paddingBottom: printType === 'rekap' ? '0.8cm' : '1.5cm', 
+            paddingLeft: printType === 'rekap' ? '1.0cm' : '2.0cm', 
+            paddingRight: printType === 'rekap' ? '1.0cm' : '2.0cm', 
+            color: 'black' 
+          }} ref={printRef}>
       <div className="print-section mt-0">
             {printType === 'rekap' ? (
               <div>
+                {/* Kop Surat Header for Reports */}
+                {templates.kopSurat ? (
+                  <div className="w-full text-center pb-2 mb-4 border-b-[3px] border-double border-black">
+                    <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-h-[190px] object-contain mx-auto" />
+                  </div>
+                ) : (
+                  <div className="w-full mb-6 text-black">
+                    <div className="flex justify-between items-center border-b-[3px] border-double border-black pb-3">
+                      <div className="w-[12%] flex justify-center items-center">
+                        <div className="w-[75px] h-[75px] border-[2.5px] border-black rounded-full bg-yellow-400 p-1 flex justify-center items-center">
+                          <span className="font-bold text-[18px] text-blue-900 tracking-tighter">GKLI</span>
+                        </div>
+                      </div>
+                      <div className="w-[88%] text-center">
+                        <h1 className="font-serif font-bold text-[15pt] tracking-[1.5px] m-0 leading-none">KANTOR PUSAT</h1>
+                        <h2 className="font-serif font-bold text-[19pt] text-blue-700 m-0 leading-tight">GEREJA KRISTEN LUTHER INDONESIA</h2>
+                        <h3 className="font-serif font-bold italic text-[11.5pt] text-red-600 m-0 leading-tight">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</h3>
+                        <p className="font-sans font-bold text-[8.5pt] text-blue-900 m-0 leading-relaxed">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
+                        <p className="font-sans font-bold text-[8.5pt] text-blue-900 m-0 leading-relaxed">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
+                      </div>
+                    </div>
+                    <div className="text-center text-[8.5pt] mt-1.5 leading-normal">
+                      Sihabonghabong, Kec. Parlilitan, Humbang Hasundutan, Sumatera Utara – e-mail: kpt_gkli@yahoo.com<br/>
+                      Bank BNI KLN Doloksanggul, No. Rek: 0061254308 – BRI Parlilitan Rek: 7796-01-003362-53-4
+                    </div>
+                    <div className="border-t-[3px] border-b border-black h-1 my-2"></div>
+                  </div>
+                )}
+
                 <h3 className="text-center text-lg font-bold underline mb-1">REKAPITULASI {(printData.kategori === 'perorangan' ? 'PEMBELIAN PERORANGAN' : CATEGORY_LABELS[printData.kategori] || printData.kategori).toUpperCase()}</h3>
                 <p className="text-center text-xs font-semibold text-slate-700 mb-2">PERIODE: {periodeAktif.toUpperCase()}</p>
                 <div className="flex justify-between items-center text-[10px] text-slate-500 mb-2 px-1 italic"><span>Resort Filter: {filterResort || 'Semua Resort'} | Wilayah: {filterWilayah || 'Semua Wilayah'}</span><span>* Nilai dalam Rupiah (Rp)</span></div>
@@ -3356,42 +3438,102 @@ const chartData = useMemo(() => {
                   <div className="w-[60%] text-[10px] text-slate-400 font-mono self-end">
                     Laporan Resmi Keuangan GKLI Kantor Pusat Sihabonghabong.
                   </div>
-                  <div className="w-64 text-center text-xs leading-relaxed text-slate-800">
-                    <p className="mb-0">Sihabonghabong, {today}</p>
+                  <div className="w-72 relative z-10 text-center leading-relaxed">
+                    <p className="mb-0 text-[13px]">Sihabonghabong, {today}</p>
                     <p className="mb-0 font-bold text-black text-[13px]">Pucuk Pimpinan GKLI</p>
-                    <p className="mb-0 italic text-slate-600">A.n. Bishop</p>
-                    <div className="h-16"></div>
-                    <p className="mb-0 font-bold underline text-black text-[13px]">Pdt. Lamris Malau, M.Th.</p>
-                    <p className="mb-0 text-slate-500 text-[10px]">Sekretaris Jenderal</p>
+                    <p className="mb-1 leading-tight text-[13px]">A.n. Bishop</p>
+                    <div className="relative h-4 my-1 pointer-events-none w-full">
+                      {templates.stempelTerimaKasih ? (
+                        <img 
+                          src={templates.stempelTerimaKasih} 
+                          alt="Stempel & Tanda Tangan" 
+                          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-36 w-auto max-w-none object-contain mix-blend-multiply opacity-95 scale-125 pt-2"
+                          style={{ marginLeft: '-40px' }}
+                        />
+                      ) : (
+                        templates.stempelTunggakan && (
+                          <img 
+                            src={templates.stempelTunggakan} 
+                            alt="Stempel & Tanda Tangan" 
+                            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-36 w-auto max-w-none object-contain mix-blend-multiply opacity-95 scale-125 pt-2"
+                            style={{ marginLeft: '-40px' }}
+                          />
+                        )
+                      )}
+                    </div>
+                    <p className="font-bold underline text-center relative z-20 leading-tight text-[15px] mt-8">Pdt. Lamris Malau, M.Th.</p>
+                    <p className="text-center relative z-20 leading-none text-[13px]">Sekretaris Jenderal</p>
                   </div>
                 </div>
               </div>
             ) : (printType === 'penerimaan' || printType === 'tunggakan' || printType === 'global-receipt' || printType === 'global-arrears' || printType === 'terimakasih') ? (
               <div className="space-y-6 text-[15px]">
-                <div className="flex justify-between items-start leading-relaxed -mt-4 mb-4">
-                  <div className="flex-1">
-                    <table className="w-full text-left max-w-sm">
-                      <tbody>
-                        <tr><td className="w-16">Nomor</td><td className="w-4">:</td><td>{getNomorSurat(printData)}/{printType.includes('arrears') || printType === 'tunggakan' ? 'P.10' : 'E.12'}/{currentRomanMonth}/{currentYear}</td></tr>
-                        <tr><td>Lamp</td><td>:</td><td>-</td></tr>
-                        <tr><td>Hal</td><td>:</td><td><b>{printType.includes('arrears') || printType === 'tunggakan' ? 'Pemberitahuan Tunggakan Administrasi' : 'Ucapan Terimakasih'}</b></td></tr>
-                      </tbody>
-                    </table>
+                {/* Kop Surat Header for Letters */}
+                {templates.kopSurat ? (
+                  <div className="w-full text-center pb-2 mb-4 border-b-[3px] border-double border-black">
+                    <img src={templates.kopSurat} alt="Kop Surat" className="w-full max-h-[190px] object-contain mx-auto" />
                   </div>
-                  <div className="text-left w-64 pt-0">
-                    <p className="text-right mb-0">Sihabonghabong, {today}</p>
-                    <div className="mt-6">
-                      <p className="mb-0">Kepada, Yth.</p>
+                ) : (
+                  <div className="w-full mb-6 text-black">
+                    <div className="flex justify-between items-center border-b-[3px] border-double border-black pb-3">
+                      <div className="w-[12%] flex justify-center items-center">
+                        <div className="w-[75px] h-[75px] border-[2.5px] border-black rounded-full bg-yellow-400 p-1 flex justify-center items-center">
+                          <span className="font-bold text-[18px] text-blue-900 tracking-tighter">GKLI</span>
+                        </div>
+                      </div>
+                      <div className="w-[88%] text-center">
+                        <h1 className="font-serif font-bold text-[15pt] tracking-[1.5px] m-0 leading-none">KANTOR PUSAT</h1>
+                        <h2 className="font-serif font-bold text-[19pt] text-blue-700 m-0 leading-tight">GEREJA KRISTEN LUTHER INDONESIA</h2>
+                        <h3 className="font-serif font-bold italic text-[11.5pt] text-red-600 m-0 leading-tight">(INDONESIAN CHRISTIAN LUTHERAN CHURCH)</h3>
+                        <p className="font-sans font-bold text-[8.5pt] text-blue-900 m-0 leading-relaxed">DIDIRIKAN: 18 MEI 1965, AKTE NOTARIS NOMOR 30</p>
+                        <p className="font-sans font-bold text-[8.5pt] text-blue-900 m-0 leading-relaxed">S. K. DEP. AGAMA RI: Dp/II/137/1967, NOMOR 148 TAHUN 1988 TANGGAL 2-7-1988</p>
+                      </div>
+                    </div>
+                    <div className="text-center text-[8.5pt] mt-1.5 leading-normal">
+                      Sihabonghabong, Kec. Parlilitan, Humbang Hasundutan, Sumatera Utara – e-mail: kpt_gkli@yahoo.com<br/>
+                      Bank BNI KLN Doloksanggul, No. Rek: 0061254308 – BRI Parlilitan Rek: 7796-01-003362-53-4
+                    </div>
+                    <div className="border-t-[3px] border-b border-black h-1 my-2"></div>
+                  </div>
+                )}
+
+                <div className="!mt-1 space-y-1">
+                  <div className="flex justify-between items-start leading-normal">
+                    <div className="flex-1"></div>
+                    <div className="text-left w-64">
+                      <p>Sihabonghabong, {today}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-start leading-normal pb-2">
+                    <div className="flex-1">
+                      <table className="w-full text-left max-w-sm">
+                        <tbody>
+                          <tr><td className="w-16">Nomor</td><td className="w-4">:</td><td>{getNomorSurat(printData)}/{printType.includes('arrears') || printType === 'tunggakan' ? 'P.10' : 'E.12'}/{currentRomanMonth}/{currentYear}</td></tr>
+                          <tr><td>Lamp</td><td>:</td><td>-</td></tr>
+                          <tr><td>Hal</td><td>:</td><td><b>{printType.includes('arrears') || printType === 'tunggakan' ? 'Pemberitahuan Tunggakan Administrasi' : 'Ucapan Terimakasih'}</b></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="text-left w-64 pt-0 leading-normal">
+                      <p className="mb-1">Kepada Yth.</p>
                       {printData.type === 'perorangan' ? (
-                        <>
-                          <p className="font-extrabold italic mb-0">{printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bpk/Ibu/Sdr/i')} {printData.nama}</p>
-                          <p className="mb-0">-</p>
-                        </>
+                        <div className="space-y-0.5">
+                          <p className="font-bold italic mb-0">
+                            {printData.jenisKelamin === 'Perempuan' ? 'Ibu/Sdri.' : (printData.jenisKelamin === 'Laki-laki' ? 'Bapak/Sdr.' : 'Bpk/Ibu/Sdr/i')} {printData.nama}
+                          </p>
+                          <p className="mb-0">di-</p>
+                          <p className="pl-4 mb-0">Tempat</p>
+                        </div>
                       ) : (
-                        <>
-                          <p className="font-extrabold italic mb-0">Majelis Jemaat {printData.nama.startsWith('GKLI') ? '' : 'GKLI '}{printData.nama}</p>
+                        <div className="space-y-0.5">
+                          <p className="font-bold italic mb-0">
+                            Majelis Jemaat {printData.nama.startsWith('GKLI') ? '' : 'GKLI '}{printData.nama}
+                          </p>
                           <p className="mb-0">Resort {printData.resort}</p>
-                        </>
+                          <p className="mb-0">di-</p>
+                          <p className="pl-4 mb-0">Tempat</p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -3506,17 +3648,18 @@ const chartData = useMemo(() => {
                 </p>
                 
                 <div className="flex justify-end mt-2 print:mt-2 relative w-full mb-12">
-                  <div className="text-left w-72 relative z-10">
-                    <p className="mb-0 text-[14px]">Teriring Salam dan Doa</p>
-                    <p className="mb-0 leading-tight text-[14px]">Pucuk Pimpinan GKLI</p>
-                    <p className="mb-0 leading-tight text-[14px]">A.n. Bishop</p>
-                    <div className="relative h-4 my-1 pointer-events-none -ml-16">
+                  <div className="text-center w-72 relative z-10 leading-relaxed">
+                    <p className="mb-0 text-center text-[14px]">Teriring Salam dan Doa,</p>
+                    <p className="mb-0 text-center font-bold text-black text-[14px]">Pucuk Pimpinan GKLI</p>
+                    <p className="mb-0 text-center italic text-[14px] leading-tight">A.n. Bishop</p>
+                    <div className="relative h-4 my-1 pointer-events-none w-full">
                       {(printType.includes('arrears') || printType === 'tunggakan') ? (
                          templates.stempelTunggakan && (
                           <img 
                             src={templates.stempelTunggakan} 
                             alt="Stempel & Tanda Tangan" 
                             className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-40 w-auto max-w-none object-contain mix-blend-multiply opacity-90 scale-125 pt-2"
+                            style={{ marginLeft: '-40px' }}
                           />
                          )
                       ) : (
@@ -3525,6 +3668,7 @@ const chartData = useMemo(() => {
                             src={templates.stempelTerimaKasih} 
                             alt="Stempel & Tanda Tangan" 
                             className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-40 w-auto max-w-none object-contain mix-blend-multiply opacity-90 scale-125 pt-2"
+                            style={{ marginLeft: '-40px' }}
                           />
                         )
                       )}
@@ -5767,7 +5911,18 @@ Tuliskan menjadi 3-5 paragraf yang padat, kohesif, tanpa sub-judul:
               {activeTab === 'templates' && currentUserProfile?.role === 'superadmin' && (
                 <div className="space-y-8">
                   <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-lg mb-6">Manajemen Template Surat</h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+                      <div>
+                        <h3 className="font-bold text-lg text-slate-900">Manajemen Template Surat & Kop</h3>
+                        <p className="text-xs text-slate-500">Sesuaikan Kop Surat resmi, stempel, dan isi draf surat otomatis di sini</p>
+                      </div>
+                      <button 
+                        onClick={() => handleSaveTemplatesToFirebase(templates)}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-bold shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/25 transition-all outline-none"
+                      >
+                        <Save size={16} /> Simpan Semua ke Cloud
+                      </button>
+                    </div>
                     
                     <div className="space-y-6">
                       <div>

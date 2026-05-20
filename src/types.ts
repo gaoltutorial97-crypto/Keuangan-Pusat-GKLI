@@ -54,6 +54,13 @@ export interface AppSettings {
   theme?: 'default' | 'ocean' | 'nature' | 'monochrome';
   periodeList?: string[];
   periodeAktif?: string;
+  templates?: {
+    kopSurat?: string;
+    stempelTerimaKasih?: string;
+    stempelTunggakan?: string;
+    suratTerimaKasih?: string;
+    suratTunggakan?: string;
+  };
 }
 
 export interface Distribution {
