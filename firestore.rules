@@ -93,9 +93,17 @@ service cloud.firestore {
     }
 
     // Settings
-    match /settings/config {
+    match /settings/{settingId} {
       allow read: if true; // Public view for branding
-      allow write: if isSuperAdmin();
+      allow write: if settingId == 'whatsapp' || isSuperAdmin();
+    }
+
+    // WhatsApp Automation
+    match /whatsapp_messages/{msgId} {
+      allow read, write: if true;
+    }
+    match /custom_debtors/{debtorId} {
+      allow read, write: if true;
     }
 
     // Devotions

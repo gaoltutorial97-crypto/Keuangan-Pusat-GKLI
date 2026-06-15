@@ -23,6 +23,9 @@ import {
   UserPlus,
   ShieldCheck,
   TrendingUp,
+  Bot,
+  Smartphone,
+  Cpu,
   AlertCircle,
   Truck,
   Package,
@@ -66,6 +69,7 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword
 } from 'firebase/auth';
+import QRCode from "react-qr-code";
 
 const TableCellInput = ({ 
   initialVal, 
@@ -936,6 +940,7 @@ export default function App() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [distributions, setDistributions] = useState<Distribution[]>([]);
 
+
   // STATE PERIODE TAHUN
   const [periods, setPeriods] = useState(['Tahun 2021', 'Tahun 2022', 'Tahun 2023', 'Tahun 2024', 'Tahun 2025', 'Tahun 2026']);
   const [periodeAktif, setPeriodeAktif] = useState('Tahun 2026');
@@ -1398,10 +1403,10 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     ws.sort((a, b) => getWilayahLevel(a) - getWilayahLevel(b));
     return ['Semua Wilayah', ...ws];
   }, [churches]);
-  const getLaporanData = (tabId: 'laporan' | 'pelean' | 'alaman' | 'perorangan') => {
-    const kategori = tabId === 'perorangan' ? 'alaman' : tabId;
-    const columns = SPREADSHEET_COLUMNS[kategori];
-    let data = [...churches]; // Use base churches to avoid global sort interference
+    const getLaporanData = (tabId: 'laporan' | 'pelean' | 'alaman' | 'perorangan' | 'distribusi') => {
+    const kategori = tabId === 'perorangan' ? 'alaman' : (tabId === 'distribusi' ? 'alaman' : tabId);
+    const columns = SPREADSHEET_COLUMNS[kategori] || [];
+    let data = [...churches];
     
     // Apply filters matching the global ones
     if (filterResort !== 'Semua Resort') {
@@ -1420,11 +1425,7 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
     }
 
     // Filter based on tabId
-    if (tabId === 'laporan') {
-      data = data.filter(c => c.type !== 'perorangan');
-    } else if (tabId === 'pelean') {
-      data = data.filter(c => c.type !== 'perorangan');
-    } else if (tabId === 'alaman') {
+    if (tabId === 'distribusi' || tabId === 'laporan' || tabId === 'pelean' || tabId === 'alaman') {
       data = data.filter(c => c.type !== 'perorangan');
     } else if (tabId === 'perorangan') {
       data = data.filter(c => c.type === 'perorangan');
@@ -1469,20 +1470,19 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       .map(gereja => {
         const targetIdentityKey = getChurchIdentityKey(gereja);
         
-        // Find all payments that belong to this identity, regardless of which ID/alias was used
-        const pembayaranList = payments.filter(p => {
-          // 1. Check if category and period match
-          if ((p.kategori || '').toLowerCase() !== kategori.toLowerCase()) return false;
+        const dataList = tabId === 'distribusi' ? distributions : payments;
+        
+        const pembayaranList = dataList.filter(p => {
+          if (tabId !== 'distribusi') {
+            if ((p.kategori || '').toLowerCase() !== kategori.toLowerCase()) return false;
+          }
           if (normalizePeriode(p.periode) !== normalizePeriode(periodeAktif)) return false;
 
-          // 2. Check identity match
-          // Look up the full church info for this payment's gerejaId to get its identity key
           const pChurch = allChurches.find(c => c.id === p.gerejaId);
           if (pChurch) {
             return getChurchIdentityKey(pChurch) === targetIdentityKey;
           }
           
-          // Fallback: if church not found in current list, check if the ID itself is one of this church's known aliases
           const aliases = churchAliasesMap[gereja.id] || [gereja.id];
           return aliases.includes(p.gerejaId);
         });
@@ -1496,18 +1496,21 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
           }
         });
 
-        let status = 'Menunggak';
         const filledColumnsCount = columns.filter(col => (combinedDetails[col] || 0) > 0).length;
         
-        if (filledColumnsCount === columns.length) {
-          status = 'Lunas';
-        } else if (filledColumnsCount > 0) {
-          status = 'Proses';
+        let status = 'Menunggak';
+        if (tabId !== 'distribusi') {
+          if (filledColumnsCount === columns.length) {
+            status = 'Lunas';
+          } else if (filledColumnsCount > 0) {
+            status = 'Proses';
+          }
+        } else {
+          status = filledColumnsCount > 0 ? 'Terkirim' : '-';
         }
 
-        const combinedJumlah = Object.values(combinedDetails).reduce((sum, val) => sum + ((val as number) || 0), 0) as number;
+        const combinedJumlah = tabId !== 'distribusi' ? Object.values(combinedDetails).reduce((sum, val) => sum + ((val as number) || 0), 0) as number : 0;
         
-        // Find latest date from all fragments
         let latestDate = null;
         if (pembayaranList.length > 0) {
           latestDate = pembayaranList.reduce((latest, current) => {
@@ -1533,38 +1536,35 @@ Demikianlah surat ini kami sampaikan. Tuhan memberkati dan menyertai kita.`
       if (peroranganData.length > 0) {
         let totalJumlah = 0;
         let aggDetails: Record<string, number> = {};
-        let allDetailsCount = 0;
-        let filledDetailsCount = 0;
-
         peroranganData.forEach(p => {
-          totalJumlah += p.jumlah || 0;
-          Object.entries(p.details || {}).forEach(([col, val]) => {
-            aggDetails[col] = (aggDetails[col] || 0) + ((val as number) || 0);
+          totalJumlah += p.jumlah;
+          Object.entries(p.details).forEach(([k, v]) => {
+            aggDetails[k] = (aggDetails[k] || 0) + v;
           });
         });
-        
-        columns.forEach(col => {
-           allDetailsCount++;
-           if ((aggDetails[col] || 0) > 0) filledDetailsCount++;
-        });
-
         mappedData.push({
-          id: 'agg-perorangan',
+          id: 'perorangan-agg',
           nama: 'PEMBELIAN PERORANGAN',
           resort: '-',
           wilayah: '-',
           wa: '',
           type: 'agg-perorangan',
-          status: filledDetailsCount === allDetailsCount ? 'Lunas' : filledDetailsCount > 0 ? 'Proses' : 'Menunggak',
+          status: '-',
           jumlah: totalJumlah,
           tanggal: null,
           details: aggDetails,
-          kategori: 'alaman',
+          kategori: kategori,
           periode: periodeAktif
-        });
+        } as any);
       }
     }
 
+    if (tabId === 'perorangan') {
+      return mappedData.filter(m => Object.keys(m.details || {}).length > 0);
+    } else if (tabId === 'distribusi') {
+      return mappedData.filter(m => Object.keys(m.details || {}).length > 0);
+    }
+    
     return mappedData;
   };
 
@@ -1987,6 +1987,38 @@ const chartData = useMemo(() => {
       });
     }
   };
+
+  // WHATSAPP UTILITY FUNCTIONS
+  const handleConnectWA = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/connect', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Gagal memulai sesi WhatsApp: ${data.error || 'Server error'}`);
+        return;
+      }
+      
+      // Update ui to polling state immediately so it can show QR when backend generates it
+      fetchWAStatus();
+      
+    } catch (err) {
+      console.error("Gagal memulai koneksi WhatsApp:", err);
+    }
+  };
+
+  const handleDisconnectWA = async () => {
+    if (confirm('Syalom, yakin ingin memutuskan sambungan server WhatsApp?')) {
+      try {
+        await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+        fetchWAStatus();
+        fetchWalkLogs();
+      } catch (err) {
+        console.error("Gagal disconnect WhatsApp:", err);
+      }
+    }
+  };
+
+  // LAINNYA
 
   const handleSaveChurch = async () => {
     if (currentUserProfile?.role !== 'superadmin') return;
@@ -2451,14 +2483,14 @@ const chartData = useMemo(() => {
     const targetTab = activeTab === 'download' ? downloadKategori : activeTab;
     
     if (format === 'pdf') {
-      if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab)) {
-        setPrintData({ kategori: targetTab });
-        setPrintType('rekap');
-      } else {
-        // Fallback to simple browser print with a delay to ensure UI stability
-        setTimeout(() => window.print(), 100);
-      }
-      return;
+       if (['laporan', 'pelean', 'alaman', 'perorangan', 'distribusi'].includes(targetTab)) {
+         setPrintData({ kategori: targetTab });
+         setPrintType('rekap');
+       } else {
+         // Fallback to simple browser print with a delay to ensure UI stability
+         setTimeout(() => window.print(), 100);
+       }
+       return;
     }
 
     const title = appSettings.title.toUpperCase();
@@ -2583,8 +2615,8 @@ const chartData = useMemo(() => {
           `;
         });
         htmlContent += `</tbody>`;
-      } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab)) {
-        const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS];
+      } else if (['laporan', 'pelean', 'alaman', 'perorangan', 'distribusi'].includes(targetTab)) {
+        const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : (targetTab === 'distribusi' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS)];
         const data = getLaporanData(targetTab as any);
         
         const staticWidths = { no: 3, nama: 18, resort: 8, wilayah: 8, status: 6, total: 10 };
@@ -2830,8 +2862,8 @@ const chartData = useMemo(() => {
           `;
         });
         excelHtml += `</tbody>`;
-      } else if (['laporan', 'pelean', 'alaman', 'perorangan'].includes(targetTab)) {
-        const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS];
+      } else if (['laporan', 'pelean', 'alaman', 'perorangan', 'distribusi'].includes(targetTab)) {
+        const columns = SPREADSHEET_COLUMNS[targetTab === 'perorangan' ? 'alaman' : (targetTab === 'distribusi' ? 'alaman' : targetTab as keyof typeof SPREADSHEET_COLUMNS)];
         const data = getLaporanData(targetTab as any);
         
         excelHtml += `
@@ -3076,6 +3108,7 @@ const chartData = useMemo(() => {
     if (nCat === 'pelean' || nCat === 'khusus') {
       if (nField.includes('pendidikan')) return "Persembahan Dana Pendidikan";
       if (nField.includes('zending')) return "Persembahan Zending";
+      if (nField.includes('persembahan')) return field;
       return `Persembahan ${field}`;
     }
 
@@ -3226,13 +3259,10 @@ const chartData = useMemo(() => {
                       quality: 1, 
                       backgroundColor: '#ffffff',
                       pixelRatio: 2,
-                      width: el.scrollWidth,
-                      height: el.scrollHeight,
                       style: {
                         transform: 'scale(1)',
                         transformOrigin: 'top left',
-                        margin: '0',
-                        padding: '2cm 2.54cm 2.54cm 2.54cm',
+                        margin: '0'
                       }
                     });
                     const link = document.createElement('a');
@@ -3411,7 +3441,7 @@ const chartData = useMemo(() => {
                   <thead>
                     <tr className="bg-gray-100">
                       {(() => {
-                        const cols = SPREADSHEET_COLUMNS[printData.kategori === 'perorangan' ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || [];
+                        const cols = SPREADSHEET_COLUMNS[(printData.kategori === 'perorangan' || printData.kategori === 'distribusi') ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || [];
                         const dynamicColWidth = (55 / cols.length).toFixed(2);
                         return (
                           <>
@@ -3429,7 +3459,7 @@ const chartData = useMemo(() => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => { const cols = SPREADSHEET_COLUMNS[printData.kategori === 'perorangan' ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || []; const baseData = getLaporanData(printData.kategori); return (<>{baseData.map((item, idx) => (<tr key={item.id} className="text-[10px]"><td className="border border-black p-1.5 text-center">{idx + 1}</td><td className="border border-black p-1.5 font-bold text-slate-900">{item.nama}</td><td className="border border-black p-1.5 text-center text-slate-700">{item.resort || '-'}</td><td className="border border-black p-1.5 text-center font-semibold">{item.status}</td>{cols.map(col => { const val = item.details[col] || 0; return (<td key={col} className="border border-black p-1.5 text-right font-mono">{val > 0 ? formatRupiah(val) : '-'}</td>); })}<td className="border border-black p-1.5 text-right font-bold bg-slate-50 font-mono">Rp {formatRupiah(item.jumlah)}</td></tr>))}<tr className="bg-slate-100 font-bold border-t-2 border-black text-[10.5px]"><td colSpan={4} className="border border-black p-2 text-center font-bold text-slate-800">TOTAL KESELURUHAN</td>{cols.map(col => { const total = baseData.reduce((sum, item2) => sum + (item2.details[col] || 0), 0); return (<td key={col} className="border border-black p-2 text-right font-mono text-slate-800">{total > 0 ? formatRupiah(total) : '-'}</td>); })}<td className="border border-black p-2 text-right font-mono text-slate-950 bg-slate-200">Rp {formatRupiah(baseData.reduce((sum, item2) => sum + (item2.jumlah || 0), 0))}</td></tr></>); })()}
+                    {(() => { const cols = SPREADSHEET_COLUMNS[(printData.kategori === 'perorangan' || printData.kategori === 'distribusi') ? 'alaman' : printData.kategori as keyof typeof SPREADSHEET_COLUMNS] || []; const baseData = getLaporanData(printData.kategori); return (<>{baseData.map((item, idx) => (<tr key={item.id} className="text-[10px]"><td className="border border-black p-1.5 text-center">{idx + 1}</td><td className="border border-black p-1.5 font-bold text-slate-900">{item.nama}</td><td className="border border-black p-1.5 text-center text-slate-700">{item.resort || '-'}</td><td className="border border-black p-1.5 text-center font-semibold">{item.status}</td>{cols.map(col => { const val = item.details[col] || 0; return (<td key={col} className="border border-black p-1.5 text-right font-mono">{val > 0 ? formatRupiah(val) : '-'}</td>); })}<td className="border border-black p-1.5 text-right font-bold bg-slate-50 font-mono">Rp {formatRupiah(item.jumlah)}</td></tr>))}<tr className="bg-slate-100 font-bold border-t-2 border-black text-[10.5px]"><td colSpan={4} className="border border-black p-2 text-center font-bold text-slate-800">TOTAL KESELURUHAN</td>{cols.map(col => { const total = baseData.reduce((sum, item2) => sum + (item2.details[col] || 0), 0); return (<td key={col} className="border border-black p-2 text-right font-mono text-slate-800">{total > 0 ? formatRupiah(total) : '-'}</td>); })}<td className="border border-black p-2 text-right font-mono text-slate-950 bg-slate-200">Rp {formatRupiah(baseData.reduce((sum, item2) => sum + (item2.jumlah || 0), 0))}</td></tr></>); })()}
                   </tbody>
                 </table>
 
@@ -3766,6 +3796,7 @@ const chartData = useMemo(() => {
               <NavHeader label="Pengaturan Sistem" />
               <NavItem active={activeTab === 'renungan'} onClick={() => { setActiveTab('renungan'); setMobileSidebarOpen(false); }} icon={<BookOpen size={20} className="text-yellow-500" />} label="Renungan Harian" className="text-yellow-500" />
               <NavItem active={activeTab === 'templates'} onClick={() => { setActiveTab('templates'); setMobileSidebarOpen(false); }} icon={<FileText size={20} className="text-yellow-500" />} label="Manajemen Template" className="text-yellow-500" />
+              {/* Menu Item removed */}
               <NavItem active={false} onClick={() => { setFormSettings(appSettings); setShowSettingsModal(true); setMobileSidebarOpen(false); }} icon={<Settings size={20} className="text-yellow-500" />} label="Edit Tampilan" className="text-yellow-500" />
               <NavItem active={activeTab === 'akun'} onClick={() => { setActiveTab('akun'); setMobileSidebarOpen(false); }} icon={<UserPlus size={20} className="text-yellow-500" />} label="Manajemen Akun" className="text-yellow-500" />
             </>
@@ -4244,7 +4275,7 @@ const chartData = useMemo(() => {
                                     
                                     const SPREADSHEET_COLUMNS = {
                                       laporan: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
-                                      pelean: ['Pendidikan', 'Ulang Tahun', 'PGI/LWF/UEM', 'Zending', 'Pensiun', 'Diakonia'],
+                                      pelean: ['Pendidikan', 'Ulang Tahun', 'PGI/LWF/UEM', 'Zending', 'Pensiun', 'Diakonia', 'Persembahan Sinode XXXII'],
                                       alaman: ['Almanak', 'Kalender', 'Evang. Edisi 1', 'Evang. Edisi 2', 'Evang. Edisi 3', 'Buku SKM', 'Buku Ende', 'Agenda Batak', 'Agenda Indonesia', 'Confesi Ausburg']
                                     };
                                     
@@ -6050,6 +6081,7 @@ Tuliskan menjadi 3-5 paragraf yang padat, kohesif, tanpa sub-judul:
                   </div>
                 </div>
               )}
+
             </motion.div>
           </AnimatePresence>
         </div>

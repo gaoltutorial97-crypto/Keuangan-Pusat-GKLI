@@ -6,16 +6,15 @@ import { fileURLToPath } from 'url';
 import cron from 'node-cron';
 import axios from 'axios';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, setDoc, doc, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, setDoc, doc, query, where, addDoc } from 'firebase/firestore';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'fs';
+
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Firebase Config from file
 import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
@@ -44,7 +43,7 @@ const PORT = 3000;
 
 // Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
 // Initialize Gemini
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -90,12 +89,18 @@ Struktur (Gabungkan menjadi 1 tulisan utuh 3-4 paragraf yang mengalir tanpa sub-
 - Refleksi mendalam yang menjawab tantangan masa kini berdasarkan Hukum Taurat dan Injil.
 - Doa penutup yang sangat singkat menyatu di akhir tulisan (misal: "Mari kita berdoa... Amin.")`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: promptText,
-    });
+    let devotionContent = "";
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: promptText,
+      });
+      devotionContent = response.text || "";
+    } catch (aiErr) {
+      console.error("Gemini AI API Error in Cron Job:", aiErr);
+      devotionContent = "Syalom Bapak/Ibu terkasih. \n\nMari senantiasa mengandalkan Tuhan dalam setiap langkah kehidupan kita hari ini. Tuhan Yesus memberkati.\n\nMari kita berdoa... Amin.";
+    }
 
-    const devotionContent = response.text;
     if (!devotionContent) throw new Error("Gagal generate renungan dari Gemini");
 
     // Save to Firestore for display in UI Dashboard
@@ -247,6 +252,266 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', serverTime: new Date().toISOString() });
 });
 
+// Helper: Normalized phone matching
+async function findChurchAndArrearsByPhone(phone: string, activeYear: string = '2026') {
+  try {
+    const rawNum = phone.replace(/[^0-9]/g, '');
+    let norm = rawNum;
+    if (rawNum.startsWith('62')) norm = rawNum.slice(2);
+    else if (rawNum.startsWith('0')) norm = rawNum.slice(1);
+    
+    if (!norm) return null;
+    
+    // Fetch all churches
+    const churchSnap = await getDocs(collection(db, 'churches'));
+    const churches = churchSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    
+    const matchedChurch = churches.find(c => {
+      const waClean = (c.wa || '').replace(/[^0-9]/g, '');
+      const waPendetaClean = (c.waPendeta || '').replace(/[^0-9]/g, '');
+      
+      const checkMatch = (str: string) => {
+        if (!str) return false;
+        let cStr = str;
+        if (str.startsWith('62')) cStr = str.slice(2);
+        else if (str.startsWith('0')) cStr = str.slice(1);
+        return cStr.includes(norm) || norm.includes(cStr);
+      };
+      
+      return checkMatch(waClean) || checkMatch(waPendetaClean);
+    });
+    
+    if (!matchedChurch) return null;
+    
+    // Fetch payments for matched church
+    const paymentSnap = await getDocs(query(collection(db, 'payments'), where('gerejaId', '==', matchedChurch.id), where('periode', '==', activeYear)));
+    const payments = paymentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    
+    const arrears: Record<string, string[]> = {};
+    let totalArrearsSum = 0;
+    const currentMonthIdx = new Date().getMonth();
+    
+    Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
+      const payment = payments.find(p => p.kategori === cat);
+      let unpaid = cols.filter(col => !payment || !payment.details[col] || payment.details[col] === 0);
+      
+      if (cat === 'laporan') {
+        unpaid = unpaid.filter(col => {
+          const monthIdx = SPREADSHEET_COLUMNS.laporan.indexOf(col);
+          return monthIdx !== -1 && monthIdx <= currentMonthIdx;
+        });
+      }
+      
+      if (unpaid.length > 0) {
+        arrears[cat] = unpaid;
+        const rate = cat === 'laporan' ? 100000 : (cat === 'pelean' ? 75000 : 50000);
+        totalArrearsSum += unpaid.length * rate;
+      }
+    });
+    
+    return {
+      church: matchedChurch,
+      arrears,
+      estimatedTotal: totalArrearsSum,
+    };
+  } catch (error) {
+    console.error('Error finding church by phone:', error);
+    return null;
+  }
+}
+
+// Format Phone to JID helper
+function formatPhoneToJid(phone: string) {
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('0')) {
+    cleaned = '62' + cleaned.substring(1);
+  }
+  return cleaned + '@s.whatsapp.net';
+}
+
+// 4. Send Message (saves log and optional relay)
+app.post('/api/send-message', async (req, res) => {
+  try {
+    const { phone_no, message } = req.body;
+    if (!phone_no || !message) return res.status(400).json({ error: 'Phone number and message are required' });
+    
+    let sendStatus = 'failed';
+    
+    const messageLog = {
+      phone: phone_no,
+      message,
+      type: 'outgoing',
+      status: sendStatus,
+      timestamp: new Date().toISOString()
+    };
+    
+    await addDoc(collection(db, 'whatsapp_messages'), messageLog);
+    
+    // If real Watzap setup exists, try sending (Legacy Fallback)
+    const snap = await getDocs(query(collection(db, 'settings')));
+    const config = snap.docs.find(d => d.id === 'config')?.data();
+    if (config?.watzapApiKey && config?.watzapSender) {
+      try {
+        await axios.post('https://api.watzap.id/v1/send_message', {
+          api_key: config.watzapApiKey,
+          number_key: config.watzapSender,
+          phone_no: phone_no,
+          message: message
+        });
+        sendStatus = 'sent';
+      } catch (axErr: any) {
+        console.warn('Watzap endpoint call failed, logged message locally: ', axErr.message);
+      }
+    }
+    
+    res.json({ success: true, log: messageLog });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Send Bulk Broadcast
+app.post('/api/send-bulk', async (req, res) => {
+  try {
+    const { recipients, messageTemplate } = req.body;
+    if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ error: 'Recipients array is required' });
+    }
+    
+    const sentLogs = [];
+    const baseTemplate = messageTemplate || "Halo {{nama}}, kami mengingatkan perihal persembahan GKLI.";
+    
+    for (const item of recipients) {
+      let formattedMsg = baseTemplate
+        .replace(/\{\{nama\}\}/g, item.nama || item.name || "Bapak/Ibu")
+        .replace(/\{\{nominal\}\}/g, item.nominal ? item.nominal.toString() : '0')
+        .replace(/\{\{jatuh_tempo\}\}/g, item.jatuh_tempo || item.dueDate || "akhir bulan");
+      
+      let sendStatus = 'failed';
+      const targetPhone = item.wa || item.phone;
+      
+      const messageLog = {
+        phone: targetPhone,
+        message: formattedMsg,
+        type: 'outgoing',
+        status: sendStatus,
+        timestamp: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, 'whatsapp_messages'), messageLog);
+      sentLogs.push(messageLog);
+    }
+    
+    res.json({ success: true, total: recipients.length, logs: sentLogs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Get Chat Messages
+app.get('/api/messages', async (req, res) => {
+  try {
+    const snap = await getDocs(collection(db, 'whatsapp_messages'));
+    const messages = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    // Sort in code by timestamp
+    messages.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    res.json(messages.slice(0, 100)); // limit 100
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Get Debtors list calculated dynamically from db
+app.get('/api/debtors', async (req, res) => {
+  try {
+    const currentPeriod = new Date().getFullYear().toString();
+    const churchSnap = await getDocs(collection(db, 'churches'));
+    const churches = churchSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    
+    const paymentSnap = await getDocs(query(collection(db, 'payments'), where('periode', '==', currentPeriod)));
+    const payments = paymentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+    
+    const currentMonthIdx = new Date().getMonth();
+    const listDebtors: any[] = [];
+    
+    for (const church of churches) {
+      const arrears: Record<string, string[]> = {};
+      let totalSum = 0;
+      let hasArrears = false;
+
+      Object.entries(SPREADSHEET_COLUMNS).forEach(([cat, cols]) => {
+        const p = payments.find(pay => pay.gerejaId === church.id && pay.kategori === cat);
+        let unpaid = cols.filter(col => !p || !p.details[col] || p.details[col] === 0);
+        
+        if (cat === 'laporan') {
+          unpaid = unpaid.filter(col => {
+            const mIdx = SPREADSHEET_COLUMNS.laporan.indexOf(col);
+            return mIdx !== -1 && mIdx <= currentMonthIdx;
+          });
+        }
+        
+        if (unpaid.length > 0) {
+          arrears[cat] = unpaid;
+          hasArrears = true;
+          // estimate Rp 100.000, 75.000, 50.000
+          const rate = cat === 'laporan' ? 100000 : (cat === 'pelean' ? 75000 : 50000);
+          totalSum += unpaid.length * rate;
+        }
+      });
+      
+      if (hasArrears) {
+        listDebtors.push({
+          id: church.id,
+          nama: church.nama,
+          resort: church.resort,
+          wa: church.wa || '',
+          waPendeta: church.waPendeta || '',
+          estimatedArrears: totalSum,
+          details: arrears,
+          lastCheck: new Date().toISOString()
+        });
+      }
+    }
+    
+    res.json(listDebtors);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Enable saving custom debtors
+app.post('/api/debtors', async (req, res) => {
+  try {
+    const data = req.body;
+    await setDoc(doc(db, 'custom_debtors', data.id || new Date().getTime().toString()), data);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Finance external system updates webhook
+app.post('/api/webhook/finance', async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log('[WEBHOOK] Webhook finance received: ', payload);
+    
+    // Save to message log for simulation
+    const alertMsg = {
+      phone: payload.wa || '+62-GKLI-SYSTEM',
+      message: `🔔 Webhook System Update: Tagihan baru divalidasi sebesar Rp${payload.amount || payload.nominal || '0'} untuk ${payload.nama || 'Instansi'}. Status: Menunggu Setoran.`,
+      type: 'incoming_webhook',
+      status: 'processed',
+      timestamp: new Date().toISOString()
+    };
+    
+    await addDoc(collection(db, 'whatsapp_messages'), alertMsg);
+    res.json({ success: true, received: true, log: alertMsg });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Manual Trigger for Testing (Requires Admin Auth ideally, but let's keep it simple for now)
 app.post('/api/cron/trigger', async (req, res) => {
   // Simple check for a secret token if you want security
@@ -274,7 +539,7 @@ async function setupVite() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
+    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
